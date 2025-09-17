@@ -4,8 +4,10 @@ import { useState } from 'react';
 
 export default function LoginForm({
   setTab,
+  title,
 }: {
   setTab: (tab: string) => void;
+  title: string;
 }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -25,8 +27,8 @@ export default function LoginForm({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center border p-6 bg-white rounded shadow-md border-blue-950 gap-6">
-      <h2 className="text-lg font-semibold">Login Form</h2>
+    <div className="flex flex-col items-center justify-center p-6 bg-white rounded  gap-6">
+      <h2 className="text-lg font-semibold">{title} Form</h2>
       <form onSubmit={onSubmit} className="flex flex-col space-y-4 ">
         <label>
           <input
@@ -47,7 +49,7 @@ export default function LoginForm({
           />
         </label>
         <button type="submit" className="bg-blue-900 text-white p-2 rounded">
-          Login
+          {title}
         </button>
       </form>
     </div>
