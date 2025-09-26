@@ -1,0 +1,136 @@
+{% extends 'tpl/template.html' %}
+{% block title %}New People{% endblock %}
+{% block head %}
+    {% assets "scss_new_people" %}
+        <link rel=stylesheet type=text/css href="{{ ASSET_URL }}">
+    {% endassets %}
+{% endblock %}
+
+{% block header %}{% include 'tpl/header.html' %}{% endblock %}
+
+{% block body %}
+
+    <div class="arrow-steps">
+        <div class="step" id="step-1"> <span>Import photos</span></div>
+        <div class="step" id="step-2"> <span>Apply K-same pixel</span></div>
+        <div class="step" id="step-4"> <span>Generate PCA</span></div>
+        <div class="step" id="step-5"> <span>Add noise</span></div>
+        <div class="step" id="step-7"> <span>Save</span></div>
+        <div class="step" id="step-6"> <span>ML creation model</span></div>
+    </div>
+
+
+    <p id="error-up" class="error"></p>
+
+    <!-- Import photos -->
+    <div class="panel hidden center" id="panel-1">
+        <div>
+            <label for="img_size_value">Image size:</label>
+            <input type="number" id="img_size_value" name="img_size_value" min="1" step="1">
+            <select id="img_size_unit" name="img_size_unit">
+                <option value="px">px</option>
+                <option value="percent">%</option>
+            </select>
+        </div>
+        <br>
+        <div class="toggle-container">
+            <label for="toggle">Import photos</label>
+            <input class="toggle" id="toggle" name="toggle" type="checkbox" style="--s:20px">
+            <label for="toggle">Take photos</label>
+        </div>
+        <div id="import-photos-container">
+            <div class="upload-button">
+                <input type="file" id="fileInput" name="fileInput" accept="image/*" style="display: none;" multiple>
+                <label for="fileInput" class="upload-label">Choose photos</label>
+            </div>
+            <div id="upload-container" class="upload-container"></div>
+        </div>
+        <div id="take-photos-container" style="display:none;">
+            <div id="camera-container">
+                <video id="camera" autoplay></video>
+                <div id="oval-overlay"></div>
+            </div>
+            <button id="capture-btn" class="button">Capture Photo</button>
+            <canvas id="photo"></canvas>
+        </div>
+        <br>
+        <button type="button" class="button" onclick="step_upload()">Run</button>
+        <button type="button" class="button" onclick="step_upload(true)">Next</button>
+    </div>
+    <!-- Apply K-same pixel -->
+    <div class="panel hidden center" id="panel-2">
+        <div>
+            <label for="k_pixel">Number by K-Same Pixel:</label>
+            <input type="number" id="k_pixel" name="k_pixel" min="1" step="1">
+            <select id="k_pixel_unit" name="k_pixel_unit">
+                <option value="px">k_pixel</option>
+                <option value="percent">%</option>
+            </select>
+        </div>
+        <button type="button" class="button" onclick="step_same_pixel()">Run</button>
+        <button type="button" class="button" onclick="step_same_pixel(true)">Next</button>
+        <br><br>
+        <div id="image-container-1" class="center"></div>
+    </div>
+    <!-- Generate PCA -->
+    <div class="panel hidden center" id="panel-4">
+        <div>
+            <label for="pca_components">Number of PCA components:</label>
+            <input type="number" id="pca_components" name="pca_components" min="1" step="1">
+            <select id="pca_components_unit" name="pca_components">
+                <option value="px">components</option>
+                <option value="percent">%</option>
+            </select>
+        </div>
+        <button type="button" class="button" onclick="step_pca()">Run</button>
+        <button type="button" class="button" onclick="step_pca(true)">Next</button>
+        <br><br>
+        <div id="image-container-3" class="center"></div>
+    </div>
+    <!-- Add noise -->
+    <div class="panel hidden center" id="panel-5">
+        <div>
+            <label for="privacyBudget">Privacy Budget:</label>
+            <input type="number" id="privacyBudget" name="privacyBudget" min="0" step="0.01">
+            <select id="privacyBudget_unit" name="privacyBudget_unit">
+                <option value="px">epsilon</option>
+                <option value="percent">%</option>
+            </select>
+        </div>
+        <button type="button" class="button" onclick="step_noise()">Run</button>
+        <button type="button" class="button" onclick="step_noise(true)">Next</button>
+        <br><br>
+        <div id="image-container-4" class="center"></div>
+    </div>
+    <!-- Save -->
+    <div class="panel hidden center" id="panel-7">
+        If you think your user data is correct, you can now save him in our database.
+        <br>
+        Try in the 'Search' page to find out if your user can be identified.
+        <br>
+        <button type="button" class="button" onclick="step_save()">Save user</button>
+        <br><br>
+        <div id="user_id" class="valid"></div>
+    </div>
+    <!-- ML tests -->
+    <div class="panel hidden center" id="panel-6">
+        <button type="button" class="button" onclick="step_ML(true)">Next</button>
+        <br><br>
+        <div id="ml_timer"></div>
+        <br>
+        <div id="ml_result"></div>
+        <br>
+        <div id="ml_result_graph" class="ml-image"></div>
+        <br>
+        <div id="ml_result_table" class="ml-image"></div>
+    </div>
+
+    <p id="error-down" class="error"></p>
+
+{% endblock %}
+
+{% block footer %}
+    <script>const CAMERA_SCRIPT_URL = "{{ url_for('static', filename='js/utils/camera.js') }}";</script>
+    <script src="{{ url_for('static', filename='js/new_people.js') }}"></script>
+    {% include 'tpl/footer.html' %}
+{% endblock %}
