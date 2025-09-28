@@ -40,3 +40,54 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Virtual environments
+venv/
+env/
+
+# Configuration files
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+
+# Log files
+*.log
+
+# Database Files
+*.sqlite3
+
+# Editor Files
+.vscode/
+.idea/
+.idea/*
+/.idea/*
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Test files
+.coverage
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Distribution files
+dist/
+build/
+*.egg-info/
+
+# Other
+/model/documentation/ISEP_Projects_list.xlsx
+/model/documentation/ISEP_Project.txt
+
+/model/analysis/visualizations_subject_1_pipeline
+
+/model/data/gui_database.db
+/model/data/ml_models/
+/model/data/dataset-lfw_reconstructed/
+/model/data/dataset-yalefaces/
+
