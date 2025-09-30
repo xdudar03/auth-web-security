@@ -11,6 +11,19 @@ Client side:
   - https://www.npmjs.com/package/ml-pca
 - The anonymized photo is sent to the server
 
+Passwordless authentication:
+
+https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API
+https://simplewebauthn.dev/docs/
+
+- User upload a photo of their face
+- The photo is anonymized on device (eigenface, k-same pixel, noise, etc.)
+- The anonymized photo is sent to the server
+- The server matches the anonymized photo with the one in the database
+- If the photo is matched, the server returns a one-time password (OTP) to the user via email or SMS
+- The OTP is valid for a short period of time (e.g., 5 minutes)
+- The user uses the OTP to log in to the system
+
 Server side:
 
 - With face recognition model, the server matches the anonymized photo with the one in the database
