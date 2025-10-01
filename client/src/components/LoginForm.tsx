@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { startRegistration } from '@simplewebauthn/browser';
+import { handleRegister } from '@/lib/registration';
+import { handleAuthenticate } from '@/lib/authentication';
 
 export default function LoginForm({
   setTab,
@@ -19,45 +20,14 @@ export default function LoginForm({
   //   setUserId(crypto.randomUUID());
   // }, []);
 
-  async function handleRegister() {
-    try {
-      const optionsRes = await fetch(
-        'http://localhost:4000/registration/options',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, credentials }),
-          credentials: 'include',
-        }
-      );
-
-      if (!optionsRes.ok) {
-        console.error('Server error', await optionsRes.text());
-        return;
-      }
-
-      const options = await optionsRes.json();
-      const attResp = await startRegistration(options);
-
-      const verifyRes = await fetch(
-        'http://localhost:4000/registration/verify',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(attResp),
-          credentials: 'include',
-        }
-      );
-      console.log(await verifyRes.json());
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // setTab('multi-factor');
-    handleRegister();
+    if (title === 'Registration') {
+      handleRegister(username, credentials);
+    } else {
+      handleAuthenticate(username);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
