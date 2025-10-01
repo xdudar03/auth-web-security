@@ -109,7 +109,7 @@ app.post("/authentication/options", async (req, res) => {
   console.log("THIS IS AUTHENTICATION OPTIONS");
   const { username } = req.body;
   console.log("USERNAME:", username);
-  const user = users.users.find((user: any) => user.username === username);
+  const user = users[username];
   console.log("USER:", user);
 
   if (!user) {
@@ -153,7 +153,7 @@ app.post("/authentication/verify", async (req, res) => {
       expectedChallenge: `${expectedChallenge}`,
       expectedOrigin: "http://localhost:3000",
       expectedRPID: "localhost",
-      credential: user.credentials[0],
+      credential: users[username]?.credentials[0],
       requireUserVerification: false,
     });
     const { verified, authenticationInfo } = verification;
