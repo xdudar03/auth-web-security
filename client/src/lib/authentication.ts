@@ -1,13 +1,13 @@
 import { startAuthentication } from '@simplewebauthn/browser';
 
-export async function handleAuthenticate(username: string) {
+export async function handleAuthenticate(username: string, userId: string) {
   try {
     const optionsRes = await fetch(
       'http://localhost:4000/authentication/options',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
+        body: JSON.stringify({ username, userId }),
         credentials: 'include',
       }
     );

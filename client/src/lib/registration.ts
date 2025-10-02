@@ -1,13 +1,17 @@
 import { startRegistration } from '@simplewebauthn/browser';
 
-export async function handleRegister(username: string, credentials: any) {
+export async function handleRegister(
+  username: string,
+  credentials: any,
+  userId: string
+) {
   try {
     const optionsRes = await fetch(
       'http://localhost:4000/registration/options',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, credentials }),
+        body: JSON.stringify({ username, credentials, userId }),
         credentials: 'include',
       }
     );

@@ -13,20 +13,18 @@ export default function LoginForm({
 }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  // const [userId, setUserId] = useState('');
+  const [userId, setUserId] = useState('');
   const [credentials, setCredentials] = useState([]);
 
-  // useEffect(() => {
-  //   setUserId(crypto.randomUUID());
-  // }, []);
-
+  console.log('userId', userId);
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // setTab('multi-factor');
     if (title === 'Registration') {
-      handleRegister(username, credentials);
+      setUserId(crypto.randomUUID());
+      handleRegister(username, credentials, userId);
     } else {
-      handleAuthenticate(username);
+      handleAuthenticate(username, userId);
     }
   };
 

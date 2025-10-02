@@ -9,6 +9,7 @@ import {
 import session from "express-session";
 import cors from "cors";
 import fs from "fs";
+import { isoUint8Array } from "@simplewebauthn/server/helpers";
 
 const app = express();
 const port = 4000;
@@ -44,19 +45,22 @@ console.log("USERS FROM FILE:", users);
 
 app.post("/registration/options", async (req, res) => {
   try {
-    const { username } = req.body;
+    const { username, userId } = req.body;
     console.log("REQ BODY:", req.body);
 
     if (!username) {
-      return res
-        .status(400)
-        .json({ error: "userId and username are required" });
+      return res.status(400).json({ error: "username is required" });
+    }
+
+    if (username in users) {
+      return res.status(400).json({ error: `${username} already exists` });
     }
 
     const options = await generateRegistrationOptions({
       rpName: "Example RP",
       rpID: "localhost", // must match domain
       userName: username,
+      userID: isoUint8Array.fromUTF8String(userId),
       attestationType: "none",
       authenticatorSelection: {
         userVerification: "required",
@@ -69,7 +73,7 @@ app.post("/registration/options", async (req, res) => {
 
     (req.session as any).challenge = options.challenge;
     (req.session as any).username = username;
-
+    (req.session as any).userId = userId;
     res.json(options);
   } catch (error) {
     console.error("Error in registration options:", error);
@@ -91,10 +95,11 @@ app.post("/registration/verify", async (req, res) => {
     });
     const { verified, registrationInfo } = verification;
     if (verified && registrationInfo) {
-      const { username } = req.session as any;
+      const { username, userId } = req.session as any;
       users[username] = {
         username,
         credentials: [registrationInfo],
+        userId,
       };
       saveUsers(users);
     }
@@ -108,9 +113,9 @@ app.post("/registration/verify", async (req, res) => {
 app.post("/authentication/options", async (req, res) => {
   console.log("THIS IS AUTHENTICATION OPTIONS");
   const { username } = req.body;
-  console.log("USERNAME:", username);
-  const user = users[username];
-  console.log("USER:", user);
+  const user = Object.values(users).find(
+    (user: any) => user.username === username
+  );
 
   if (!user) {
     return res.status(400).json({ error: "User not found" });
@@ -119,19 +124,18 @@ app.post("/authentication/options", async (req, res) => {
   try {
     const options = await generateAuthenticationOptions({
       rpID: "localhost",
-      allowCredentials: user.credentials.map(
-        (credential: { id: any; transports: any }) => ({
-          id: credential.id,
-          transports: credential.transports,
-        })
-      ),
+      allowCredentials: user.credentials.map((cred: any) => ({
+        id: cred.credential.id, // must be a Buffer
+        transports: cred.credential.transports || ["internal"],
+      })),
       challenge: (req.session as any).challenge,
       timeout: 60000,
       userVerification: "required",
     });
-    console.log("OPTIONS:", options);
 
-    (req.session as any).currentChallenge = options.challenge;
+    (req.session as any).challenge = options.challenge;
+    (req.session as any).userId = user.userId;
+    (req.session as any).username = user.username;
 
     res.json(options);
   } catch (error) {
@@ -141,24 +145,30 @@ app.post("/authentication/options", async (req, res) => {
 });
 
 app.post("/authentication/verify", async (req, res) => {
+  console.log("THIS IS AUTHENTICATION VERIFY");
   const body = req.body;
-  console.log("REQ BODY:", body);
-  const expectedChallenge = (req.session as any).challenge;
   const username = (req.session as any).username;
-  console.log("USERNAME:", username);
-  console.log("EXPECTED CHALLENGE:", expectedChallenge);
+  const expectedChallenge = (req.session as any).challenge;
+  const user = users[username];
+  const credentials = user.credentials[0].credential;
+
   try {
     const verification = await verifyAuthenticationResponse({
       response: body,
       expectedChallenge: `${expectedChallenge}`,
       expectedOrigin: "http://localhost:3000",
       expectedRPID: "localhost",
-      credential: users[username]?.credentials[0],
+      credential: {
+        id: credentials.id,
+        publicKey: credentials.publicKey,
+        counter: credentials.counter,
+      },
       requireUserVerification: false,
     });
     const { verified, authenticationInfo } = verification;
     if (verified && authenticationInfo) {
       (req.session as any).currentChallenge = authenticationInfo.credentialID;
+      credentials.counter = authenticationInfo.newCounter;
     }
     res.json({ verified });
   } catch (error) {

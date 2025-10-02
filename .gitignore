@@ -91,4 +91,4 @@ build/
 /model/data/dataset-lfw_reconstructed/
 /model/data/dataset-yalefaces/
 
-server/src/users.json
+/server/src/users.json
