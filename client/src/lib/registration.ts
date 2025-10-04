@@ -7,7 +7,7 @@ export async function handleRegister(
 ) {
   try {
     const optionsRes = await fetch(
-      'http://localhost:4000/registration/options',
+      'http://localhost:4000/passwordless/registration/options',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -25,12 +25,15 @@ export async function handleRegister(
     const options = await optionsRes.json();
     const attResp = await startRegistration({ optionsJSON: options });
 
-    const verifyRes = await fetch('http://localhost:4000/registration/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(attResp),
-      credentials: 'include',
-    });
+    const verifyRes = await fetch(
+      'http://localhost:4000/passwordless/registration/verify',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(attResp),
+        credentials: 'include',
+      }
+    );
     console.log(await verifyRes.json());
   } catch (error) {
     console.error(error);

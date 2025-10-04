@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react';
 import Image from 'next/image';
+import { User, useUser } from '@/hooks/useUserContext';
 
 export default function BiometricAuth() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const { user, setUser } = useUser();
 
   async function startCamera() {
     try {
@@ -46,6 +48,11 @@ export default function BiometricAuth() {
         ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         const imageData = canvas.toDataURL('image/png');
         setCapturedImage(imageData);
+        setUser({
+          ...user,
+          embedding: imageData,
+          id: user?.id ?? '',
+        } as User);
       }
     }
   };

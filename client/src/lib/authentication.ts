@@ -3,7 +3,7 @@ import { startAuthentication } from '@simplewebauthn/browser';
 export async function handleAuthenticate(username: string, userId: string) {
   try {
     const optionsRes = await fetch(
-      'http://localhost:4000/authentication/options',
+      'http://localhost:4000/passwordless/authentication/options',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -27,7 +27,7 @@ export async function handleAuthenticate(username: string, userId: string) {
     }
 
     const verifyRes = await fetch(
-      'http://localhost:4000/authentication/verify',
+      'http://localhost:4000/passwordless/authentication/verify',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
