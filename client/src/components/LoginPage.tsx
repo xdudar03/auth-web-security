@@ -29,7 +29,7 @@ export default function LoginPage({
         {tab === 'login' ? (
           <LoginForm title="Login" setTab={setTab} />
         ) : (
-          <BiometricAuth />
+          <BiometricAuth title="Login" />
         )}
       </div>
     </UserProvider>

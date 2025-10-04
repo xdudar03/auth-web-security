@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
 import Image from 'next/image';
 import { User, useUser } from '@/hooks/useUserContext';
+import { handleRegister } from '@/lib/registration';
+import { handleAuthenticate } from '@/lib/authentication';
 
-export default function BiometricAuth() {
+export default function BiometricAuth({title}: {title: string}) {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -53,13 +55,18 @@ export default function BiometricAuth() {
           embedding: imageData,
           id: user?.id ?? '',
         } as User);
+        if (user && title === 'Registration') {
+          handleRegister(user);
+        } else if (user && title === 'Login') {
+          handleAuthenticate(user);
+        }
       }
     }
   };
 
   return (
     <div className="flex flex-col items-center justify-center p-6 bg-white rounded  gap-6">
-      <h2 className="text-lg font-semibold">Biometric Authentication</h2>
+      <h2 className="text-lg font-semibold">Biometric {title.toLowerCase()}</h2>
       <p>Please position your face within the frame.</p>
       <video
         ref={videoRef}

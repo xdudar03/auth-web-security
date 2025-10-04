@@ -30,7 +30,7 @@ export default function RegistrationPage({
         {tab === 'registration' ? (
           <LoginForm title="Registration" setTab={setTab} />
         ) : (
-          <BiometricAuth />
+          <BiometricAuth title="Registration" />
         )}
       </div>
     </UserProvider>

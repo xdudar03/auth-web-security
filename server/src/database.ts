@@ -6,6 +6,7 @@ const initTable = () => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId TEXT NOT NULL,
       username TEXT NOT NULL,
       password TEXT,
       embedding TEXT NOT NULL
@@ -16,7 +17,7 @@ const initTable = () => {
 initTable();
 
 const addUser = db.prepare(
-  `INSERT INTO users (username, password, embedding) VALUES (?, ?, ?)`
+  `INSERT INTO users (userId, username, password, embedding) VALUES (?, ?, ?, ?)`
 );
 
 const getUserByUsername = db.prepare(`SELECT * FROM users WHERE username = ?`);

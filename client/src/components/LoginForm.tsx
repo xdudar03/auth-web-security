@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import { handleRegister } from '@/lib/registration';
-import { handleAuthenticate } from '@/lib/authentication';
+import { handleRegisterPasswordless } from '@/lib/registrationPasswordless';
+import { handleAuthenticatePasswordless } from '@/lib/authenticationPasswordless';
 import { useUser, type User } from '@/hooks/useUserContext';
 
 export default function LoginForm({
@@ -52,13 +52,13 @@ export default function LoginForm({
       console.log('id', id);
       setUser({ ...(user ?? {}), id: id } as User);
       if (user?.username) {
-        handleRegister(user.username, user.credentials, id);
+        handleRegisterPasswordless(user.username, user.credentials, id);
       } else {
         alert('Username is required');
       }
     } else {
       if (user?.username) {
-        handleAuthenticate(user.username, user.id);
+        handleAuthenticatePasswordless(user.username, user.id);
       } else {
         alert('Username is required');
       }

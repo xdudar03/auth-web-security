@@ -1,41 +1,29 @@
-import { startRegistration } from '@simplewebauthn/browser';
+import type { User } from "@/hooks/useUserContext";
 
-export async function handleRegister(
-  username: string,
-  credentials: any,
-  userId: string
-) {
+export async function handleRegister(user: User) {
+  const { username, password, embedding, id } = user;
+  if (!username || !password || !id) {
+    throw new Error('Username, password, and id are required');
+  }
+  if (!embedding) {
+    throw new Error('Embedding is required');
+  }
+  // shorten embedding to 128 bits
+  const shortenedEmbedding = embedding.slice(0, 128);
+  console.log('Shortened embedding:', shortenedEmbedding);
   try {
-    const optionsRes = await fetch(
-      'http://localhost:4000/passwordless/registration/options',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, credentials, userId }),
-        credentials: 'include',
-      }
-    );
-    console.log('OPTIONS RES:', optionsRes);
-
-    if (!optionsRes.ok) {
-      console.error('Server error', await optionsRes.text());
-      return;
-    }
-
-    const options = await optionsRes.json();
-    const attResp = await startRegistration({ optionsJSON: options });
-
-    const verifyRes = await fetch(
-      'http://localhost:4000/passwordless/registration/verify',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(attResp),
-        credentials: 'include',
-      }
-    );
-    console.log(await verifyRes.json());
+  const response = await fetch('http://localhost:4000/biometric/registration', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ username, password, embedding: shortenedEmbedding, id }),
+  });
+  console.log('Response:', response);
+  const data = await response.json();
+  return data;
   } catch (error) {
-    console.error(error);
+    console.error('Error registering user', error);
+    return null;
   }
 }
