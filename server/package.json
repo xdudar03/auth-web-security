@@ -16,7 +16,8 @@
     "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "@types/form-data": "^2.5.0"
   },
   "dependencies": {
     "@simplewebauthn/server": "^13.2.1",

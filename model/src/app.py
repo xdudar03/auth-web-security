@@ -21,16 +21,19 @@ The aim of the project is the development a prototype that take a photo and matc
 # $ poetry init # for generate .toml file
 # ---------------------------------------------------------------------------
 from flask import Flask, render_template, jsonify, request
+import os
+import requests
 from flask_assets import Environment, Bundle
 from os import listdir
 
 from src.controller.ml_controller import MLController
 from src.controller.user_creation_controller import UserCreationController
 from src.controller.database_controller import DatabaseController
-from src.modules.utils_image import pillow_image_to_bytes
+from src.modules.utils_image import pillow_image_to_bytes, base64_image_to_numpy
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY = b'\x1f\x0e\x0c\xa6\xdbt\x01S\xa0$r\xf8$\xb4\xe3\x8a\xcf\xe0\\\x00M0H\x01'
+EXPRESS_BASE_URL = os.environ.get('EXPRESS_BASE_URL', 'http://localhost:4000')
 # Configure SCSS bundle
 assets = Environment(app)
 assets.url = app.static_url_path
@@ -160,6 +163,32 @@ def check_photo():
     return jsonify({"prediction":prediction, "trust": trust}), 200
 
 
+@app.route('/api/check_photo_json', methods=['POST'])
+def check_photo_json():
+    data = request.get_json(silent=True) or {}
+    data_url = data.get('dataUrl') or data.get('imageBase64')
+    if not data_url:
+        return jsonify({'error': 'dataUrl or imageBase64 is required'}), 400
+    # Accept full data URL or raw base64
+    base64_part = data_url.split(',')[-1] if isinstance(data_url, str) else None
+    if not base64_part:
+        return jsonify({'error': 'Invalid dataUrl'}), 400
+
+    # Convert to numpy
+    try:
+        image = base64_image_to_numpy(base64_part)
+    except Exception as e:
+        return jsonify({'error': f'Failed to decode image: {e}'}), 400
+
+    # Predict
+    mlc = MLController()
+    try:
+        result = mlc.predict_image(image)
+    except Exception as e:
+        return jsonify({'error': f'Prediction failed: {e}'}), 500
+    prediction, trust = int(result[0]), round(float(result[1]), 2)
+    return jsonify({"prediction": prediction, "trust": trust}), 200
+
 @app.route('/api/load_yaleface', methods=['POST'])
 def load_yaleface():
     DatabaseController().load_yalefaces_dataset()
@@ -176,6 +205,48 @@ def delete_db():
     return jsonify({"result": "ok"}), 200
 
 
+
+
+# ---------------------------------------------------------------------------
+# ------------------------- EXPRESS SERVER PROXY ----------------------------
+# ---------------------------------------------------------------------------
+
+@app.route('/api/express/health', methods=['GET'])
+def express_health():
+    try:
+        r = requests.get(f"{EXPRESS_BASE_URL}/", timeout=5)
+        return jsonify({"ok": True, "status_code": r.status_code, "body": r.text}), 200
+    except requests.RequestException as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+
+@app.route('/api/biometric/registration', methods=['POST'])
+def proxy_biometric_registration():
+    payload = request.get_json(silent=True) or {}
+    try:
+        r = requests.post(f"{EXPRESS_BASE_URL}/biometric/registration", json=payload, timeout=10)
+        # Try JSON first; fallback to text
+        try:
+            data = r.json()
+        except ValueError:
+            data = {"message": r.text}
+        return jsonify(data), r.status_code
+    except requests.RequestException as e:
+        return jsonify({"error": "Express server unavailable", "details": str(e)}), 502
+
+
+@app.route('/api/biometric/authentication', methods=['POST'])
+def proxy_biometric_authentication():
+    payload = request.get_json(silent=True) or {}
+    try:
+        r = requests.post(f"{EXPRESS_BASE_URL}/biometric/authentication", json=payload, timeout=10)
+        try:
+            data = r.json()
+        except ValueError:
+            data = {"message": r.text}
+        return jsonify(data), r.status_code
+    except requests.RequestException as e:
+        return jsonify({"error": "Express server unavailable", "details": str(e)}), 502
 
 
 

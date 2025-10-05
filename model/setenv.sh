@@ -10,3 +10,5 @@ echo "FLASK_APP = ${FLASK_APP}"
 echo "FLASK_ENV = ${FLASK_ENV}"
 echo "FLASK_DEBUG = ${FLASK_DEBUG}"
 echo "In folder $(pwd)"
+
+flask run
