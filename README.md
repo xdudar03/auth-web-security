@@ -1,3 +1,40 @@
+# auth-web-security
+
+## Deployment (Docker Compose)
+
+1. Create a `.env` file at the repo root using the template below:
+
+```
+SESSION_SECRET=replace-with-strong-random-secret
+CORS_ORIGIN=http://localhost:3000
+MODEL_BASE_URL=http://model:5000
+
+# Client
+SERVER_BASE_URL=http://server:4000
+
+# Model (Flask)
+FLASK_SECRET_KEY=replace-with-strong-random-secret
+EXPRESS_BASE_URL=http://server:4000
+```
+
+2. Build and start:
+
+```
+docker compose up --build -d
+```
+
+Services:
+- client: http://localhost:3000
+- server: http://localhost:4000
+- model:  http://localhost:5000
+
+Health endpoints:
+- server: GET /health
+- model:  GET /health
+
+## Notes
+- The Next.js client proxies all requests from `/api/*` to the server (`SERVER_BASE_URL`).
+- The server accepts CORS origins set via `CORS_ORIGIN` (comma-separated list allowed).
 ## Privacy-preserving face recognition
 
 ### The flow of the system

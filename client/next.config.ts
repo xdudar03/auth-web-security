@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 
+const serverBaseUrl = process.env.SERVER_BASE_URL || "http://localhost:4000";
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  async rewrites() {
+    return [
+      { source: "/api/:path*", destination: `${serverBaseUrl}/:path*` },
+    ];
+  },
 };
 
 export default nextConfig;

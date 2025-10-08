@@ -12,7 +12,7 @@ export async function handleRegister(user: User) {
   const shortenedEmbedding = embedding.slice(0, 128);
   console.log('Shortened embedding:', shortenedEmbedding);
   try {
-  const response = await fetch('http://localhost:4000/biometric/registration', {
+  const response = await fetch('/api/biometric/registration', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

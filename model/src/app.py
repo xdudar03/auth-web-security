@@ -32,7 +32,9 @@ from src.controller.database_controller import DatabaseController
 from src.modules.utils_image import pillow_image_to_bytes, base64_image_to_numpy
 
 app = Flask(__name__)
-app.secret_key = SECRET_KEY = b'\x1f\x0e\x0c\xa6\xdbt\x01S\xa0$r\xf8$\xb4\xe3\x8a\xcf\xe0\\\x00M0H\x01'
+SECRET_KEY = os.environ.get('FLASK_SECRET_KEY', None)
+if SECRET_KEY:
+    app.secret_key = SECRET_KEY
 EXPRESS_BASE_URL = os.environ.get('EXPRESS_BASE_URL', 'http://localhost:4000')
 # Configure SCSS bundle
 assets = Environment(app)
@@ -51,6 +53,10 @@ for filename in listdir(f"src/{assets.url}/css"):
 @app.route("/")
 def index_page():
     return render_template("index.html")
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({"ok": True}), 200
 
 @app.route("/search_people")
 def search_people_page():

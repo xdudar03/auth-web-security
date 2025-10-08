@@ -2,15 +2,12 @@ import { startAuthentication } from '@simplewebauthn/browser';
 
 export async function handleAuthenticatePasswordless(username: string, userId: string) {
   try {
-    const optionsRes = await fetch(
-      'http://localhost:4000/passwordless/authentication/options',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, userId }),
-        credentials: 'include',
-      }
-    );
+    const optionsRes = await fetch('/api/passwordless/authentication/options', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, userId }),
+      credentials: 'include',
+    });
     console.log('OPTIONS RES:', optionsRes);
     if (!optionsRes.ok) {
       console.error('Server error', await optionsRes.text());
@@ -26,15 +23,12 @@ export async function handleAuthenticatePasswordless(username: string, userId: s
       return;
     }
 
-    const verifyRes = await fetch(
-      'http://localhost:4000/passwordless/authentication/verify',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(attResp),
-        credentials: 'include',
-      }
-    );
+    const verifyRes = await fetch('/api/passwordless/authentication/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(attResp),
+      credentials: 'include',
+    });
     console.log(await verifyRes.json());
   } catch (error) {
     console.error(error);

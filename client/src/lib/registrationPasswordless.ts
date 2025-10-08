@@ -6,15 +6,12 @@ export async function handleRegisterPasswordless(
   userId: string
 ) {
   try {
-    const optionsRes = await fetch(
-      'http://localhost:4000/passwordless/registration/options',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, credentials, userId }),
-        credentials: 'include',
-      }
-    );
+    const optionsRes = await fetch('/api/passwordless/registration/options', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, credentials, userId }),
+      credentials: 'include',
+    });
     console.log('OPTIONS RES:', optionsRes);
 
     if (!optionsRes.ok) {
@@ -25,15 +22,12 @@ export async function handleRegisterPasswordless(
     const options = await optionsRes.json();
     const attResp = await startRegistration({ optionsJSON: options });
 
-    const verifyRes = await fetch(
-      'http://localhost:4000/passwordless/registration/verify',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(attResp),
-        credentials: 'include',
-      }
-    );
+    const verifyRes = await fetch('/api/passwordless/registration/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(attResp),
+      credentials: 'include',
+    });
     console.log(await verifyRes.json());
   } catch (error) {
     console.error(error);

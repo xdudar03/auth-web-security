@@ -3,7 +3,7 @@ import type { User } from "@/hooks/useUserContext";
 export async function handleAuthenticate(user: User) {
   const { username, password } = user;
   
-  const response = await fetch('http://localhost:4000/biometric/authentication', {
+  const response = await fetch('/api/biometric/authentication', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

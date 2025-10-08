@@ -29,6 +29,8 @@ COPY src ./src
 
 EXPOSE 5000
 
-CMD ["python", "-m", "src.app"]
+# Gunicorn for production
+ENV GUNICORN_CMD_ARGS="--bind 0.0.0.0:5000 --workers 2 --threads 2 --timeout 60"
+CMD ["gunicorn", "-k", "gthread", "-w", "2", "-b", "0.0.0.0:5000", "src.app:app"]
 
 

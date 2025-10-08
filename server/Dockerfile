@@ -18,6 +18,6 @@ ENV NODE_ENV=production \
 EXPOSE 4000
 
 # Run TypeScript directly with tsx (installed from devDependencies)
-CMD ["node", "--import", "tsx", "src/server.ts"]
+CMD ["npm", "run", "start"]
 
 

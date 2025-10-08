@@ -17,13 +17,22 @@ const app = express();
 const port = 4000;
 const USERS_FILE_TEMP = "src/users.json";
 const MODEL_BASE_URL = process.env.MODEL_BASE_URL || "http://localhost:5000";
+const SESSION_SECRET = process.env.SESSION_SECRET || "change-me";
+const CORS_ORIGINS = (process.env.CORS_ORIGIN || "http://localhost:3000")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const usersFromDB = db.prepare("SELECT * FROM users").all();
 console.log("USERS FROM DB:", usersFromDB);
 
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (CORS_ORIGINS.includes(origin)) return callback(null, true);
+      return callback(new Error("Not allowed by CORS"), false);
+    },
     credentials: true,
   })
 );
@@ -31,15 +40,21 @@ app.use(
 app.use(express.json());
 app.use(
   session({
-    secret: "secret",
+    secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
   })
 );
 
 export function loadUsers() {
-  const users = JSON.parse(fs.readFileSync(USERS_FILE_TEMP, "utf8"));
-  return users;
+  try {
+    if (!fs.existsSync(USERS_FILE_TEMP)) return [];
+    const users = JSON.parse(fs.readFileSync(USERS_FILE_TEMP, "utf8"));
+    return users;
+  } catch (err) {
+    console.warn("Failed to load users from file:", err);
+    return [];
+  }
 }
 
 export function saveUsers(users: any) {
@@ -150,6 +165,10 @@ app.post("/model/dataset/delete", async (_req, res) => {
 
 app.get("/", (req, res) => {
   res.send("Hello World!");
+});
+
+app.get("/health", (_req, res) => {
+  res.status(200).json({ ok: true });
 });
 
 app.listen(port, () => {

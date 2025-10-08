@@ -7,7 +7,8 @@ RUN npm ci
 FROM deps AS builder
 WORKDIR /app
 COPY . .
-ENV NEXT_DISABLE_ESLINT=true
+ENV NEXT_DISABLE_ESLINT=true \
+    SERVER_BASE_URL=http://server:4000
 RUN npm run build -- --no-lint
 
 FROM node:22-bookworm-slim AS runner
