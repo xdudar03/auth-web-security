@@ -1,0 +1,38 @@
+services:
+  server:
+    build:
+      context: ./server
+    env_file: []
+    environment:
+      - MODEL_BASE_URL=http://model:5000
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./server/users.db:/app/users.db
+    depends_on:
+      - model
+
+  client:
+    build:
+      context: ./client
+    environment:
+      - SERVER_BASE_URL=http://server:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+
+  model:
+    build:
+      context: ./model
+    environment:
+      - EXPRESS_BASE_URL=http://server:4000
+    ports:
+      - "5000:5000"
+    volumes:
+      - model_db:/app/data
+
+volumes:
+  model_db:
+
+

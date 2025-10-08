@@ -3,9 +3,6 @@ import session from "express-session";
 import cors from "cors";
 import fs from "fs";
 import "dotenv/config";
-// FormData is used to send multipart data to the Flask model
-// Types are provided via @types/form-data or the package itself depending on version
-// Removed multipart dependency by using JSON-based endpoint in the model
 import { addUser, db } from "./database.js";
 import {
   authenticateOptions,
@@ -47,19 +44,6 @@ export function loadUsers() {
 
 export function saveUsers(users: any) {
   fs.writeFileSync(USERS_FILE_TEMP, JSON.stringify(users, null, 2));
-}
-
-function parseDataURL(dataUrl: string): { mime: string; buffer: Buffer } {
-  const match = dataUrl.match(/^data:(.+);base64,(.+)$/);
-  if (!match) {
-    throw new Error("Invalid data URL");
-  }
-  const mime = match[1] ?? "";
-  const base64 = match[2] ?? "";
-  if (!mime || !base64) {
-    throw new Error("Invalid data URL content");
-  }
-  return { mime, buffer: Buffer.from(base64, "base64") };
 }
 
 app.post("/passwordless/registration/options", async (req, res) => {

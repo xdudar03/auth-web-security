@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log
+.DS_Store
+.env
+dist
+coverage
+.turbo
+.next
+.cache
+*.tsbuildinfo
+**/*.map
+Dockerfile*
+docker-compose*
+
+
