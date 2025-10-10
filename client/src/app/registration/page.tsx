@@ -16,12 +16,12 @@ export default function RegistrationPage() {
     }
   };
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-200">
-      <div className="flex flex-col items-center justify-center border p-6 bg-white rounded shadow-md border-blue-950 gap-6">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background">
+      <div className="flex flex-col items-center justify-center border p-6 bg-surface rounded shadow-md border-border gap-6">
         <div className="flex flex-row items-center justify-center gap-6">
           <button
             onClick={handleBack}
-            className="bg-transparent p-2 rounded-full mb-4 hover:bg-gray-200 hover:scale-110 transition"
+            className="bg-transparent p-2 rounded-full mb-4 hover:bg-muted/20 hover:scale-110 transition"
           >
             &#8592;
           </button>

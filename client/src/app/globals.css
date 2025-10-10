@@ -1,21 +1,46 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Base neutrals */
+  --background: #f1f5f9; /* gray-200 used as app bg */
+  --foreground: #0f172a; /* slate-900 for strong text */
+  --surface: #ffffff; /* card/surface */
+  --border: #172554; /* blue-950 seen in borders */
+  --muted: #64748b; /* slate-500 for subtle text */
+
+  /* Brand primary derived from existing usage */
+  --primary: #1e3a8a; /* blue-900 primary */
+  --primary-foreground: #ffffff;
+
+  /* Focus ring and accents */
+  --ring: #1e3a8a; /* align with primary */
 }
 
 @theme inline {
+  /* Semantic colors */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--ring);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #020617; /* slate-950 */
+    --foreground: #e2e8f0; /* slate-200 */
+    --surface: #0b1220; /* near-bg but raised */
+    --border: #1e3a8a; /* keep brand visible on dark */
+    --muted: #94a3b8; /* slate-400 */
+    --primary: #1d4ed8; /* brighter primary for dark */
+    --primary-foreground: #ffffff;
+    --ring: #1d4ed8;
   }
 }
 

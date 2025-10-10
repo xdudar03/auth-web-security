@@ -81,7 +81,7 @@ export default function FormAuth({
     }
   };
   return (
-    <div className="flex flex-col items-center justify-center p-6 bg-white rounded  gap-6">
+    <div className="flex flex-col items-center justify-center p-6 bg-surface rounded  gap-6">
       <h2 className="text-lg font-semibold">{title} Form</h2>
       <form onSubmit={onSubmit} className="flex flex-col space-y-4">
         <label>
@@ -89,7 +89,7 @@ export default function FormAuth({
             type="text"
             name="username"
             onChange={handleChange}
-            className="border p-2 rounded"
+            className="border border-border p-2 rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             placeholder="Username"
           />
         </label>
@@ -98,20 +98,20 @@ export default function FormAuth({
             type="password"
             name="password"
             onChange={handleChange}
-            className="border p-2 rounded"
+            className="border border-border p-2 rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             placeholder="Password"
           />
         </label>
         <button
           type="button"
-          className=" text-sm align-self-start hover:underline cursor-pointer"
+          className=" text-sm align-self-start hover:underline cursor-pointer text-muted"
           onClick={handlePasswordless}
         >
           Use passwordless {title.toLowerCase()}
         </button>
         <button
           type="submit"
-          className="bg-blue-900 text-white p-2 rounded cursor-pointer"
+          className="bg-primary text-primary-foreground p-2 rounded cursor-pointer hover:bg-primary/90"
         >
           {title}
         </button>

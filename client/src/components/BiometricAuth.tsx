@@ -4,7 +4,7 @@ import { User, useUser } from '@/hooks/useUserContext';
 import { handleRegister } from '@/lib/registration';
 import { handleAuthenticate } from '@/lib/authentication';
 
-export default function BiometricAuth({title}: {title: string}) {
+export default function BiometricAuth({ title }: { title: string }) {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -65,17 +65,17 @@ export default function BiometricAuth({title}: {title: string}) {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-6 bg-white rounded  gap-6">
+    <div className="flex flex-col items-center justify-center p-6 bg-surface rounded  gap-6">
       <h2 className="text-lg font-semibold">Biometric {title.toLowerCase()}</h2>
       <p>Please position your face within the frame.</p>
       <video
         ref={videoRef}
         autoPlay
-        className="w-64 h-48 bg-transparent border-2 border-dashed border-blue-800 rounded"
+        className="w-64 h-48 bg-transparent border-2 border-dashed border-primary rounded"
       />
       <button
         onClick={handleClick}
-        className="bg-blue-900 text-white p-2 rounded"
+        className="bg-primary text-primary-foreground p-2 rounded hover:bg-primary/90"
       >
         {isCameraActive ? 'Take Photo' : 'Start Camera'}
       </button>
