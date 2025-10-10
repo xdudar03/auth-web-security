@@ -84,11 +84,11 @@ app.post("/biometric/registration", async (req, res) => {
   const { username, password, embedding, id } = req.body;
   // add user to database
   if (usersFromDB.find((user: any) => user.userId === id)) {
-    res.status(400).json({ error: "User already exists" });
+    return res.status(400).json({ error: "User already exists" });
   }
   addUser.run(id, username, password, embedding);
   console.log("USER ADDED TO DB:", db.prepare("SELECT * FROM users").all());
-  res.status(200).json({ message: "Registration successful" });
+  return res.status(200).json({ message: "Registration successful" });
 });
 
 app.post("/biometric/authentication", async (req, res) => {
@@ -96,12 +96,12 @@ app.post("/biometric/authentication", async (req, res) => {
   const { username, password } = req.body;
   const user = usersFromDB.find((user: any) => user.username === username);
   if (!user) {
-    res.status(400).json({ error: "User not found" });
+    return res.status(400).json({ error: "User not found" });
   } else if (user.password !== password) {
-    res.status(400).json({ error: "Invalid password" });
+    return res.status(400).json({ error: "Invalid password" });
   }
   console.log("USER FOUND:", user);
-  res.status(200).json(user);
+  return res.status(200).json(user);
 });
 
 // ------------------------- MODEL (Flask) INTEGRATION -------------------------

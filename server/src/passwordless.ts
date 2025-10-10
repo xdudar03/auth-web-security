@@ -13,13 +13,13 @@ export const registredOptions = async (req: any, res: any) => {
     console.log("REQ BODY:", req.body);
 
     if (!username) {
-      res.status(400).json({ error: "username is required" });
+      return res.status(400).json({ error: "username is required" });
     }
 
     const users = loadUsers();
 
     if (users[username]) {
-      res.status(400).json({ error: `${username} already exists` });
+      return res.status(400).json({ error: `${username} already exists` });
     }
 
     const options = await generateRegistrationOptions({
