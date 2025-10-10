@@ -88,7 +88,7 @@ app.post("/biometric/registration", async (req, res) => {
   }
   addUser.run(id, username, password, embedding);
   console.log("USER ADDED TO DB:", db.prepare("SELECT * FROM users").all());
-  res.json({ message: "Registration successful" });
+  res.status(200).json({ message: "Registration successful" });
 });
 
 app.post("/biometric/authentication", async (req, res) => {
@@ -101,7 +101,7 @@ app.post("/biometric/authentication", async (req, res) => {
     res.status(400).json({ error: "Invalid password" });
   }
   console.log("USER FOUND:", user);
-  res.json(user);
+  res.status(200).json(user);
 });
 
 // ------------------------- MODEL (Flask) INTEGRATION -------------------------
@@ -129,17 +129,23 @@ app.post("/model/check-photo", async (req, res) => {
     const data = await r.json();
     res.status(r.status).json(data);
   } catch (err: any) {
-    res.status(502).json({ error: "Model service unavailable", details: String(err) });
+    res
+      .status(502)
+      .json({ error: "Model service unavailable", details: String(err) });
   }
 });
 
 app.post("/model/dataset/yaleface", async (_req, res) => {
   try {
-    const r = await fetch(`${MODEL_BASE_URL}/api/load_yaleface`, { method: "POST" });
+    const r = await fetch(`${MODEL_BASE_URL}/api/load_yaleface`, {
+      method: "POST",
+    });
     const data = await r.json();
     res.status(r.status).json(data);
   } catch (err: any) {
-    res.status(502).json({ error: "Model service unavailable", details: String(err) });
+    res
+      .status(502)
+      .json({ error: "Model service unavailable", details: String(err) });
   }
 });
 
@@ -149,17 +155,23 @@ app.post("/model/dataset/lfw", async (_req, res) => {
     const data = await r.json();
     res.status(r.status).json(data);
   } catch (err: any) {
-    res.status(502).json({ error: "Model service unavailable", details: String(err) });
+    res
+      .status(502)
+      .json({ error: "Model service unavailable", details: String(err) });
   }
 });
 
 app.post("/model/dataset/delete", async (_req, res) => {
   try {
-    const r = await fetch(`${MODEL_BASE_URL}/api/delete_db`, { method: "POST" });
+    const r = await fetch(`${MODEL_BASE_URL}/api/delete_db`, {
+      method: "POST",
+    });
     const data = await r.json();
     res.status(r.status).json(data);
   } catch (err: any) {
-    res.status(502).json({ error: "Model service unavailable", details: String(err) });
+    res
+      .status(502)
+      .json({ error: "Model service unavailable", details: String(err) });
   }
 });
 

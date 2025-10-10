@@ -1,7 +1,10 @@
+'use client';
 import { createContext, useContext, useState } from 'react';
 
 export const UserContext = createContext<
   | {
+      isAuthenticated: boolean;
+      setIsAuthenticated: (isAuthenticated: boolean) => void;
       user: User | null;
       setUser: (user: User | null) => void;
     }
@@ -18,9 +21,12 @@ export type User = {
 
 export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   console.log('user in context', user);
   return (
-    <UserContext.Provider value={{ user, setUser }}>
+    <UserContext.Provider
+      value={{ user, setUser, isAuthenticated, setIsAuthenticated }}
+    >
       {children}
     </UserContext.Provider>
   );

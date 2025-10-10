@@ -8,8 +8,8 @@ const initTable = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       userId TEXT NOT NULL,
       username TEXT NOT NULL,
-      password TEXT,
-      embedding TEXT NOT NULL
+      password TEXT NOT NULL,
+      embedding TEXT
     )
   `);
 };
@@ -17,7 +17,7 @@ const initTable = () => {
 initTable();
 
 const addUser = db.prepare(
-  `INSERT INTO users (userId, username, password, embedding) VALUES (?, ?, ?, ?)`
+  `INSERT INTO users (userId, username, password, embedding) VALUES (?, ?, ?, ?)` // embedding is not needed during registration
 );
 
 const getUserByUsername = db.prepare(`SELECT * FROM users WHERE username = ?`);

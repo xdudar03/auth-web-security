@@ -4,21 +4,23 @@ import { useEffect } from 'react';
 import { handleRegisterPasswordless } from '@/lib/registrationPasswordless';
 import { handleAuthenticatePasswordless } from '@/lib/authenticationPasswordless';
 import { useUser, type User } from '@/hooks/useUserContext';
-
-export default function LoginForm({
+import { handleRegister } from '@/lib/registration';
+import { useRouter } from 'next/navigation';
+import { handleAuthenticate } from '@/lib/authentication';
+export default function FormAuth({
   setTab,
   title,
 }: {
   setTab: (tab: string) => void;
   title: string;
 }) {
-  const { user, setUser } = useUser();
-
+  const { user, setUser, setIsAuthenticated } = useUser();
+  const router = useRouter();
   useEffect(() => {
     console.log('user updated', user);
   }, [user]);
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const id = crypto.randomUUID();
     setUser({ ...(user ?? {}), id: id } as User);
@@ -30,7 +32,21 @@ export default function LoginForm({
       alert('Password is required');
       return;
     }
-    setTab('multi-factor');
+    if (title === 'Registration') {
+      const result = await handleRegister(user as User);
+      if (result) {
+        setIsAuthenticated(true);
+        router.push('/dashboard');
+      }
+    } else {
+      const resultUser = await handleAuthenticate(user as User);
+      if (resultUser.embedding === '') {
+        setIsAuthenticated(true);
+        router.push('/dashboard');
+      } else {
+        setTab('multi-factor');
+      }
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

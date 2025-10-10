@@ -11,5 +11,6 @@ export async function handleAuthenticate(user: User) {
     body: JSON.stringify({ username, password }),
   });
   const data = await response.json();
+  console.log('Data:', data);
   return data;
 }
