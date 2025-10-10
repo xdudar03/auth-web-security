@@ -89,7 +89,7 @@ export default function FormAuth({
             type="text"
             name="username"
             onChange={handleChange}
-            className="border border-border p-2 rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="input"
             placeholder="Username"
           />
         </label>
@@ -98,21 +98,18 @@ export default function FormAuth({
             type="password"
             name="password"
             onChange={handleChange}
-            className="border border-border p-2 rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="input"
             placeholder="Password"
           />
         </label>
         <button
           type="button"
-          className=" text-sm align-self-start hover:underline cursor-pointer text-muted"
+          className="btn-link-muted"
           onClick={handlePasswordless}
         >
           Use passwordless {title.toLowerCase()}
         </button>
-        <button
-          type="submit"
-          className="bg-primary text-primary-foreground p-2 rounded cursor-pointer hover:bg-primary/90"
-        >
+        <button type="submit" className="btn-primary cursor-pointer">
           {title}
         </button>
       </form>

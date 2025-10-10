@@ -1,3 +1,4 @@
+/* stylelint-disable at-rule-no-unknown */
 @import 'tailwindcss';
 
 :root {
@@ -46,4 +47,60 @@
 
 body {
   font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer components {
+  /* Layout helpers */
+  .center-screen {
+    @apply flex min-h-screen flex-col items-center justify-center bg-background;
+  }
+
+  /* Surfaces */
+  .card {
+    @apply flex flex-col items-center justify-center border p-6 bg-surface rounded shadow-md border-border gap-6;
+  }
+
+  /* Inputs */
+  .input {
+    @apply border border-border p-2 rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply bg-primary text-primary-foreground p-2 rounded hover:bg-primary/90;
+  }
+  .btn-link-muted {
+    @apply text-sm hover:underline cursor-pointer text-muted self-start;
+  }
+
+  /* Icon buttons */
+  .icon-btn {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full p-2 hover:bg-muted/20;
+  }
+  .icon-btn-zoom {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full p-2 hover:bg-muted/20 hover:scale-110 transition cursor-pointer;
+  }
+
+  /* Utility surfaces */
+  .muted-panel {
+    @apply bg-muted/20;
+  }
+
+  /* Structured sections */
+  .grid-section-2 {
+    @apply grid grid-cols-2 gap-4 border-t border-border pt-4 mt-4 w-full;
+  }
+
+  /* Avatars */
+  .avatar-lg {
+    @apply w-12 h-12 rounded-full p-2 bg-muted/20;
+  }
+
+  .active {
+    @apply bg-primary/20 scale-110 transition cursor-pointer;
+  }
+
+  .page-container {
+    @apply flex h-screen bg-background w-full gap-4 p-2 sm:p-4 pb-16 md:pb-4 flex-col md:flex-row  mx-auto;
+  }
 }

@@ -16,12 +16,12 @@ export default function LoginPage() {
     }
   };
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background">
-      <div className="flex flex-col items-center justify-center border p-6 bg-surface rounded shadow-md border-border gap-6">
+    <div className="center-screen">
+      <div className="card">
         <div className="flex flex-row items-center justify-center gap-6">
           <button
             onClick={handleBack}
-            className="bg-transparent p-2 rounded-full mb-4 hover:bg-muted/20 hover:scale-110 transition"
+            className="icon-btn-zoom bg-transparent mb-4"
           >
             &#8592;
           </button>
