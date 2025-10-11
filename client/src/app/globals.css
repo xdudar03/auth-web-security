@@ -15,6 +15,8 @@
 
   /* Focus ring and accents */
   --ring: #1e3a8a; /* align with primary */
+  --error: #ef4444; /* red-400 */
+  --warning: #f59e0b; /* amber-400 */
 }
 
 @theme inline {
@@ -30,6 +32,8 @@
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-error: var(--error);
+  --color-warning: var(--warning);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,6 +46,8 @@
     --primary: #1d4ed8; /* brighter primary for dark */
     --primary-foreground: #ffffff;
     --ring: #1d4ed8;
+    --error: #7e1919;
+    --warning: #744c0c;
   }
 }
 
@@ -67,10 +73,13 @@ body {
 
   /* Buttons */
   .btn-primary {
-    @apply bg-primary text-primary-foreground p-2 rounded hover:bg-primary/90;
+    @apply bg-primary text-primary-foreground p-2 rounded hover:bg-primary/90 cursor-pointer shadow-md hover:scale-105 transition;
   }
   .btn-link-muted {
-    @apply text-sm hover:underline cursor-pointer text-muted self-start;
+    @apply text-sm hover:underline cursor-pointer text-muted self-start shadow-md hover:scale-105 transition;
+  }
+  .btn-outline {
+    @apply bg-surface text-foreground p-2 rounded hover:bg-surface/90 border border-border cursor-pointer shadow-md hover:scale-105 transition;
   }
 
   /* Icon buttons */
@@ -102,5 +111,39 @@ body {
 
   .page-container {
     @apply flex h-screen bg-background w-full gap-4 p-2 sm:p-4 pb-16 md:pb-4 flex-col md:flex-row  mx-auto;
+  }
+
+  /* Tables */
+  .table-card {
+    @apply bg-surface border border-border rounded-lg shadow-md overflow-hidden;
+  }
+  .table {
+    @apply w-full border-collapse text-sm;
+  }
+  .th {
+    @apply bg-primary/10 text-foreground font-semibold uppercase tracking-wide text-left p-3 border-b border-border;
+  }
+  .td {
+    @apply p-3 text-foreground/90 border-b border-border align-middle;
+  }
+  .table tbody tr:hover {
+    @apply bg-primary/5;
+  }
+  .table tbody tr:nth-child(even) {
+    @apply bg-muted/10;
+  }
+  .table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap;
+  }
+  .badge-success {
+    @apply bg-green-600 text-white;
+  }
+  .badge-error {
+    @apply bg-error text-primary-foreground;
   }
 }

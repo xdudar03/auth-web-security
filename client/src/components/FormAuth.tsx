@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+// import { useEffect } from 'react';
 import { handleRegisterPasswordless } from '@/lib/registrationPasswordless';
 import { handleAuthenticatePasswordless } from '@/lib/authenticationPasswordless';
 import { useUser, type User } from '@/hooks/useUserContext';
@@ -16,14 +16,13 @@ export default function FormAuth({
 }) {
   const { user, setUser, setIsAuthenticated } = useUser();
   const router = useRouter();
-  useEffect(() => {
-    console.log('user updated', user);
-  }, [user]);
+  // useEffect(() => {
+  //   console.log('user updated', user);
+  // }, [user]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const id = crypto.randomUUID();
-    setUser({ ...(user ?? {}), id: id } as User);
+    console.log('submitting users', user);
     if (user?.username === '') {
       alert('Username is required');
       return;
@@ -33,15 +32,19 @@ export default function FormAuth({
       return;
     }
     if (title === 'Registration') {
-      const result = await handleRegister(user as User);
+      const id = crypto.randomUUID(); // TODO: generate id from server
+      const userWithId = { ...(user ?? {}), id: id, roleId: 2 } as User;
+      const result = await handleRegister(userWithId);
       if (result) {
+        setUser(userWithId);
         setIsAuthenticated(true);
         router.push('/dashboard');
       }
     } else {
       const resultUser = await handleAuthenticate(user as User);
-      if (resultUser.embedding === '') {
+      if (resultUser && resultUser.embedding === '') {
         setIsAuthenticated(true);
+        setUser(resultUser as User);
         router.push('/dashboard');
       } else {
         setTab('multi-factor');
@@ -64,9 +67,9 @@ export default function FormAuth({
       return;
     }
     if (title === 'Registration') {
-      const id = crypto.randomUUID();
+      const id = crypto.randomUUID(); // TODO: generate id from server
       console.log('id', id);
-      setUser({ ...(user ?? {}), id: id } as User);
+      setUser({ ...(user ?? {}), id: id, roleId: 2 } as User);
       if (user?.username) {
         handleRegisterPasswordless(user.username, user.credentials, id);
       } else {
@@ -104,7 +107,7 @@ export default function FormAuth({
         </label>
         <button
           type="button"
-          className="btn-link-muted"
+          className="btn-link-muted shadow-none self-center"
           onClick={handlePasswordless}
         >
           Use passwordless {title.toLowerCase()}

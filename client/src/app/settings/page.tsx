@@ -1,11 +1,14 @@
 import Settings from '@/components/Settings';
 import SideBar from '@/components/SideBar';
+import Protected from '@/components/Protected';
 
 export default function SettingsPage() {
   return (
-    <div className="page-container">
-      <SideBar />
-      <Settings />
-    </div>
+    <Protected>
+      <div className="page-container">
+        <SideBar />
+        <Settings />
+      </div>
+    </Protected>
   );
 }

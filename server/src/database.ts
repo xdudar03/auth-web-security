@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 
-const db = new DatabaseSync("users.db");
+const db = new DatabaseSync("./users.db");
 
 const initTable = () => {
   db.exec(`
@@ -9,7 +9,21 @@ const initTable = () => {
       userId TEXT NOT NULL,
       username TEXT NOT NULL,
       password TEXT NOT NULL,
-      embedding TEXT
+      embedding TEXT,
+      roleId INTEGER NOT NULL,
+      FOREIGN KEY (roleId) REFERENCES roles(id)
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS roles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      canChangeUsersCredentials BOOLEAN NOT NULL,
+      canChangeUsersRoles BOOLEAN NOT NULL,
+      canReadUsers BOOLEAN NOT NULL,
+      canReadUsersCredentials BOOLEAN NOT NULL,
+      canReadUsersSettings BOOLEAN NOT NULL,
+      canReadUsersRoles BOOLEAN NOT NULL
     )
   `);
 };
@@ -17,17 +31,46 @@ const initTable = () => {
 initTable();
 
 const addUser = db.prepare(
-  `INSERT INTO users (userId, username, password, embedding) VALUES (?, ?, ?, ?)` // embedding is not needed during registration
+  `INSERT INTO users (userId, username, password, embedding, roleId) VALUES (?, ?, ?, ?, ?)` // embedding is not needed during registration
 );
+// 1 is admin, 2 is user, 3 is shop owner
+const addRole = db.prepare(
+  `INSERT INTO roles (name, canChangeUsersCredentials, canChangeUsersRoles, canReadUsers, canReadUsersCredentials, canReadUsersSettings, canReadUsersRoles) VALUES (?, ?, ?, ?, ?, ?, ?)`
+);
+
+const getRoleById = db.prepare(`SELECT * FROM roles WHERE id = ?`);
+
+const getRoleByName = db.prepare(`SELECT * FROM roles WHERE name = ?`);
 
 const getUserByUsername = db.prepare(`SELECT * FROM users WHERE username = ?`);
 
 const getUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
 const updateUser = db.prepare(
-  `UPDATE users SET username = ?, password = ?, embedding = ? WHERE id = ?`
+  `UPDATE users SET username = ?, password = ?, embedding = ?, roleId = ? WHERE id = ?`
 );
+
+const updateRole = db.prepare(
+  `UPDATE roles SET name = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ? WHERE id = ?`
+);
+
+const getRoles = db.prepare(`SELECT * FROM roles`);
 
 const deleteUser = db.prepare(`DELETE FROM users WHERE id = ?`);
 
-export { db, addUser, getUserByUsername, getUserById, updateUser, deleteUser };
+const deleteRole = db.prepare(`DELETE FROM roles WHERE id = ?`);
+
+export {
+  db,
+  addUser,
+  getUserByUsername,
+  getUserById,
+  updateUser,
+  updateRole,
+  deleteUser,
+  addRole,
+  getRoleById,
+  getRoleByName,
+  getRoles,
+  deleteRole,
+};

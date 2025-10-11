@@ -12,6 +12,7 @@ import {
 } from "./passwordless.ts";
 
 console.log("Init server");
+console.log("cwd", process.cwd());
 
 const app = express();
 const port = 4000;
@@ -25,6 +26,8 @@ const CORS_ORIGINS = (process.env.CORS_ORIGIN || "http://localhost:3000")
 
 const usersFromDB = db.prepare("SELECT * FROM users").all();
 console.log("USERS FROM DB:", usersFromDB);
+const rolesFromDB = db.prepare("SELECT * FROM roles").all();
+console.log("ROLES FROM DB:", rolesFromDB);
 
 app.use(
   cors({
@@ -81,12 +84,12 @@ app.post("/biometric/registration", async (req, res) => {
   console.log("REQ BODY:", req.body);
   const usersFromDB = db.prepare("SELECT * FROM users").all();
   console.log("USERS FROM DB:", usersFromDB);
-  const { username, password, embedding, id } = req.body;
+  const { username, password, embedding, id, roleId } = req.body;
   // add user to database
-  if (usersFromDB.find((user: any) => user.userId === id)) {
+  if (usersFromDB.find((user: any) => user.username === username)) {
     return res.status(400).json({ error: "User already exists" });
   }
-  addUser.run(id, username, password, embedding);
+  addUser.run(id, username, password, embedding, roleId);
   console.log("USER ADDED TO DB:", db.prepare("SELECT * FROM users").all());
   return res.status(200).json({ message: "Registration successful" });
 });

@@ -3,6 +3,7 @@ import { LayoutDashboard, LogOut, Settings, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useUser } from '@/hooks/useUserContext';
 
 export default function SideBar() {
   // get current path
@@ -10,7 +11,10 @@ export default function SideBar() {
   const pathname = usePathname();
   const router = useRouter();
   console.log('pathname', pathname);
+  const { setUser, setIsAuthenticated } = useUser();
   const handleLogout = () => {
+    setUser(null);
+    setIsAuthenticated(false);
     router.push('/');
   };
   useEffect(() => {

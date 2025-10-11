@@ -1,7 +1,8 @@
 import type { User } from '@/hooks/useUserContext';
 
 export async function handleRegister(user: User) {
-  const { username, password, id } = user;
+  const { username, password, id, roleId } = user;
+  console.log('username, password, id', username, password, id, roleId);
   if (!username || !password || !id) {
     throw new Error('Username, password, and id are required');
   }
@@ -22,9 +23,13 @@ export async function handleRegister(user: User) {
         password,
         embedding: '',
         id,
+        roleId,
       }),
     });
     console.log('Response:', response);
+    if (response.status !== 200) {
+      throw new Error('Registration failed: ' + response.statusText);
+    }
     const data = await response.json();
     console.log('Data:', data);
     return data;
