@@ -3,8 +3,15 @@ import Image from 'next/image';
 import { User, useUser } from '@/hooks/useUserContext';
 import { handleRegister } from '@/lib/registration';
 import { handleAuthenticate } from '@/lib/authentication';
+import { handleBiometricChange } from '@/lib/biometricChange';
 
-export default function BiometricAuth({ title }: { title: string }) {
+export default function BiometricAuth({
+  title,
+  action,
+}: {
+  title: string;
+  action: string;
+}) {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -40,7 +47,7 @@ export default function BiometricAuth({ title }: { title: string }) {
     setIsCameraActive(!isCameraActive);
   };
 
-  const captureFrame = () => {
+  const captureFrame = async () => {
     if (videoRef.current) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
@@ -50,41 +57,70 @@ export default function BiometricAuth({ title }: { title: string }) {
         ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         const imageData = canvas.toDataURL('image/png');
         setCapturedImage(imageData);
-        setUser({
+        const userWithEmbedding = {
           ...user,
           embedding: imageData,
           id: user?.id ?? '',
-        } as User);
-        if (user && title === 'Registration') {
-          handleRegister(user);
-        } else if (user && title === 'Login') {
-          handleAuthenticate(user);
+        } as User;
+        if (action === 'registration') {
+          const resultUser = await handleRegister(userWithEmbedding);
+          if (resultUser) {
+            setUser(resultUser);
+          }
+        } else if (action === 'login') {
+          const resultUser = await handleAuthenticate(userWithEmbedding);
+          if (resultUser) {
+            setUser(resultUser);
+          }
+        } else if (action === 'change') {
+          const resultUser = await handleBiometricChange(userWithEmbedding);
+          if (resultUser) {
+            setUser(resultUser);
+          }
         }
       }
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-6 bg-surface rounded  gap-6">
-      <h2 className="text-lg font-semibold">Biometric {title.toLowerCase()}</h2>
-      <p>Please position your face within the frame.</p>
-      <video
-        ref={videoRef}
-        autoPlay
-        className="w-64 h-48 bg-transparent border-2 border-dashed border-primary rounded"
-      />
-      <button
-        onClick={handleClick}
-        className="bg-primary text-primary-foreground p-2 rounded hover:bg-primary/90"
-      >
-        {isCameraActive ? 'Take Photo' : 'Start Camera'}
-      </button>
-      {capturedImage && (
-        <div className="mt-4">
-          <h3 className="text-md font-semibold">Captured Image:</h3>
-          <Image src={capturedImage} alt="Captured" width={256} height={192} />
-        </div>
+    <div className="flex flex-col items-center justify-center p-6 bg-surface rounded gap-6">
+      {title !== '' && (
+        <h2 className="text-xl font-semibold">
+          Biometric {title.toLowerCase()}
+        </h2>
       )}
+      <div className="form w-full items-center">
+        <div className="form-field items-center">
+          <label className="form-label" htmlFor="biometric-video">
+            Camera feed
+          </label>
+          <video
+            id="biometric-video"
+            ref={videoRef}
+            autoPlay
+            className="w-64 h-48 bg-transparent border-2 border-dashed border-primary rounded"
+          />
+          <span className="helper-text">
+            Position your face within the frame.
+          </span>
+        </div>
+        <div className="flex items-center gap-2 self-center">
+          <button onClick={handleClick} className="btn-primary">
+            {isCameraActive ? 'Take Photo' : 'Start Camera'}
+          </button>
+        </div>
+        {capturedImage && (
+          <div className="flex flex-col items-center gap-2">
+            <h3 className="text-md font-semibold">Captured image</h3>
+            <Image
+              src={capturedImage}
+              alt="Captured"
+              width={256}
+              height={192}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

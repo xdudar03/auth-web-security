@@ -42,12 +42,10 @@ export default function FormAuth({
       }
     } else {
       const resultUser = await handleAuthenticate(user as User);
-      if (resultUser && resultUser.embedding === '') {
+      if (resultUser) {
         setIsAuthenticated(true);
         setUser(resultUser as User);
         router.push('/dashboard');
-      } else {
-        setTab('multi-factor');
       }
     }
   };
@@ -82,6 +80,14 @@ export default function FormAuth({
         alert('Username is required');
       }
     }
+  };
+
+  const handleBiometric = () => {
+    if (user?.username === '') {
+      alert('Username is required');
+      return;
+    }
+    setTab('multi-factor');
   };
   return (
     <div className="flex flex-col items-center justify-center p-6 bg-surface rounded gap-6">
@@ -127,6 +133,13 @@ export default function FormAuth({
             onClick={handlePasswordless}
           >
             Use passwordless {title.toLowerCase()}
+          </button>
+          <button
+            type="button"
+            className="btn-link-muted shadow-none self-center w-full"
+            onClick={handleBiometric}
+          >
+            Use biometric {title.toLowerCase()}
           </button>
           <button type="submit" className="btn-primary cursor-pointer w-full">
             {title}

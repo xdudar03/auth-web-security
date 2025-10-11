@@ -78,21 +78,13 @@ export default function ChangePasswordForm({
       onClose={() => setShowChangePasswordModal(false)}
       title="Change Password"
       footer={
-        <>
-          <button
-            className="btn-outline"
-            onClick={() => setShowChangePasswordModal(false)}
-          >
-            Cancel
-          </button>
-          <button
-            form="change-password-form"
-            type="submit"
-            className="btn-primary"
-          >
-            Save
-          </button>
-        </>
+        <button
+          form="change-password-form"
+          type="submit"
+          className="btn-primary"
+        >
+          Save
+        </button>
       }
     >
       <form id="change-password-form" onSubmit={onSubmit} className="form">

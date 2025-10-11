@@ -64,14 +64,6 @@ export function saveUsers(users: any) {
   fs.writeFileSync(USERS_FILE_TEMP, JSON.stringify(users, null, 2));
 }
 
-app.post("/passwordless/registration/options", async (req, res) => {
-  await registredOptions(req, res);
-});
-
-app.post("/passwordless/registration/verify", async (req, res) => {
-  await registeredVerify(req, res);
-});
-
 app.post("/passwordless/authentication/options", async (req, res) => {
   await authenticateOptions(req, res);
 });
@@ -120,6 +112,32 @@ app.post("/change-password", async (req, res) => {
   }
   updateUser(user.id as number, { password: newPassword });
   return res.status(200).json({ message: "Password changed successfully" });
+});
+
+app.post("/confirm-password", async (req, res) => {
+  console.log("REQ BODY:", req.body);
+  const { username, password } = req.body;
+  const usersFromDB = db.prepare("SELECT * FROM users").all();
+  const user = usersFromDB.find((user: any) => user.username === username);
+  if (!user) {
+    return res.status(400).json({ error: "User not found" });
+  }
+  if (user.password !== password) {
+    return res.status(400).json({ error: "Invalid password" });
+  }
+  return res.status(200).json({ message: "Password confirmed successfully" });
+});
+
+app.post("/biometric/change", async (req, res) => {
+  console.log("REQ BODY:", req.body);
+  const { username, embedding } = req.body;
+  const usersFromDB = db.prepare("SELECT * FROM users").all();
+  const user = usersFromDB.find((user: any) => user.username === username);
+  if (!user) {
+    return res.status(400).json({ error: "User not found" });
+  }
+  updateUser(user.id as number, { embedding: embedding });
+  return res.status(200).json({ message: "Biometric changed successfully" });
 });
 
 // ------------------------- MODEL (Flask) INTEGRATION -------------------------
