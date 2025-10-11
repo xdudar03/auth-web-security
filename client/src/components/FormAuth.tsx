@@ -84,37 +84,54 @@ export default function FormAuth({
     }
   };
   return (
-    <div className="flex flex-col items-center justify-center p-6 bg-surface rounded  gap-6">
-      <h2 className="text-lg font-semibold">{title} Form</h2>
-      <form onSubmit={onSubmit} className="flex flex-col space-y-4">
-        <label>
+    <div className="flex flex-col items-center justify-center p-6 bg-surface rounded gap-6">
+      <h2 className="text-xl font-semibold">{title}</h2>
+      <form onSubmit={onSubmit} className="form">
+        <div className="form-field">
+          <label htmlFor="username" className="form-label">
+            Username
+          </label>
           <input
+            id="username"
             type="text"
             name="username"
             onChange={handleChange}
-            className="input"
-            placeholder="Username"
+            className="form-input"
+            placeholder="Enter your username"
+            autoComplete="username"
           />
-        </label>
-        <label>
+        </div>
+        <div className="form-field">
+          <label htmlFor="password" className="form-label">
+            Password
+          </label>
           <input
+            id="password"
             type="password"
             name="password"
             onChange={handleChange}
-            className="input"
-            placeholder="Password"
+            className="form-input"
+            placeholder="Enter your password"
+            autoComplete={
+              title === 'Registration' ? 'new-password' : 'current-password'
+            }
           />
-        </label>
-        <button
-          type="button"
-          className="btn-link-muted shadow-none self-center"
-          onClick={handlePasswordless}
-        >
-          Use passwordless {title.toLowerCase()}
-        </button>
-        <button type="submit" className="btn-primary cursor-pointer">
-          {title}
-        </button>
+          <span className="helper-text">
+            Use at least 8 characters, including a number and a symbol.
+          </span>
+        </div>
+        <div className="flex items-center justify-between flex-col gap-2">
+          <button
+            type="button"
+            className="btn-link-muted shadow-none self-center w-full"
+            onClick={handlePasswordless}
+          >
+            Use passwordless {title.toLowerCase()}
+          </button>
+          <button type="submit" className="btn-primary cursor-pointer w-full">
+            {title}
+          </button>
+        </div>
       </form>
     </div>
   );

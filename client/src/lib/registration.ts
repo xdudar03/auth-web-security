@@ -27,10 +27,10 @@ export async function handleRegister(user: User) {
       }),
     });
     console.log('Response:', response);
-    if (response.status !== 200) {
-      throw new Error('Registration failed: ' + response.statusText);
-    }
     const data = await response.json();
+    if (data.status !== 200) {
+      throw new Error('Registration failed: ' + data.error);
+    }
     console.log('Data:', data);
     return data;
   } catch (error) {

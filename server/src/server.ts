@@ -3,7 +3,7 @@ import session from "express-session";
 import cors from "cors";
 import fs from "fs";
 import "dotenv/config";
-import { addUser, db } from "./database.js";
+import { addUser, db, updateUser } from "./database.js";
 import {
   authenticateOptions,
   authenticateVerify,
@@ -105,6 +105,21 @@ app.post("/biometric/authentication", async (req, res) => {
   }
   console.log("USER FOUND:", user);
   return res.status(200).json(user);
+});
+
+app.post("/change-password", async (req, res) => {
+  console.log("REQ BODY:", req.body);
+  const { username, oldPassword, newPassword } = req.body;
+  const usersFromDB = db.prepare("SELECT * FROM users").all();
+  const user = usersFromDB.find((user: any) => user.username === username);
+  if (!user) {
+    return res.status(400).json({ error: "User not found" });
+  }
+  if (user.password !== oldPassword) {
+    return res.status(400).json({ error: "Invalid password" });
+  }
+  updateUser(user.id as number, { password: newPassword });
+  return res.status(200).json({ message: "Password changed successfully" });
 });
 
 // ------------------------- MODEL (Flask) INTEGRATION -------------------------

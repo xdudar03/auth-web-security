@@ -17,6 +17,7 @@
   --ring: #1e3a8a; /* align with primary */
   --error: #ef4444; /* red-400 */
   --warning: #f59e0b; /* amber-400 */
+  --success: #10b981; /* green-600 */
 }
 
 @theme inline {
@@ -34,6 +35,7 @@
   --font-mono: var(--font-geist-mono);
   --color-error: var(--error);
   --color-warning: var(--warning);
+  --color-success: var(--success);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -48,6 +50,7 @@
     --ring: #1d4ed8;
     --error: #7e1919;
     --warning: #744c0c;
+    --success: #0e6447;
   }
 }
 
@@ -110,7 +113,7 @@ body {
   }
 
   .page-container {
-    @apply flex h-screen bg-background w-full gap-4 p-2 sm:p-4 pb-16 md:pb-4 flex-col md:flex-row  mx-auto;
+    @apply flex h-screen bg-background w-full gap-4 p-2 sm:p-4 pb-16 md:pb-4 flex-col md:flex-row mx-auto;
   }
 
   /* Tables */
@@ -141,9 +144,55 @@ body {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap;
   }
   .badge-success {
-    @apply bg-green-600 text-white;
+    @apply bg-success text-white;
   }
   .badge-error {
     @apply bg-error text-primary-foreground;
+  }
+
+  /* Forms */
+  .form {
+    @apply flex flex-col gap-4 w-full;
+  }
+  .form-field {
+    @apply flex flex-col gap-1 w-72 sm:w-80;
+  }
+  .form-label {
+    @apply text-sm font-medium text-foreground;
+  }
+  .form-input {
+    @apply border border-border p-2 rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring;
+  }
+  .helper-text {
+    @apply text-xs text-muted;
+  }
+  .alert {
+    @apply text-sm rounded px-3 py-2;
+  }
+  .alert-success {
+    @apply bg-success/10 text-[color:var(--success)] border border-[color:color-mix(in_lab,theme(colors.success)_30%,transparent)];
+  }
+  .alert-error {
+    @apply bg-error/10 text-error border border-[color:color-mix(in_lab,theme(colors.error)_30%,transparent)];
+  }
+
+  /* Modal */
+  .modal-overlay {
+    @apply fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4;
+  }
+  .modal-card {
+    @apply bg-surface border border-border rounded-lg shadow-xl w-full max-w-md overflow-hidden;
+  }
+  .modal-header {
+    @apply flex items-center justify-between p-4 border-b border-border;
+  }
+  .modal-title {
+    @apply text-lg font-semibold;
+  }
+  .modal-body {
+    @apply p-4;
+  }
+  .modal-footer {
+    @apply p-4 border-t border-border flex justify-end gap-2;
   }
 }

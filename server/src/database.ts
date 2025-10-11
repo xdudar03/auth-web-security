@@ -46,9 +46,29 @@ const getUserByUsername = db.prepare(`SELECT * FROM users WHERE username = ?`);
 
 const getUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
-const updateUser = db.prepare(
-  `UPDATE users SET username = ?, password = ?, embedding = ?, roleId = ? WHERE id = ?`
-);
+function updateUser(userId: number, updates: Record<string, any>) {
+  const allowedFields = ["username", "password", "embedding", "roleId"];
+
+  const setClauses = [];
+  const values = [];
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (allowedFields.includes(key) && value !== undefined) {
+      setClauses.push(`${key} = ?`);
+      values.push(value);
+    }
+  }
+
+  if (setClauses.length === 0) {
+    throw new Error("No valid fields provided for update");
+  }
+
+  const sql = `UPDATE users SET ${setClauses.join(", ")} WHERE id = ?`;
+  values.push(userId);
+
+  const stmt = db.prepare(sql);
+  return stmt.run(...values);
+}
 
 const updateRole = db.prepare(
   `UPDATE roles SET name = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ? WHERE id = ?`

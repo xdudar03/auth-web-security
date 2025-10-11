@@ -1,14 +1,26 @@
 import { useUser } from '@/hooks/useUserContext';
+import { useState } from 'react';
+import ChangePasswordForm from './ChangePasswordForm';
 
 export default function SecuritySettings() {
   const { user } = useUser();
   const isBiometric = user?.embedding !== '';
-
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   return (
     <div className="grid-section-2 w-full">
       <h1 className="text-lg font-bold col-span-2">Security Settings</h1>
       <div className="flex flex-col gap-2">
-        <button className="btn-outline">Change Password</button>
+        <button
+          className="btn-outline"
+          onClick={() => setShowChangePasswordModal(true)}
+        >
+          Change Password
+        </button>
+        {showChangePasswordModal && (
+          <ChangePasswordForm
+            setShowChangePasswordModal={setShowChangePasswordModal}
+          />
+        )}
         {isBiometric ? (
           <button className="btn-outline">Change Biometric</button>
         ) : (
