@@ -1,4 +1,4 @@
-import Settings from '@/components/Settings';
+import Settings from '@/components/settings/Settings';
 import SideBar from '@/components/SideBar';
 import Protected from '@/components/Protected';
 

@@ -1,11 +1,11 @@
 'use client';
 
 // import { useEffect } from 'react';
-import { handleAuthenticatePasswordless } from '@/lib/authenticationPasswordless';
+import { handleAuthenticatePasswordless } from '@/lib/authentication/authenticationPasswordless';
 import { useUser, type User } from '@/hooks/useUserContext';
-import { handleRegister } from '@/lib/registration';
+import { handleRegister } from '@/lib/authentication/registration';
 import { useRouter } from 'next/navigation';
-import { handleAuthenticate } from '@/lib/authentication';
+import { handleAuthenticate } from '@/lib/authentication/authentication';
 export default function FormAuth({
   setTab,
   title,

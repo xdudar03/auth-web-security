@@ -1,6 +1,6 @@
 'use client';
-import FormAuth from '@/components/FormAuth';
-import BiometricAuth from '@/components/BiometricAuth';
+import FormAuth from '@/components/authentication/FormAuth';
+import BiometricAuth from '@/components/authentication/BiometricAuth';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';

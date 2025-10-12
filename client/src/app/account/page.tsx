@@ -1,4 +1,4 @@
-import AccountInfo from '@/components/AccountInfo';
+import AccountInfo from '@/components/account/AccountInfo';
 import SideBar from '@/components/SideBar';
 import Protected from '@/components/Protected';
 

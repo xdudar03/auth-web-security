@@ -1,8 +1,8 @@
 'use client';
-import { handleChangePassword } from '@/lib/changePassword';
+import { handleChangePassword } from '@/lib/settings/changePassword';
 import { useUser } from '@/hooks/useUserContext';
 import { useState } from 'react';
-import Modal from './Modal';
+import Modal from '../Modal';
 
 export default function ChangePasswordForm({
   setShowChangePasswordModal,

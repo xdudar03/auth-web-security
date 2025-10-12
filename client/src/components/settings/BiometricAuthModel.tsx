@@ -1,10 +1,10 @@
 'use client';
 import { handleConfirmPassword } from '@/lib/confirmPassword';
-import BiometricAuth from './BiometricAuth';
-import Modal from './Modal';
+import BiometricAuth from '../authentication/BiometricAuth';
+import Modal from '../Modal';
 import { useState } from 'react';
 import { useUser } from '@/hooks/useUserContext';
-import ConfirmPassword from './ConfirmPassword';
+import ConfirmPassword from '../ConfirmPassword';
 
 export default function BiometricAuthModel({
   setShowChangeBiometricModal,

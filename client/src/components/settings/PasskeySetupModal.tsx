@@ -1,10 +1,10 @@
 import { User, useUser } from '@/hooks/useUserContext';
 import { handleConfirmPassword } from '@/lib/confirmPassword';
 import { useState } from 'react';
-import ConfirmPassword from './ConfirmPassword';
-import Modal from './Modal';
-import { handleRegisterPasskey } from '@/lib/registrationPasswordless';
-import { handleOptions } from '@/lib/registrationPasswordless';
+import ConfirmPassword from '../ConfirmPassword';
+import Modal from '../Modal';
+import { handleRegisterPasskey } from '@/lib/authentication/registrationPasswordless';
+import { handleOptions } from '@/lib/authentication/registrationPasswordless';
 
 export default function PasskeySetupModal({
   setShowPasskeySetupModal,

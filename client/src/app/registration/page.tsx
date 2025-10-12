@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import FormAuth from '@/components/FormAuth';
+import FormAuth from '@/components/authentication/FormAuth';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 

@@ -1,6 +1,6 @@
 'use client';
 import Protected from '@/components/Protected';
-import Dashboard from '@/components/Dashboard';
+import Dashboard from '@/components/dashboard/Dashboard';
 import SideBar from '@/components/SideBar';
 
 export default function DashboardPage() {

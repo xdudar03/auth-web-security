@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
 import Image from 'next/image';
 import { User, useUser } from '@/hooks/useUserContext';
-import { handleRegister } from '@/lib/registration';
-import { handleAuthenticate } from '@/lib/authentication';
-import { handleBiometricChange } from '@/lib/biometricChange';
+import { handleRegister } from '@/lib/authentication/registration';
+import { handleAuthenticate } from '@/lib/authentication/authentication';
+import { handleBiometricChange } from '@/lib/settings/biometricChange';
 
 export default function BiometricAuth({
   title,

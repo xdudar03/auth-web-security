@@ -3,7 +3,7 @@ import { useState } from 'react';
 import ChangePasswordForm from './ChangePasswordForm';
 import BiometricAuthModel from './BiometricAuthModel';
 import PasskeySetupModal from './PasskeySetupModal';
-import { Lock, Fingerprint, KeyRound } from 'lucide-react';
+import { Lock, KeyRound, ScanFace } from 'lucide-react';
 
 export default function SecuritySettings() {
   const { user } = useUser();
@@ -49,7 +49,7 @@ export default function SecuritySettings() {
       {/* Biometric */}
       <div className="signin-methods">
         <div className="flex items-start gap-3">
-          <Fingerprint className="w-5 h-5 text-muted mt-0.5" />
+          <ScanFace className="w-5 h-5 text-muted mt-0.5" />
           <div>
             <h2 className="font-medium">Biometric</h2>
             <p className="text-sm text-muted">
