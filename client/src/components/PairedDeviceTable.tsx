@@ -33,7 +33,7 @@ export default function PairedDeviceTable() {
     );
   };
   return (
-    <div className="grid-section-2 w-full">
+    <div className="w-full mx-auto space-y-6 border-t border-border pt-4 ">
       <h1 className="text-lg font-bold col-span-2">Paired Devices</h1>
       <div className="table-card">
         <table className="table">

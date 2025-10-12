@@ -58,43 +58,45 @@ export default function SideBar() {
       </nav>
 
       {/* Desktop sidebar */}
-      <div className="hidden md:flex md:max-h-screen bg-surface rounded-lg w-16 lg:w-20 xl:w-28 flex-col gap-4 justify-between items-center p-2 lg:p-4">
-        <div className="flex flex-col gap-2 lg:gap-4">
-          <Link
-            href="/dashboard"
-            aria-label="Dashboard"
-            className={`icon-btn-zoom ${
-              isActive === 'dashboard' ? 'active' : ''
-            }`}
+      <div className="fixed top-0 left-0 bottom-0 sidebar-width p-4 hidden md:block">
+        <div className="flex bg-surface rounded-lg flex-col gap-4 justify-between items-center p-2 lg:p-4 h-full">
+          <div className="flex flex-col gap-2 lg:gap-4">
+            <Link
+              href="/dashboard"
+              aria-label="Dashboard"
+              className={`icon-btn-zoom ${
+                isActive === 'dashboard' ? 'active' : ''
+              }`}
+            >
+              <LayoutDashboard className="w-6 h-6" />
+            </Link>
+            <Link
+              href="/account"
+              aria-label="Profile"
+              className={`icon-btn-zoom ${
+                isActive === 'account' ? 'active' : ''
+              }`}
+            >
+              <User className="w-6 h-6" />
+            </Link>
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              className={`icon-btn-zoom ${
+                isActive === 'settings' ? 'active' : ''
+              }`}
+            >
+              <Settings className="w-6 h-6" />
+            </Link>
+          </div>
+          <button
+            aria-label="Logout"
+            className="icon-btn-zoom"
+            onClick={handleLogout}
           >
-            <LayoutDashboard className="w-6 h-6" />
-          </Link>
-          <Link
-            href="/account"
-            aria-label="Profile"
-            className={`icon-btn-zoom ${
-              isActive === 'account' ? 'active' : ''
-            }`}
-          >
-            <User className="w-6 h-6" />
-          </Link>
-          <Link
-            href="/settings"
-            aria-label="Settings"
-            className={`icon-btn-zoom ${
-              isActive === 'settings' ? 'active' : ''
-            }`}
-          >
-            <Settings className="w-6 h-6" />
-          </Link>
+            <LogOut className="w-6 h-6" />
+          </button>
         </div>
-        <button
-          aria-label="Logout"
-          className="icon-btn-zoom"
-          onClick={handleLogout}
-        >
-          <LogOut className="w-6 h-6" />
-        </button>
       </div>
     </>
   );

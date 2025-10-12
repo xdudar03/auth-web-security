@@ -5,33 +5,57 @@ import {
   verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
 import { isoUint8Array } from "@simplewebauthn/server/helpers";
-import { saveUsers, loadUsers } from "./server.ts";
+import { db, updateUser } from "./database.ts";
+
+function toBase64URL(bytes: Uint8Array): string {
+  const b64 = Buffer.from(bytes).toString("base64");
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function fromBase64URL(str: string): Uint8Array {
+  const b64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  return new Uint8Array(Buffer.from(b64, "base64"));
+}
 
 export const registredOptions = async (req: any, res: any) => {
   try {
-    const { username, userId } = req.body;
-    console.log("REQ BODY:", req.body);
-
+    const { username } = req.body as { username?: string };
     if (!username) {
       return res.status(400).json({ error: "username is required" });
     }
 
-    const users = loadUsers();
-
-    if (users[username]) {
-      return res.status(400).json({ error: `${username} already exists` });
+    const users = db.prepare("SELECT * FROM users").all();
+    const user = users.find((u: any) => u.username === username);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
     }
+    console.log("USER:", user);
 
+    let credentials: any[] = [];
+    if (user.credentials) {
+      try {
+        credentials = JSON.parse(user.credentials as string) || [];
+      } catch {
+        credentials = [];
+      }
+    }
+    console.log("CREDENTIALS:", credentials);
+
+    // const userIdStr =
+    //   typeof user.userId === "string" ? user.userId : String(user.userId);
     const options = await generateRegistrationOptions({
       rpName: "Example RP",
-      rpID: "localhost", // must match domain
+      rpID: "localhost",
       userName: username,
-      userID: isoUint8Array.fromUTF8String(userId), // must be a Uint8Array, but wont write it to json
+      userID: isoUint8Array.fromUTF8String(user.userId as string),
       attestationType: "none",
       authenticatorSelection: {
         userVerification: "required",
       },
-      excludeCredentials: [],
+      excludeCredentials: credentials.map((cred: any) => ({
+        id: cred.credentialID,
+        transports: cred.transports || ["internal"],
+      })),
       timeout: 60000,
     });
 
@@ -39,18 +63,19 @@ export const registredOptions = async (req: any, res: any) => {
 
     (req.session as any).challenge = options.challenge;
     (req.session as any).username = username;
-    (req.session as any).userId = userId;
-    res.json(options);
+    (req.session as any).userId = user.userId;
+    return res.json(options);
   } catch (error) {
     console.error("Error in registration options:", error);
-    res.status(500).json({ error: String(error) });
+    return res.status(500).json({ error: String(error) });
   }
 };
 
 export const registeredVerify = async (req: any, res: any) => {
+  console.log("THIS IS REGISTERED VERIFY");
   const body = req.body;
   const expectedChallenge = (req.session as any).challenge;
-
+  const username = (req.session as any).username;
   try {
     const verification = await verifyRegistrationResponse({
       response: body,
@@ -59,44 +84,79 @@ export const registeredVerify = async (req: any, res: any) => {
       expectedRPID: "localhost",
       requireUserVerification: false,
     });
-    const { verified, registrationInfo } = verification;
+    console.log("VERIFICATION:", verification);
+    const { verified, registrationInfo } = verification as any;
+    console.log("VERIFIED:", verified);
+    console.log("REGISTRATION INFO:", registrationInfo);
     if (verified && registrationInfo) {
-      const { username, userId } = req.session as any;
-      const users = loadUsers();
-      users[username] = {
-        username,
-        credentials: [registrationInfo],
-        userId,
+      const users = db.prepare("SELECT * FROM users").all();
+      const user = users.find((u: any) => u.username === username);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      let credentials: any[] = [];
+      if (user.credentials) {
+        try {
+          credentials = JSON.parse(user.credentials as string) || [];
+        } catch {
+          credentials = [];
+        }
+      }
+      console.log("CREDENTIALS IN REGISTERED VERIFY:", credentials);
+      const newAuthenticator = {
+        credentialID: registrationInfo.credential.id,
+        credentialPublicKey: toBase64URL(registrationInfo.credential.publicKey),
+        counter: registrationInfo.credential.counter,
+        credentialDeviceType: registrationInfo.credentialDeviceType,
+        credentialBackedUp: registrationInfo.credentialBackedUp,
+        transports: registrationInfo.credential.transports || ["internal"],
       };
-      saveUsers(users);
+      console.log("NEW AUTHENTICATOR:", newAuthenticator);
+      // Merge, avoiding duplicates by credentialID
+      const withoutDup = credentials.filter(
+        (c: any) => c.credentialID !== newAuthenticator.credentialID
+      );
+      const updated = [...withoutDup, newAuthenticator];
+      updateUser(user.id as number, { credentials: JSON.stringify(updated) });
     }
-    res.json({ verified });
+    return res.json({ verified });
   } catch (error) {
     console.error(error);
-    res.status(400).json({ error: "Invalid registration response" });
+    return res.status(400).json({ error: "Invalid registration response" });
   }
 };
 
 export const authenticateOptions = async (req: any, res: any) => {
   console.log("THIS IS AUTHENTICATION OPTIONS");
   const { username } = req.body;
-  const users = loadUsers();
-  const user = Object.values(users).find(
-    (user: any) => user.username === username
-  );
+  const users = db.prepare("SELECT * FROM users").all();
+  const user = users.find((user: any) => user.username === username);
 
   if (!user) {
     return res.status(400).json({ error: "User not found" });
   }
 
+  if (user?.credentials) {
+    user.credentials = JSON.parse(user.credentials as string);
+  }
+
+  console.log("USER CREDENTIALS IN AUTHENTICATION OPTIONS:", user.credentials);
+
   try {
+    const credentialsArray = Array.isArray(user.credentials)
+      ? user.credentials
+      : [];
+    console.log(
+      "CREDENTIALS ARRAY IN AUTHENTICATION OPTIONS:",
+      credentialsArray
+    );
     const options = await generateAuthenticationOptions({
       rpID: "localhost",
-      allowCredentials: user.credentials.map((cred: any) => ({
-        id: cred.credential.id, // must be a base64 string
-        transports: cred.credential.transports || ["internal"],
+      allowCredentials: credentialsArray.map((cred: any) => ({
+        id: cred.credentialID,
+        transports: cred.transports || ["internal"],
       })),
-      challenge: (req.session as any).challenge,
       timeout: 60000,
       userVerification: "required",
     });
@@ -105,10 +165,10 @@ export const authenticateOptions = async (req: any, res: any) => {
     (req.session as any).userId = user.userId;
     (req.session as any).username = user.username;
 
-    res.json(options);
+    return res.json(options);
   } catch (error) {
     console.error(error);
-    res.status(400).json({ error: "Invalid authentication response" });
+    return res.status(400).json({ error: "Invalid authentication response" });
   }
 };
 
@@ -117,39 +177,62 @@ export const authenticateVerify = async (req: any, res: any) => {
   const body = req.body;
   const username = (req.session as any).username;
   const expectedChallenge = (req.session as any).challenge;
-  const users = loadUsers();
-  const user = users[username];
-  const credentials = user.credentials[0].credential;
+  const users = db.prepare("SELECT * FROM users").all();
+  const user = users.find((user: any) => user.username === username);
+  if (user?.credentials) {
+    user.credentials = JSON.parse(user.credentials as string);
+  }
+  if (!user) {
+    return res.status(404).json({ error: "User not found" });
+  }
 
-  console.log("CREDENTIALS:", credentials);
+  console.log("CREDENTIALS:", user?.credentials);
   console.log("EXPECTED CHALLENGE:", expectedChallenge);
   console.log("USERNAME:", username);
   console.log("BODY:", body);
   console.log("USER:", user);
 
   try {
+    const credentialsArray: any[] = Array.isArray(user?.credentials)
+      ? (user?.credentials as any[])
+      : [];
+    const authenticator = credentialsArray.find(
+      (c: any) => c.credentialID === body.id
+    );
+    if (!authenticator) {
+      return res.status(400).json({ error: "Authenticator not found" });
+    }
+    console.log("AUTHENTICATOR: ", authenticator);
     const verification = await verifyAuthenticationResponse({
       response: body,
       expectedChallenge: `${expectedChallenge}`,
       expectedOrigin: "http://localhost:3000",
       expectedRPID: "localhost",
       credential: {
-        id: credentials.id,
-        publicKey: credentials.publicKey,
-        counter: credentials.counter,
+        id: authenticator.credentialID,
+        publicKey: fromBase64URL(authenticator.credentialPublicKey),
+        counter: authenticator.counter || 0,
       },
       requireUserVerification: false,
-    });
+    } as any);
     console.log("VERIFICATION:", verification);
-    const { verified, authenticationInfo } = verification;
+    const { verified, authenticationInfo } = verification as any;
+    console.log("VERIFIED:", verified);
+    console.log("AUTHENTICATION INFO:", authenticationInfo);
     if (verified && authenticationInfo) {
-      (req.session as any).currentChallenge = authenticationInfo.credentialID;
-      credentials.counter = authenticationInfo.newCounter;
-      console.log("AUTHENTICATION INFO:", authenticationInfo);
+      // Update counter
+      const updatedCreds = credentialsArray.map((c: any) =>
+        c.credentialID === authenticator.credentialID
+          ? { ...c, counter: authenticationInfo.newCounter }
+          : c
+      );
+      updateUser(user.id as number, {
+        credentials: JSON.stringify(updatedCreds),
+      });
     }
-    res.json({ verified });
+    return res.json({ verified, user });
   } catch (error) {
     console.error(error);
-    res.status(400).json({ error: "Invalid authentication response" });
+    return res.status(400).json({ error: "Invalid authentication response" });
   }
 };

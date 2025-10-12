@@ -5,7 +5,7 @@ import Protected from '@/components/Protected';
 export default function AccountPage() {
   return (
     <Protected>
-      <div className="page-container">
+      <div className="sidebar-padding-left page-container">
         <SideBar />
         <AccountInfo />
       </div>

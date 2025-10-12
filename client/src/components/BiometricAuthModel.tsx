@@ -4,6 +4,7 @@ import BiometricAuth from './BiometricAuth';
 import Modal from './Modal';
 import { useState } from 'react';
 import { useUser } from '@/hooks/useUserContext';
+import ConfirmPassword from './ConfirmPassword';
 
 export default function BiometricAuthModel({
   setShowChangeBiometricModal,
@@ -15,12 +16,7 @@ export default function BiometricAuthModel({
   const [message, setMessage] = useState({ message: '', type: '' });
   const { user } = useUser();
   const username = user?.username;
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    if (name === 'confirmPassword') {
-      setConfirmPassword(value);
-    }
-  };
+
   const handleSubmit = async () => {
     const result = await handleConfirmPassword(
       username as string,
@@ -54,28 +50,10 @@ export default function BiometricAuthModel({
       {isConfirmed ? (
         <BiometricAuth title="" action="change" />
       ) : (
-        <div className="form-field flex flex-col gap-2 w-full justify-center  ">
-          <label className="form-label" htmlFor="confirmPassword">
-            Confirm your password
-          </label>
-          <input
-            className="form-input"
-            id="confirmPassword"
-            type="password"
-            name="confirmPassword"
-            placeholder="Enter your password"
-            onChange={handleChange}
-          />
-          {message.message && (
-            <p
-              className={`${
-                message.type === 'error' ? 'text-error' : 'text-success'
-              }`}
-            >
-              {message.message}
-            </p>
-          )}
-        </div>
+        <ConfirmPassword
+          setConfirmPassword={setConfirmPassword}
+          message={message}
+        />
       )}
     </Modal>
   );

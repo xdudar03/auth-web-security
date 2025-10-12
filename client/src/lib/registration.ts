@@ -6,12 +6,6 @@ export async function handleRegister(user: User) {
   if (!username || !password || !id) {
     throw new Error('Username, password, and id are required');
   }
-  // if (!embedding) {
-  //   throw new Error('Embedding is required');
-  // }
-  // shorten embedding to 128 bits
-  // const shortenedEmbedding = embedding.slice(0, 128);
-  // console.log('Shortened embedding:', shortenedEmbedding);
   try {
     const response = await fetch('/api/biometric/registration', {
       method: 'POST',
@@ -27,10 +21,10 @@ export async function handleRegister(user: User) {
       }),
     });
     console.log('Response:', response);
-    const data = await response.json();
-    if (data.status !== 200) {
-      throw new Error('Registration failed: ' + data.error);
+    if (!response.ok) {
+      throw new Error('Registration failed: ' + response.statusText);
     }
+    const data = await response.json();
     console.log('Data:', data);
     return data;
   } catch (error) {

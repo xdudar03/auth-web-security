@@ -6,10 +6,11 @@ const initTable = () => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId TEXT NOT NULL,
-      username TEXT NOT NULL,
+      userId TEXT NOT NULL UNIQUE,
+      username TEXT NOT NULL UNIQUE,
       password TEXT NOT NULL,
       embedding TEXT,
+      credentials TEXT,
       roleId INTEGER NOT NULL,
       FOREIGN KEY (roleId) REFERENCES roles(id)
     )
@@ -31,7 +32,7 @@ const initTable = () => {
 initTable();
 
 const addUser = db.prepare(
-  `INSERT INTO users (userId, username, password, embedding, roleId) VALUES (?, ?, ?, ?, ?)` // embedding is not needed during registration
+  `INSERT INTO users (userId, username, password, embedding, roleId, credentials) VALUES (?, ?, ?, ?, ?, ?)` // credentials is a base64 string
 );
 // 1 is admin, 2 is user, 3 is shop owner
 const addRole = db.prepare(
@@ -47,7 +48,13 @@ const getUserByUsername = db.prepare(`SELECT * FROM users WHERE username = ?`);
 const getUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
 function updateUser(userId: number, updates: Record<string, any>) {
-  const allowedFields = ["username", "password", "embedding", "roleId"];
+  const allowedFields = [
+    "username",
+    "password",
+    "embedding",
+    "roleId",
+    "credentials", // credentials is a base64 string
+  ];
 
   const setClauses = [];
   const values = [];

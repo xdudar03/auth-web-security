@@ -1,7 +1,6 @@
 'use client';
 
 // import { useEffect } from 'react';
-import { handleRegisterPasswordless } from '@/lib/registrationPasswordless';
 import { handleAuthenticatePasswordless } from '@/lib/authenticationPasswordless';
 import { useUser, type User } from '@/hooks/useUserContext';
 import { handleRegister } from '@/lib/registration';
@@ -59,26 +58,23 @@ export default function FormAuth({
     }
   };
 
-  const handlePasswordless = () => {
+  const handlePasswordless = async () => {
     if (user?.username === '') {
       alert('Username is required');
       return;
     }
-    if (title === 'Registration') {
-      const id = crypto.randomUUID(); // TODO: generate id from server
-      console.log('id', id);
-      setUser({ ...(user ?? {}), id: id, roleId: 2 } as User);
-      if (user?.username) {
-        handleRegisterPasswordless(user.username, user.credentials, id);
-      } else {
-        alert('Username is required');
+    if (user?.username) {
+      const result = await handleAuthenticatePasswordless(
+        user.username,
+        user.id
+      );
+      if (result.user) {
+        setUser(result.user);
+        setIsAuthenticated(true);
+        router.push('/dashboard');
       }
     } else {
-      if (user?.username) {
-        handleAuthenticatePasswordless(user.username, user.id);
-      } else {
-        alert('Username is required');
-      }
+      alert('Username is required');
     }
   };
 
@@ -127,13 +123,15 @@ export default function FormAuth({
           </span>
         </div>
         <div className="flex items-center justify-between flex-col gap-2">
-          <button
-            type="button"
-            className="btn-link-muted shadow-none self-center w-full"
-            onClick={handlePasswordless}
-          >
-            Use passwordless {title.toLowerCase()}
-          </button>
+          {title === 'Login' && (
+            <button
+              type="button"
+              className="btn-link-muted shadow-none self-center w-full"
+              onClick={handlePasswordless}
+            >
+              Use passwordless {title.toLowerCase()}
+            </button>
+          )}
           <button
             type="button"
             className="btn-link-muted shadow-none self-center w-full"

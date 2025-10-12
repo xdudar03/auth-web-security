@@ -17,7 +17,7 @@ export type User = {
   password: string;
   embedding?: string;
   roleId?: number;
-  credentials?: any[];
+  credentials?: any;
 };
 
 export const UserProvider = ({ children }: { children: React.ReactNode }) => {

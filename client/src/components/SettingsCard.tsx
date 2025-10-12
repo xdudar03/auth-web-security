@@ -18,13 +18,19 @@ export default function SettingsCard() {
         <div className="flex flex-col gap-2 flex-1 min-h-0 box-border p-2 ">
           <h3 className="text-lg font-semibold text-center">Settings</h3>
           {user?.embedding ? (
-            <p className="text-sm text-muted-foreground">
-              Biometric data registered
-            </p>
+            <p className="settings-warning">Biometric data registered</p>
           ) : (
-            <p className="text-sm text-muted-foreground flex items-center gap-2 justify-center">
+            <p className="settings-warning">
               <TriangleAlert className="w-4 h-4 text-warning" />
-              Biometric data not registered
+              Please register biometric data
+            </p>
+          )}
+          {user?.credentials ? (
+            <p className="settings-warning">Passkey is set</p>
+          ) : (
+            <p className="settings-warning">
+              <TriangleAlert className="w-4 h-4 text-warning" />
+              Please set passkey
             </p>
           )}
         </div>

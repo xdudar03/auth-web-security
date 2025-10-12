@@ -72,6 +72,14 @@ app.post("/passwordless/authentication/verify", async (req, res) => {
   await authenticateVerify(req, res);
 });
 
+app.post("/passwordless/registration/options", async (req, res) => {
+  await registredOptions(req, res);
+});
+
+app.post("/passwordless/registration/verify", async (req, res) => {
+  await registeredVerify(req, res);
+});
+
 app.post("/biometric/registration", async (req, res) => {
   console.log("REQ BODY:", req.body);
   const usersFromDB = db.prepare("SELECT * FROM users").all();

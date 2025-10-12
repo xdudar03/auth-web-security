@@ -2,55 +2,113 @@ import { useUser } from '@/hooks/useUserContext';
 import { useState } from 'react';
 import ChangePasswordForm from './ChangePasswordForm';
 import BiometricAuthModel from './BiometricAuthModel';
+import PasskeySetupModal from './PasskeySetupModal';
+import { Lock, Fingerprint, KeyRound } from 'lucide-react';
 
 export default function SecuritySettings() {
   const { user } = useUser();
-  const isBiometric = user?.embedding !== '';
+  const isBiometric = !!user?.embedding && user?.embedding !== '';
+  const isPasskey = !!user?.credentials && user?.credentials !== '';
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [showChangeBiometricModal, setShowChangeBiometricModal] =
     useState(false);
+  const [showPasskeySetupModal, setShowPasskeySetupModal] = useState(false);
   return (
-    <div className="grid-section-2 w-full">
-      <h1 className="text-lg font-bold col-span-2">Security Settings</h1>
-      <div className="flex flex-col gap-2">
-        <button
-          className="btn-outline"
-          onClick={() => setShowChangePasswordModal(true)}
-        >
-          Change Password
-        </button>
-        {showChangePasswordModal && (
-          <ChangePasswordForm
-            setShowChangePasswordModal={setShowChangePasswordModal}
-          />
-        )}
-        {isBiometric ? (
+    <div className="w-full mx-auto space-y-6 border-t border-border pt-4 ">
+      <div className="flex flex-col gap-2 ">
+        <h1 className="text-xl font-semibold">Security settings</h1>
+        <p className="text-sm text-muted">
+          Manage how you sign in and protect your account.
+        </p>
+      </div>
+
+      {/* Password */}
+      <div className="signin-methods">
+        <div className="flex items-start gap-3">
+          <Lock className="w-5 h-5 text-muted mt-0.5" />
+          <div>
+            <h2 className="font-medium">Password</h2>
+            <p className="text-sm text-muted">Update your account password.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
           <button
             className="btn-outline"
+            onClick={() => setShowChangePasswordModal(true)}
+          >
+            Change password
+          </button>
+        </div>
+      </div>
+      {showChangePasswordModal && (
+        <ChangePasswordForm
+          setShowChangePasswordModal={setShowChangePasswordModal}
+        />
+      )}
+
+      {/* Biometric */}
+      <div className="signin-methods">
+        <div className="flex items-start gap-3">
+          <Fingerprint className="w-5 h-5 text-muted mt-0.5" />
+          <div>
+            <h2 className="font-medium">Biometric</h2>
+            <p className="text-sm text-muted">
+              {isBiometric
+                ? 'Biometric sign-in is enabled.'
+                : 'Set up biometric authentication to secure your account.'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            className={
+              isBiometric
+                ? 'btn-outline'
+                : 'btn-outline bg-warning hover:bg-warning/90 border-warning'
+            }
             onClick={() => setShowChangeBiometricModal(true)}
           >
-            Change Biometric
+            {isBiometric ? 'Change biometric' : 'Set up biometric'}
           </button>
-        ) : (
-          <>
-            <p>
-              Biometric data not registered, please register to use biometric
-              authentication.
-            </p>
-            <button
-              className="btn-outline bg-warning hover:bg-warning/90 border-warning"
-              onClick={() => setShowChangeBiometricModal(true)}
-            >
-              Register Biometric
-            </button>
-          </>
-        )}
-        {showChangeBiometricModal && (
-          <BiometricAuthModel
-            setShowChangeBiometricModal={setShowChangeBiometricModal}
-          />
-        )}
+        </div>
       </div>
+      {showChangeBiometricModal && (
+        <BiometricAuthModel
+          setShowChangeBiometricModal={setShowChangeBiometricModal}
+        />
+      )}
+
+      {/* Passkeys */}
+      <div className="signin-methods">
+        <div className="flex items-start gap-3">
+          <KeyRound className="w-5 h-5 text-muted mt-0.5" />
+          <div>
+            <h2 className="font-medium">Passkeys</h2>
+            <p className="text-sm text-muted">
+              {isPasskey
+                ? 'Use your device passkey to sign in without a password.'
+                : 'Create a passkey for simple and secure sign-in.'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            className={
+              isPasskey
+                ? 'btn-outline'
+                : 'btn-outline bg-warning hover:bg-warning/90 border-warning'
+            }
+            onClick={() => setShowPasskeySetupModal(true)}
+          >
+            {isPasskey ? 'Add another passkey' : 'Set up passkey'}
+          </button>
+        </div>
+      </div>
+      {showPasskeySetupModal && (
+        <PasskeySetupModal
+          setShowPasskeySetupModal={setShowPasskeySetupModal}
+        />
+      )}
     </div>
   );
 }
