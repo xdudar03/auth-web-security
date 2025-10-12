@@ -6,6 +6,7 @@ import {
 } from "@simplewebauthn/server";
 import { isoUint8Array } from "@simplewebauthn/server/helpers";
 import { db, updateUser } from "./database.ts";
+import { mapResponseQuery } from "./server.ts";
 
 function toBase64URL(bytes: Uint8Array): string {
   const b64 = Buffer.from(bytes).toString("base64");
@@ -70,7 +71,7 @@ export const registredOptions = async (req: any, res: any) => {
     return res.status(500).json({ error: String(error) });
   }
 };
-
+// TODO: figure out a way how to use fewer queries
 export const registeredVerify = async (req: any, res: any) => {
   console.log("THIS IS REGISTERED VERIFY");
   const body = req.body;
@@ -89,16 +90,17 @@ export const registeredVerify = async (req: any, res: any) => {
     console.log("VERIFIED:", verified);
     console.log("REGISTRATION INFO:", registrationInfo);
     if (verified && registrationInfo) {
-      const users = db.prepare("SELECT * FROM users").all();
-      const user = users.find((u: any) => u.username === username);
-      if (!user) {
+      const response = db
+        .prepare("SELECT * FROM users WHERE username = ?")
+        .get(username);
+      if (!response) {
         return res.status(404).json({ error: "User not found" });
       }
 
       let credentials: any[] = [];
-      if (user.credentials) {
+      if (response.credentials) {
         try {
-          credentials = JSON.parse(user.credentials as string) || [];
+          credentials = JSON.parse(response.credentials as string) || [];
         } catch {
           credentials = [];
         }
@@ -118,9 +120,18 @@ export const registeredVerify = async (req: any, res: any) => {
         (c: any) => c.credentialID !== newAuthenticator.credentialID
       );
       const updated = [...withoutDup, newAuthenticator];
-      updateUser(user.id as number, { credentials: JSON.stringify(updated) });
+      updateUser(response.id as number, {
+        credentials: JSON.stringify(updated),
+      });
     }
-    return res.json({ verified });
+    const query = db
+      .prepare(
+        "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ?"
+      )
+      .get(username);
+    const response = mapResponseQuery(query);
+    console.log("RESPONSE IN REGISTERED VERIFY:", response);
+    return res.json({ verified, response });
   } catch (error) {
     console.error(error);
     return res.status(400).json({ error: "Invalid registration response" });
@@ -130,8 +141,9 @@ export const registeredVerify = async (req: any, res: any) => {
 export const authenticateOptions = async (req: any, res: any) => {
   console.log("THIS IS AUTHENTICATION OPTIONS");
   const { username } = req.body;
-  const users = db.prepare("SELECT * FROM users").all();
-  const user = users.find((user: any) => user.username === username);
+  const user = db
+    .prepare("SELECT * FROM users WHERE username = ?")
+    .get(username);
 
   if (!user) {
     return res.status(400).json({ error: "User not found" });
@@ -177,24 +189,28 @@ export const authenticateVerify = async (req: any, res: any) => {
   const body = req.body;
   const username = (req.session as any).username;
   const expectedChallenge = (req.session as any).challenge;
-  const users = db.prepare("SELECT * FROM users").all();
-  const user = users.find((user: any) => user.username === username);
-  if (user?.credentials) {
-    user.credentials = JSON.parse(user.credentials as string);
+  const query = db
+    .prepare(
+      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ?"
+    )
+    .get(username);
+  const response = mapResponseQuery(query);
+  if (response.user?.credentials) {
+    response.user.credentials = JSON.parse(response.user.credentials as string);
   }
-  if (!user) {
+  if (!response.user) {
     return res.status(404).json({ error: "User not found" });
   }
 
-  console.log("CREDENTIALS:", user?.credentials);
+  console.log("CREDENTIALS:", response.user?.credentials);
   console.log("EXPECTED CHALLENGE:", expectedChallenge);
   console.log("USERNAME:", username);
   console.log("BODY:", body);
-  console.log("USER:", user);
+  console.log("USER:", response.user);
 
   try {
-    const credentialsArray: any[] = Array.isArray(user?.credentials)
-      ? (user?.credentials as any[])
+    const credentialsArray: any[] = Array.isArray(response.user?.credentials)
+      ? (response.user?.credentials as any[])
       : [];
     const authenticator = credentialsArray.find(
       (c: any) => c.credentialID === body.id
@@ -226,11 +242,11 @@ export const authenticateVerify = async (req: any, res: any) => {
           ? { ...c, counter: authenticationInfo.newCounter }
           : c
       );
-      updateUser(user.id as number, {
+      updateUser(response.user.id as number, {
         credentials: JSON.stringify(updatedCreds),
       });
     }
-    return res.json({ verified, user });
+    return res.json({ verified, response });
   } catch (error) {
     console.error(error);
     return res.status(400).json({ error: "Invalid authentication response" });

@@ -7,6 +7,8 @@ export const UserContext = createContext<
       setIsAuthenticated: (isAuthenticated: boolean) => void;
       user: User | null;
       setUser: (user: User | null) => void;
+      role: Role | null;
+      setRole: (role: Role | null) => void;
     }
   | undefined
 >(undefined);
@@ -20,13 +22,32 @@ export type User = {
   credentials?: any;
 };
 
+export type Role = {
+  id: number;
+  name: string;
+  canChangeUsersCredentials: boolean;
+  canChangeUsersRoles: boolean;
+  canReadUsers: boolean;
+  canReadUsersCredentials: boolean;
+  canReadUsersSettings: boolean;
+  canReadUsersRoles: boolean;
+};
+
 export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [role, setRole] = useState<Role | null>(null);
   // console.log('user in context', user);
   return (
     <UserContext.Provider
-      value={{ user, setUser, isAuthenticated, setIsAuthenticated }}
+      value={{
+        user,
+        setUser,
+        isAuthenticated,
+        setIsAuthenticated,
+        role,
+        setRole,
+      }}
     >
       {children}
     </UserContext.Provider>

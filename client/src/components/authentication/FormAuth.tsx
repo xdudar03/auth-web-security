@@ -2,7 +2,7 @@
 
 // import { useEffect } from 'react';
 import { handleAuthenticatePasswordless } from '@/lib/authentication/authenticationPasswordless';
-import { useUser, type User } from '@/hooks/useUserContext';
+import { Role, useUser, type User } from '@/hooks/useUserContext';
 import { handleRegister } from '@/lib/authentication/registration';
 import { useRouter } from 'next/navigation';
 import { handleAuthenticate } from '@/lib/authentication/authentication';
@@ -13,7 +13,7 @@ export default function FormAuth({
   setTab: (tab: string) => void;
   title: string;
 }) {
-  const { user, setUser, setIsAuthenticated } = useUser();
+  const { user, setUser, setIsAuthenticated, setRole } = useUser();
   const router = useRouter();
   // useEffect(() => {
   //   console.log('user updated', user);
@@ -35,15 +35,18 @@ export default function FormAuth({
       const userWithId = { ...(user ?? {}), id: id, roleId: 2 } as User;
       const result = await handleRegister(userWithId);
       if (result) {
-        setUser(userWithId);
+        setUser(result.user as User);
+        setRole(result.role as Role);
         setIsAuthenticated(true);
         router.push('/dashboard');
       }
     } else {
       const resultUser = await handleAuthenticate(user as User);
+      console.log('resultUser', resultUser);
       if (resultUser) {
         setIsAuthenticated(true);
-        setUser(resultUser as User);
+        setUser(resultUser.user as User);
+        setRole(resultUser.role as Role);
         router.push('/dashboard');
       }
     }
@@ -69,7 +72,8 @@ export default function FormAuth({
         user.id
       );
       if (result.user) {
-        setUser(result.user);
+        setUser(result.user as User);
+        setRole(result.role as Role);
         setIsAuthenticated(true);
         router.push('/dashboard');
       }

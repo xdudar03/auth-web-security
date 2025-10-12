@@ -15,5 +15,5 @@ export async function handleAuthenticate(user: User) {
     throw new Error('Authentication failed: ' + data.error);
   }
   console.log('Data:', data);
-  return data;
+  return data.response;
 }

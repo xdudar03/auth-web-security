@@ -33,13 +33,15 @@ export async function handleAuthenticatePasswordless(
       credentials: 'include',
     });
 
+    console.log('VERIFY RES:', verifyRes);
+
     if (!verifyRes.ok) {
       console.error('Server error', await verifyRes.text());
       return;
     }
     const json = await verifyRes.json();
     console.log('JSON:', json);
-    return json;
+    return json.response;
   } catch (error) {
     console.error(error);
   }

@@ -26,7 +26,7 @@ export async function handleRegister(user: User) {
     }
     const data = await response.json();
     console.log('Data:', data);
-    return data;
+    return data.response;
   } catch (error) {
     console.error('Error registering user', error);
     return null;

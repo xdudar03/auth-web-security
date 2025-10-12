@@ -49,6 +49,30 @@ app.use(
   })
 );
 
+export function mapResponseQuery(query: any) {
+  const response = {
+    user: {
+      id: query.id,
+      username: query.username,
+      password: query.password,
+      embedding: query.embedding,
+      roleId: query.roleId,
+      credentials: query.credentials,
+    },
+    role: {
+      id: query.roleId,
+      name: query.name,
+      canChangeUsersCredentials: query.canChangeUsersCredentials,
+      canChangeUsersRoles: query.canChangeUsersRoles,
+      canReadUsers: query.canReadUsers,
+      canReadUsersCredentials: query.canReadUsersCredentials,
+      canReadUsersSettings: query.canReadUsersSettings,
+      canReadUsersRoles: query.canReadUsersRoles,
+    },
+  };
+  return response;
+}
+
 export function loadUsers() {
   try {
     if (!fs.existsSync(USERS_FILE_TEMP)) return [];
@@ -85,40 +109,49 @@ app.post("/biometric/registration", async (req, res) => {
   const usersFromDB = db.prepare("SELECT * FROM users").all();
   console.log("USERS FROM DB:", usersFromDB);
   const { username, password, embedding, id, roleId } = req.body;
-  // add user to database
-  if (usersFromDB.find((user: any) => user.username === username)) {
+  // add query to database
+  if (usersFromDB.find((query: any) => query.username === username)) {
     return res.status(400).json({ error: "User already exists" });
   }
   addUser.run(id, username, password, embedding, roleId);
-  console.log("USER ADDED TO DB:", db.prepare("SELECT * FROM users").all());
-  return res.status(200).json({ message: "Registration successful" });
+  const query = db
+    .prepare(
+      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ?"
+    )
+    .get(username);
+  const response = mapResponseQuery(query);
+  return res.status(200).json({ message: "Registration successful", response });
 });
 
 app.post("/biometric/authentication", async (req, res) => {
-  const usersFromDB = db.prepare("SELECT * FROM users").all();
   const { username, password } = req.body;
-  const user = usersFromDB.find((user: any) => user.username === username);
-  if (!user) {
+  const query = db
+    .prepare(
+      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ?"
+    )
+    .get(username);
+  if (!query) {
     return res.status(400).json({ error: "User not found" });
-  } else if (user.password !== password) {
+  } else if (query.password !== password) {
     return res.status(400).json({ error: "Invalid password" });
   }
-  console.log("USER FOUND:", user);
-  return res.status(200).json(user);
+  const response = mapResponseQuery(query);
+
+  return res.status(200).json({ response });
 });
 
 app.post("/change-password", async (req, res) => {
   console.log("REQ BODY:", req.body);
   const { username, oldPassword, newPassword } = req.body;
   const usersFromDB = db.prepare("SELECT * FROM users").all();
-  const user = usersFromDB.find((user: any) => user.username === username);
-  if (!user) {
+  const query = usersFromDB.find((query: any) => query.username === username);
+  if (!query) {
     return res.status(400).json({ error: "User not found" });
   }
-  if (user.password !== oldPassword) {
+  if (query.password !== oldPassword) {
     return res.status(400).json({ error: "Invalid password" });
   }
-  updateUser(user.id as number, { password: newPassword });
+  updateUser(query.id as number, { password: newPassword });
   return res.status(200).json({ message: "Password changed successfully" });
 });
 
@@ -126,11 +159,11 @@ app.post("/confirm-password", async (req, res) => {
   console.log("REQ BODY:", req.body);
   const { username, password } = req.body;
   const usersFromDB = db.prepare("SELECT * FROM users").all();
-  const user = usersFromDB.find((user: any) => user.username === username);
-  if (!user) {
+  const query = usersFromDB.find((query: any) => query.username === username);
+  if (!query) {
     return res.status(400).json({ error: "User not found" });
   }
-  if (user.password !== password) {
+  if (query.password !== password) {
     return res.status(400).json({ error: "Invalid password" });
   }
   return res.status(200).json({ message: "Password confirmed successfully" });
@@ -140,11 +173,11 @@ app.post("/biometric/change", async (req, res) => {
   console.log("REQ BODY:", req.body);
   const { username, embedding } = req.body;
   const usersFromDB = db.prepare("SELECT * FROM users").all();
-  const user = usersFromDB.find((user: any) => user.username === username);
-  if (!user) {
+  const query = usersFromDB.find((query: any) => query.username === username);
+  if (!query) {
     return res.status(400).json({ error: "User not found" });
   }
-  updateUser(user.id as number, { embedding: embedding });
+  updateUser(query.id as number, { embedding: embedding });
   return res.status(200).json({ message: "Biometric changed successfully" });
 });
 
