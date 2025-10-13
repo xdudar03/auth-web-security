@@ -38,7 +38,11 @@ export default function FormAuth({
         setUser(result.user as User);
         setRole(result.role as Role);
         setIsAuthenticated(true);
-        router.push('/dashboard');
+        if (result.role.canAccessAdminPanel) {
+          router.push('/admin-dashboard');
+        } else {
+          router.push('/dashboard');
+        }
       }
     } else {
       const resultUser = await handleAuthenticate(user as User);
@@ -47,7 +51,11 @@ export default function FormAuth({
         setIsAuthenticated(true);
         setUser(resultUser.user as User);
         setRole(resultUser.role as Role);
-        router.push('/dashboard');
+        if (resultUser.role.canAccessAdminPanel) {
+          router.push('/admin-dashboard');
+        } else {
+          router.push('/dashboard');
+        }
       }
     }
   };

@@ -68,6 +68,8 @@ export function mapResponseQuery(query: any) {
       canReadUsersCredentials: query.canReadUsersCredentials,
       canReadUsersSettings: query.canReadUsersSettings,
       canReadUsersRoles: query.canReadUsersRoles,
+      canAccessAdminPanel: query.canAccessAdminPanel,
+      canAccessUserPanel: query.canAccessUserPanel,
     },
   };
   return response;

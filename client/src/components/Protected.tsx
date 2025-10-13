@@ -6,31 +6,57 @@ import { useUser } from '@/hooks/useUserContext';
 
 type ProtectedProps = {
   children: React.ReactNode;
-  requireRoles?: number[]; // optional role IDs allowed to access
+  requiredPermissions?: string[];
   fallback?: React.ReactNode; // optional fallback while redirecting
 };
 
 export default function Protected({
   children,
-  requireRoles,
+  requiredPermissions,
   fallback,
 }: ProtectedProps) {
   const router = useRouter();
-  const { isAuthenticated, user } = useUser();
+  const { isAuthenticated, user, role } = useUser();
+
+  console.log('role', role);
+  console.log('user?.roleId', user?.roleId);
 
   const isAuthorized = (() => {
-    if (!requireRoles || requireRoles.length === 0) return true;
-    if (!user?.roleId) return false;
-    return requireRoles.includes(user.roleId);
+    if (!requiredPermissions || requiredPermissions.length === 0) return true;
+    if (!user?.roleId || !role) return false;
+    return requiredPermissions.every(
+      (permission) => role[`${permission}` as keyof typeof role]
+    );
   })();
 
+  console.log('isAuthorized', isAuthorized);
+  console.log('requiredPermissions', requiredPermissions);
+
   useEffect(() => {
-    if (!isAuthenticated || !isAuthorized) {
+    if (!isAuthenticated) {
       router.replace('/login');
     }
-  }, [isAuthenticated, isAuthorized, router]);
+  }, [isAuthenticated, router]);
 
-  if (!isAuthenticated || !isAuthorized) {
+  if (!isAuthorized) {
+    return (
+      <div className="center-screen">
+        <div className="card">
+          <p className="text-center text-muted">
+            You are not authorized to access this page
+          </p>
+          <button
+            className="btn-primary"
+            onClick={() => router.push('/dashboard')}
+          >
+            Go to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
     return (
       fallback ?? (
         <div className="center-screen">

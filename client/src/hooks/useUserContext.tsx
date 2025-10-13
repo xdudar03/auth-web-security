@@ -31,6 +31,8 @@ export type Role = {
   canReadUsersCredentials: boolean;
   canReadUsersSettings: boolean;
   canReadUsersRoles: boolean;
+  canAccessAdminPanel: boolean;
+  canAccessUserPanel: boolean;
 };
 
 export const UserProvider = ({ children }: { children: React.ReactNode }) => {

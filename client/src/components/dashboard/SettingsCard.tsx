@@ -1,3 +1,4 @@
+'use client';
 import { Settings, TriangleAlert } from 'lucide-react';
 import { useUser } from '@/hooks/useUserContext';
 import Link from 'next/link';

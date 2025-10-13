@@ -24,7 +24,9 @@ const initTable = () => {
       canReadUsers BOOLEAN NOT NULL,
       canReadUsersCredentials BOOLEAN NOT NULL,
       canReadUsersSettings BOOLEAN NOT NULL,
-      canReadUsersRoles BOOLEAN NOT NULL
+      canReadUsersRoles BOOLEAN NOT NULL,
+      canAccessAdminPanel BOOLEAN NOT NULL,
+      canAccessUserPanel BOOLEAN NOT NULL
     )
   `);
 };
@@ -36,7 +38,7 @@ const addUser = db.prepare(
 );
 // 1 is admin, 2 is user, 3 is shop owner
 const addRole = db.prepare(
-  `INSERT INTO roles (name, canChangeUsersCredentials, canChangeUsersRoles, canReadUsers, canReadUsersCredentials, canReadUsersSettings, canReadUsersRoles) VALUES (?, ?, ?, ?, ?, ?, ?)`
+  `INSERT INTO roles (name, canChangeUsersCredentials, canChangeUsersRoles, canReadUsers, canReadUsersCredentials, canReadUsersSettings, canReadUsersRoles, canAccessAdminPanel, canAccessUserPanel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 );
 
 const getRoleById = db.prepare(`SELECT * FROM roles WHERE id = ?`);
@@ -78,7 +80,7 @@ function updateUser(userId: number, updates: Record<string, any>) {
 }
 
 const updateRole = db.prepare(
-  `UPDATE roles SET name = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ? WHERE id = ?`
+  `UPDATE roles SET name = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ?, canAccessAdminPanel = ?, canAccessUserPanel = ? WHERE id = ?`
 );
 
 const getRoles = db.prepare(`SELECT * FROM roles`);
