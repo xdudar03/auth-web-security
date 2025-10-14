@@ -18,7 +18,7 @@ const initTable = () => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
+      roleName TEXT NOT NULL,
       canChangeUsersCredentials BOOLEAN NOT NULL,
       canChangeUsersRoles BOOLEAN NOT NULL,
       canReadUsers BOOLEAN NOT NULL,
@@ -38,12 +38,12 @@ const addUser = db.prepare(
 );
 // 1 is admin, 2 is user, 3 is shop owner
 const addRole = db.prepare(
-  `INSERT INTO roles (name, canChangeUsersCredentials, canChangeUsersRoles, canReadUsers, canReadUsersCredentials, canReadUsersSettings, canReadUsersRoles, canAccessAdminPanel, canAccessUserPanel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  `INSERT INTO roles (roleName, canChangeUsersCredentials, canChangeUsersRoles, canReadUsers, canReadUsersCredentials, canReadUsersSettings, canReadUsersRoles, canAccessAdminPanel, canAccessUserPanel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 );
 
 const getRoleById = db.prepare(`SELECT * FROM roles WHERE id = ?`);
 
-const getRoleByName = db.prepare(`SELECT * FROM roles WHERE name = ?`);
+const getRoleByName = db.prepare(`SELECT * FROM roles WHERE roleName = ?`);
 
 const getUserByUsername = db.prepare(`SELECT * FROM users WHERE username = ?`);
 
@@ -80,7 +80,7 @@ function updateUser(userId: number, updates: Record<string, any>) {
 }
 
 const updateRole = db.prepare(
-  `UPDATE roles SET name = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ?, canAccessAdminPanel = ?, canAccessUserPanel = ? WHERE id = ?`
+  `UPDATE roles SET roleName = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ?, canAccessAdminPanel = ?, canAccessUserPanel = ? WHERE id = ?`
 );
 
 const getRoles = db.prepare(`SELECT * FROM roles`);

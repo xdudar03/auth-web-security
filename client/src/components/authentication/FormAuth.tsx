@@ -83,7 +83,11 @@ export default function FormAuth({
         setUser(result.user as User);
         setRole(result.role as Role);
         setIsAuthenticated(true);
-        router.push('/dashboard');
+        if (result.role.canAccessAdminPanel) {
+          router.push('/admin-dashboard');
+        } else {
+          router.push('/dashboard');
+        }
       }
     } else {
       alert('Username is required');

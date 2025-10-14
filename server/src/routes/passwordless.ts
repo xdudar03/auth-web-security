@@ -5,8 +5,29 @@ import {
   verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
 import { isoUint8Array } from "@simplewebauthn/server/helpers";
-import { db, updateUser } from "./database.ts";
-import { mapResponseQuery } from "./server.ts";
+import { db, updateUser } from "../database.ts";
+import { mapResponseQuery } from "../utils.ts";
+import { Router } from "express";
+
+const router = Router();
+
+router.post("/authentication/options", async (req, res) => {
+  await authenticateOptions(req, res);
+});
+
+router.post("/authentication/verify", async (req, res) => {
+  await authenticateVerify(req, res);
+});
+
+router.post("/registration/options", async (req, res) => {
+  await registredOptions(req, res);
+});
+
+router.post("/registration/verify", async (req, res) => {
+  await registeredVerify(req, res);
+});
+
+export default router;
 
 function toBase64URL(bytes: Uint8Array): string {
   const b64 = Buffer.from(bytes).toString("base64");

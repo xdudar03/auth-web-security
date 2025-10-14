@@ -6,42 +6,31 @@ import {
   Table,
   Row,
 } from '@tanstack/react-table';
-import { Pencil, Trash } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Eye, Pencil, Trash } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { getAllUsers } from '@/lib/admin/getAllUsers';
+import { User, useUser } from '@/hooks/useUserContext';
+import { getUserInfo } from '@/lib/admin/getUserInfo';
 
 type UserRow = {
   id: string;
   username: string;
-  role: string;
-  status: 'active' | 'offline' | 'pending';
-  lastActive: string;
+  roleName: string;
 };
 
-const placeholderUsers: UserRow[] = [
-  {
-    id: '1',
-    username: 'alice',
-    role: 'Admin',
-    status: 'active',
-    lastActive: 'Just now',
-  },
-  {
-    id: '2',
-    username: 'bob',
-    role: 'Member',
-    status: 'offline',
-    lastActive: '2h ago',
-  },
-  {
-    id: '3',
-    username: 'charlie',
-    role: 'Member',
-    status: 'pending',
-    lastActive: '—',
-  },
-];
+export default function UsersTable({
+  setShowUserInfoModal,
+  users,
+  setActiveUser,
+}: {
+  setShowUserInfoModal: (show: boolean) => void;
+  users: UserRow[];
+  setActiveUser: (user: User) => void;
+}) {
+  const { role } = useUser();
+  console.log('role', role);
+  console.log('users', users);
 
-export default function UsersTable() {
   const columns = useMemo(
     () => [
       {
@@ -68,16 +57,13 @@ export default function UsersTable() {
       },
       {
         header: 'User',
-        accessorKey: 'username',
+        accessorKey: 'user.username',
       },
       {
         header: 'Role',
-        accessorKey: 'role',
+        accessorKey: 'role.roleName',
       },
-      {
-        header: 'Status',
-        accessorKey: 'status',
-      },
+
       {
         id: 'actions',
         header: 'Actions',
@@ -85,14 +71,14 @@ export default function UsersTable() {
           <div className="flex gap-2">
             <button
               className="icon-btn"
-              onClick={() => handleEdit(row.original.id)}
+              onClick={() => handleView(row.original.user.id)}
             >
+              <Eye className="w-4 h-4" />
+            </button>
+            <button className="icon-btn" onClick={() => handleEdit(row.id)}>
               <Pencil className="w-4 h-4" />
             </button>
-            <button
-              className="icon-btn"
-              onClick={() => handleDelete(row.original.id)}
-            >
+            <button className="icon-btn" onClick={() => handleDelete(row.id)}>
               <Trash className="w-4 h-4" />
             </button>
           </div>
@@ -104,7 +90,7 @@ export default function UsersTable() {
   );
   const [rowSelection, setRowSelection] = useState({});
   const table = useReactTable({
-    data: placeholderUsers,
+    data: users,
     columns,
     state: {
       rowSelection,
@@ -113,6 +99,15 @@ export default function UsersTable() {
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
   });
+  const handleView = async (id: string) => {
+    console.log('viewing user', id);
+    if (role?.canReadUsers) {
+      const userInfo = await getUserInfo(id);
+      setShowUserInfoModal(true);
+      console.log('userInfo', userInfo);
+      setActiveUser(userInfo);
+    }
+  };
   const handleEdit = (id: string) => {
     console.log('editing user', id);
   };
