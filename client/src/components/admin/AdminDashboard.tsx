@@ -19,6 +19,7 @@ export default function AdminDashboard() {
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [activeUser, setActiveUser] = useState<User | null>(null);
+  const [mode, setMode] = useState<'view' | 'edit'>('view');
   console.log('activeUser', activeUser);
   useEffect(() => {
     getAllUsers().then((users) => setUsers(users));
@@ -40,13 +41,18 @@ export default function AdminDashboard() {
       <UsersTable
         setShowUserInfoModal={setShowUserInfoModal}
         users={users}
+        activeUser={activeUser as User}
         setActiveUser={setActiveUser}
+        mode={mode}
+        setMode={setMode}
       />
       {showUserInfoModal && activeUser && (
         <UserInfoModal
           activeUser={activeUser as User}
           setShowUserInfoModal={setShowUserInfoModal}
           setActiveUser={setActiveUser}
+          mode={mode}
+          setMode={setMode}
         />
       )}
     </div>

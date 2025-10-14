@@ -7,8 +7,7 @@ import {
   Row,
 } from '@tanstack/react-table';
 import { Eye, Pencil, Trash } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { getAllUsers } from '@/lib/admin/getAllUsers';
+import { useMemo, useState } from 'react';
 import { User, useUser } from '@/hooks/useUserContext';
 import { getUserInfo } from '@/lib/admin/getUserInfo';
 
@@ -21,11 +20,17 @@ type UserRow = {
 export default function UsersTable({
   setShowUserInfoModal,
   users,
+  activeUser,
   setActiveUser,
+  mode,
+  setMode,
 }: {
   setShowUserInfoModal: (show: boolean) => void;
   users: UserRow[];
+  activeUser: User;
   setActiveUser: (user: User) => void;
+  mode: 'view' | 'edit';
+  setMode: (mode: 'view' | 'edit') => void;
 }) {
   const { role } = useUser();
   console.log('role', role);
@@ -75,10 +80,16 @@ export default function UsersTable({
             >
               <Eye className="w-4 h-4" />
             </button>
-            <button className="icon-btn" onClick={() => handleEdit(row.id)}>
+            <button
+              className="icon-btn"
+              onClick={() => handleEdit(row.original.user.id)}
+            >
               <Pencil className="w-4 h-4" />
             </button>
-            <button className="icon-btn" onClick={() => handleDelete(row.id)}>
+            <button
+              className="icon-btn"
+              onClick={() => handleDelete(row.original.user.id)}
+            >
               <Trash className="w-4 h-4" />
             </button>
           </div>
@@ -106,10 +117,23 @@ export default function UsersTable({
       setShowUserInfoModal(true);
       console.log('userInfo', userInfo);
       setActiveUser(userInfo);
+      setMode('view');
     }
   };
-  const handleEdit = (id: string) => {
+  const handleEdit = async (id: string) => {
     console.log('editing user', id);
+    if (role?.canChangeUsersCredentials) {
+      const userInfo = await getUserInfo(id);
+      setShowUserInfoModal(true);
+      setActiveUser(userInfo);
+      setMode('edit');
+    } else if (activeUser && role?.canChangeUsersCredentials) {
+      setShowUserInfoModal(true);
+      setActiveUser(activeUser);
+      setMode('edit');
+    } else {
+      alert('You do not have permission to edit this user');
+    }
   };
   const handleDelete = (id: string) => {
     console.log('deleting user', id);
