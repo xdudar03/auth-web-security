@@ -3,6 +3,9 @@ import { handleChangePassword } from '@/lib/settings/changePassword';
 import { useUser } from '@/hooks/useUserContext';
 import { useState } from 'react';
 import Modal from '../Modal';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 export default function ChangePasswordForm({
   setShowChangePasswordModal,
@@ -77,53 +80,47 @@ export default function ChangePasswordForm({
       open={true}
       onClose={() => setShowChangePasswordModal(false)}
       title="Change Password"
+      description="Enter your current password and a new password to change your password."
       footer={
-        <button
-          form="change-password-form"
-          type="submit"
-          className="btn-primary"
-        >
+        <Button form="change-password-form" type="submit">
           Save
-        </button>
+        </Button>
       }
     >
       <form id="change-password-form" onSubmit={onSubmit} className="form">
         <div className="form-field">
-          <label className="form-label" htmlFor="oldPassword">
+          <Label className="form-label" htmlFor="oldPassword">
             Old password
-          </label>
-          <input
+          </Label>
+          <Input
             id="oldPassword"
             type="password"
             name="oldPassword"
             onChange={handleChange}
-            className="form-input"
             placeholder="Enter your current password"
           />
         </div>
         <div className="form-field">
-          <label className="form-label" htmlFor="newPassword">
+          <Label className="form-label" htmlFor="newPassword">
             New password
-          </label>
-          <input
+          </Label>
+          <Input
             id="newPassword"
             type="password"
             name="newPassword"
             onChange={handleChange}
-            className="form-input"
             placeholder="Enter a new password"
           />
         </div>
         <div className="form-field">
-          <label className="form-label" htmlFor="confirmPassword">
+          <Label className="form-label" htmlFor="confirmPassword">
             Confirm new password
-          </label>
-          <input
+          </Label>
+          <Input
             id="confirmPassword"
             type="password"
             name="confirmPassword"
             onChange={handleChange}
-            className="form-input"
             placeholder="Re-enter the new password"
           />
         </div>

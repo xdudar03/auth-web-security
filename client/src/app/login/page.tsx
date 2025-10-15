@@ -4,6 +4,7 @@ import BiometricAuth from '@/components/authentication/BiometricAuth';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function LoginPage() {
   const [tab, setTab] = useState('login');
@@ -20,9 +21,14 @@ export default function LoginPage() {
     <div className="center-screen">
       <div className="card">
         <div className="flex flex-row items-center justify-center gap-6">
-          <button onClick={handleBack} className="icon-btn-zoom ">
+          <Button
+            onClick={handleBack}
+            variant="ghost"
+            size="icon"
+            className="icon-btn-zoom "
+          >
             <ArrowLeft />
-          </button>
+          </Button>
           {tab === 'login' ? (
             <FormAuth title="Login" setTab={setTab} />
           ) : (

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import ConfirmPassword from '../ConfirmPassword';
 import Modal from '../Modal';
 import { handleRegisterPasskey } from '@/lib/authentication/registrationPasswordless';
+import { Button } from '@/components/ui/button';
 import { handleOptions } from '@/lib/authentication/registrationPasswordless';
 
 export default function PasskeySetupModal({
@@ -56,13 +57,10 @@ export default function PasskeySetupModal({
   return (
     <Modal
       title="Passkey Registration"
+      description="Enter your password to register a passkey."
       onClose={handleClose}
       footer={
-        isConfirmed ? null : (
-          <button className="btn-primary" onClick={handleSubmit}>
-            Submit
-          </button>
-        )
+        isConfirmed ? null : <Button onClick={handleSubmit}>Submit</Button>
       }
       open={true}
     >

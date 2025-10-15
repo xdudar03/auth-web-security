@@ -5,6 +5,7 @@ import Modal from '../Modal';
 import { useState } from 'react';
 import { useUser } from '@/hooks/useUserContext';
 import ConfirmPassword from '../ConfirmPassword';
+import { Button } from '@/components/ui/button';
 
 export default function BiometricAuthModel({
   setShowChangeBiometricModal,
@@ -37,14 +38,11 @@ export default function BiometricAuthModel({
   return (
     <Modal
       title="Biometric Authentication"
+      description="Change your biometric authentication."
       open={true}
       onClose={handleClose}
       footer={
-        isConfirmed ? null : (
-          <button className="btn-primary" onClick={handleSubmit}>
-            Submit
-          </button>
-        )
+        isConfirmed ? null : <Button onClick={handleSubmit}>Submit</Button>
       }
     >
       {isConfirmed ? (

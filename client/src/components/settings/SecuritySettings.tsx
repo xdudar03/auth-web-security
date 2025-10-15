@@ -4,6 +4,7 @@ import ChangePasswordForm from './ChangePasswordForm';
 import BiometricAuthModel from './BiometricAuthModel';
 import PasskeySetupModal from './PasskeySetupModal';
 import { Lock, KeyRound, ScanFace } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function SecuritySettings() {
   const { user } = useUser();
@@ -32,12 +33,12 @@ export default function SecuritySettings() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            className="btn-outline"
+          <Button
+            variant="outline"
             onClick={() => setShowChangePasswordModal(true)}
           >
             Change password
-          </button>
+          </Button>
         </div>
       </div>
       {showChangePasswordModal && (
@@ -60,16 +61,15 @@ export default function SecuritySettings() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="outline"
             className={
-              isBiometric
-                ? 'btn-outline'
-                : 'btn-outline bg-warning hover:bg-warning/90 border-warning'
+              isBiometric ? '' : 'bg-warning hover:bg-warning/90 border-warning'
             }
             onClick={() => setShowChangeBiometricModal(true)}
           >
             {isBiometric ? 'Change biometric' : 'Set up biometric'}
-          </button>
+          </Button>
         </div>
       </div>
       {showChangeBiometricModal && (
@@ -92,16 +92,15 @@ export default function SecuritySettings() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="outline"
             className={
-              isPasskey
-                ? 'btn-outline'
-                : 'btn-outline bg-warning hover:bg-warning/90 border-warning'
+              isPasskey ? '' : 'bg-warning hover:bg-warning/90 border-warning'
             }
             onClick={() => setShowPasskeySetupModal(true)}
           >
             {isPasskey ? 'Add another passkey' : 'Set up passkey'}
-          </button>
+          </Button>
         </div>
       </div>
       {showPasskeySetupModal && (

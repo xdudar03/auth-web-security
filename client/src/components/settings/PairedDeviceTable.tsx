@@ -1,5 +1,15 @@
 import { Laptop, Plus, Smartphone, Tablet, Trash } from 'lucide-react';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table as UITable,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table';
 
 const fakePairedDevices = [
   { id: 1, name: 'Device 1', status: 'Connected', type: 'Smartphone' },
@@ -36,46 +46,53 @@ export default function PairedDeviceTable() {
     <div className="w-full mx-auto space-y-6 border-t border-border pt-4 ">
       <h1 className="text-lg font-bold col-span-2">Paired Devices</h1>
       <div className="table-card">
-        <table className="table">
-          <thead>
-            <tr>
-              <th className="th">Device</th>
-              <th className="th">Status</th>
-              <th className="th">
-                <button className="icon-btn" onClick={handleAddDevice}>
+        <UITable>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Device</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleAddDevice}
+                  aria-label="Add device"
+                >
                   <Plus className="w-4 h-4" />
-                </button>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
+                </Button>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {pairedDevicesTable.map((device) => (
-              <tr key={device.id}>
-                <td className="td">
+              <TableRow key={device.id}>
+                <TableCell>
                   <div className="flex items-center gap-2">
                     {deviceIcons[device.type as keyof typeof deviceIcons]}
                     {device.name}
                   </div>
-                </td>
-                <td className="td">
+                </TableCell>
+                <TableCell>
                   {device.status === 'Connected' ? (
-                    <span className="badge badge-success">Connected</span>
+                    <Badge variant="success">Connected</Badge>
                   ) : (
-                    <span className="badge badge-error">Disconnected</span>
+                    <Badge variant="destructive">Disconnected</Badge>
                   )}
-                </td>
-                <td className="td">
-                  <button
-                    className="icon-btn"
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={() => handleRemoveDevice(device.id)}
+                    aria-label={`Remove ${device.name}`}
                   >
                     <Trash className="w-4 h-4" />
-                  </button>
-                </td>
-              </tr>
+                  </Button>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </UITable>
       </div>
     </div>
   );

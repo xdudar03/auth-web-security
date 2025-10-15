@@ -1,5 +1,8 @@
 import { User, useUser } from '@/hooks/useUserContext';
 import Modal from '../Modal';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 export default function UserInfoModal({
   activeUser,
@@ -31,9 +34,10 @@ export default function UserInfoModal({
 
   const editInput = (label: string, value: string, disabled: boolean) => {
     return (
-      <div className="flex flex-row gap-2">
-        <label>{label}:</label>
-        <input
+      <div className="flex flex-col gap-1 w-72 sm:w-80">
+        <Label htmlFor={label}>{label}</Label>
+        <Input
+          id={label}
           type="text"
           value={value}
           onChange={handleEdit}
@@ -49,12 +53,9 @@ export default function UserInfoModal({
       title={mode === 'view' ? 'User Info' : 'Edit User'}
       open={true}
       onClose={handleClose}
+      description={mode === 'view' ? 'User Info' : 'Edit User'}
       footer={
-        mode === 'edit' && (
-          <button onClick={() => setMode('view')} className="btn-primary">
-            Save
-          </button>
-        )
+        mode === 'edit' && <Button onClick={() => setMode('view')}>Save</Button>
       }
     >
       <div className="flex flex-col gap-2">

@@ -4,6 +4,7 @@ import { User, useUser } from '@/hooks/useUserContext';
 import { handleRegister } from '@/lib/authentication/registration';
 import { handleAuthenticate } from '@/lib/authentication/authentication';
 import { handleBiometricChange } from '@/lib/settings/biometricChange';
+import { Button } from '@/components/ui/button';
 
 export default function BiometricAuth({
   title,
@@ -105,9 +106,9 @@ export default function BiometricAuth({
           </span>
         </div>
         <div className="flex items-center gap-2 self-center">
-          <button onClick={handleClick} className="btn-primary">
+          <Button onClick={handleClick}>
             {isCameraActive ? 'Take Photo' : 'Start Camera'}
-          </button>
+          </Button>
         </div>
         {capturedImage && (
           <div className="flex flex-col items-center gap-2">

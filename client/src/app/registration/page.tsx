@@ -4,6 +4,7 @@ import { useState } from 'react';
 import FormAuth from '@/components/authentication/FormAuth';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function RegistrationPage() {
   const [tab, setTab] = useState('registration');
@@ -20,9 +21,14 @@ export default function RegistrationPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background">
       <div className="flex flex-col items-center justify-center border p-6 bg-surface rounded shadow-md border-border gap-6">
         <div className="flex flex-row items-center justify-center gap-6">
-          <button onClick={handleBack} className="icon-btn-zoom">
+          <Button
+            onClick={handleBack}
+            variant="ghost"
+            size="icon"
+            className="icon-btn-zoom"
+          >
             <ArrowLeft className="w-6 h-6" />
-          </button>
+          </Button>
           <FormAuth title="Registration" setTab={setTab} />
           {/* <BiometricAuth title="Registration" action="registration" /> */}
         </div>

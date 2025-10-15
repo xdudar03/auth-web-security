@@ -7,9 +7,18 @@ import {
   Row,
 } from '@tanstack/react-table';
 import { Eye, Pencil, Trash } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { User, useUser } from '@/hooks/useUserContext';
 import { getUserInfo } from '@/lib/admin/getUserInfo';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Table as UITable,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table';
 
 type UserRow = {
   id: string;
@@ -22,38 +31,71 @@ export default function UsersTable({
   users,
   activeUser,
   setActiveUser,
-  mode,
   setMode,
 }: {
   setShowUserInfoModal: (show: boolean) => void;
   users: UserRow[];
   activeUser: User;
   setActiveUser: (user: User) => void;
-  mode: 'view' | 'edit';
   setMode: (mode: 'view' | 'edit') => void;
 }) {
   const { role } = useUser();
   console.log('role', role);
   console.log('users', users);
 
+  const handleView = useCallback(
+    async (id: string) => {
+      console.log('viewing user', id);
+      if (role?.canReadUsers) {
+        const userInfo = await getUserInfo(id);
+        setShowUserInfoModal(true);
+        console.log('userInfo', userInfo);
+        setActiveUser(userInfo);
+        setMode('view');
+      }
+    },
+    [role, setActiveUser, setMode, setShowUserInfoModal]
+  );
+
+  const handleEdit = useCallback(
+    async (id: string) => {
+      console.log('editing user', id);
+      if (role?.canChangeUsersCredentials) {
+        const userInfo = await getUserInfo(id);
+        setShowUserInfoModal(true);
+        setActiveUser(userInfo);
+        setMode('edit');
+      } else if (activeUser && role?.canChangeUsersCredentials) {
+        setShowUserInfoModal(true);
+        setActiveUser(activeUser);
+        setMode('edit');
+      } else {
+        alert('You do not have permission to edit this user');
+      }
+    },
+    [role, activeUser, setActiveUser, setMode, setShowUserInfoModal]
+  );
+
+  const handleDelete = useCallback((id: string) => {
+    console.log('deleting user', id);
+  }, []);
+
   const columns = useMemo(
     () => [
       {
         id: 'select',
         header: ({ table }: { table: Table<UserRow> }) => (
-          <input
-            type="checkbox"
-            className="input"
-            onChange={(e) => table.toggleAllRowsSelected(e.target.checked)}
+          <Checkbox
             checked={table.getIsAllRowsSelected()}
+            onCheckedChange={(v) => table.toggleAllRowsSelected(!!v)}
+            aria-label="Select all"
           />
         ),
         cell: ({ row }: { row: Row<UserRow> }) => (
-          <input
-            type="checkbox"
-            className="input"
-            onChange={(e) => row.toggleSelected()}
+          <Checkbox
             checked={row.getIsSelected()}
+            onCheckedChange={() => row.toggleSelected()}
+            aria-label={`Select row ${row.id}`}
           />
         ),
         accessorKey: 'select',
@@ -97,7 +139,7 @@ export default function UsersTable({
         accessorKey: 'actions',
       },
     ],
-    []
+    [handleView, handleEdit, handleDelete]
   );
   const [rowSelection, setRowSelection] = useState({});
   const table = useReactTable({
@@ -110,34 +152,6 @@ export default function UsersTable({
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
   });
-  const handleView = async (id: string) => {
-    console.log('viewing user', id);
-    if (role?.canReadUsers) {
-      const userInfo = await getUserInfo(id);
-      setShowUserInfoModal(true);
-      console.log('userInfo', userInfo);
-      setActiveUser(userInfo);
-      setMode('view');
-    }
-  };
-  const handleEdit = async (id: string) => {
-    console.log('editing user', id);
-    if (role?.canChangeUsersCredentials) {
-      const userInfo = await getUserInfo(id);
-      setShowUserInfoModal(true);
-      setActiveUser(userInfo);
-      setMode('edit');
-    } else if (activeUser && role?.canChangeUsersCredentials) {
-      setShowUserInfoModal(true);
-      setActiveUser(activeUser);
-      setMode('edit');
-    } else {
-      alert('You do not have permission to edit this user');
-    }
-  };
-  const handleDelete = (id: string) => {
-    console.log('deleting user', id);
-  };
   console.log('rowSelection', rowSelection);
   return (
     <div className="lg:col-span-2 col-span-1 bg-surface rounded-lg h-full overflow-hidden">
@@ -145,36 +159,36 @@ export default function UsersTable({
         <div className="p-2 flex-1 min-h-0 box-border">
           <h3 className="text-lg font-semibold text-center">User List</h3>
           <div className="overflow-x-auto mt-4">
-            <table className="min-w-full text-sm text-gray-200">
-              <thead className="bg-gray-800">
+            <UITable>
+              <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
+                  <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
-                      <th key={header.id} className="px-4 py-2 text-left">
+                      <TableHead key={header.id}>
                         {flexRender(
                           header.column.columnDef.header,
                           header.getContext()
                         )}
-                      </th>
+                      </TableHead>
                     ))}
-                  </tr>
+                  </TableRow>
                 ))}
-              </thead>
-              <tbody>
+              </TableHeader>
+              <TableBody>
                 {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="border-b border-gray-700">
+                  <TableRow key={row.id}>
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-2">
+                      <TableCell key={cell.id}>
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext()
                         )}
-                      </td>
+                      </TableCell>
                     ))}
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </UITable>
           </div>
         </div>
       </div>

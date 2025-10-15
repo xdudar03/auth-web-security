@@ -1,9 +1,11 @@
 'use client';
 import { LayoutDashboard, LogOut, Settings, User } from 'lucide-react';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useUser } from '@/hooks/useUserContext';
+import MobileBottomBar from './MobileBottomBar';
 
 export default function SideBar() {
   // get current path
@@ -26,73 +28,67 @@ export default function SideBar() {
     <>
       {/* Mobile bottom bar */}
       {/* TODO: Come up with better dolution for mobile bottom bar (dont reuse code from desktop sidebar) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-20 bg-surface border-t border-border px-4 py-2 flex md:hidden items-center justify-around">
-        <Link
-          href={!!role?.canAccessAdminPanel ? '/admin-dashboard' : '/dashboard'}
-          className={`icon-btn ${isActive === 'dashboard' ? 'active' : ''}`}
-        >
-          <LayoutDashboard className="w-6 h-6" />
-        </Link>
-        <Link
-          className={`icon-btn ${isActive === 'account' ? 'active' : ''}`}
-          href="/account"
-        >
-          <User className="w-6 h-6" />
-        </Link>
-        <Link
-          className={`icon-btn ${isActive === 'settings' ? 'active' : ''}`}
-          href="/settings"
-        >
-          <Settings className="w-6 h-6" />
-        </Link>
-        <button aria-label="Logout" className="icon-btn" onClick={handleLogout}>
-          <LogOut className="w-6 h-6" />
-        </button>
-      </nav>
+      <MobileBottomBar />
 
       {/* Desktop sidebar */}
       <div className="fixed top-0 left-0 bottom-0 sidebar-width p-4 hidden md:block">
         <div className="flex bg-surface rounded-lg flex-col gap-4 justify-between items-center p-2 lg:p-4 h-full">
           <div className="flex flex-col gap-2 lg:gap-4">
-            <Link
-              href={
-                !!role?.canAccessAdminPanel ? '/admin-dashboard' : '/dashboard'
-              }
-              aria-label="Dashboard"
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
               className={`icon-btn-zoom ${
                 isActive === 'dashboard' || isActive === 'admin-dashboard'
                   ? 'active'
                   : ''
               }`}
             >
-              <LayoutDashboard className="w-6 h-6" />
-            </Link>
-            <Link
-              href="/account"
-              aria-label="Profile"
+              <Link
+                href={
+                  !!role?.canAccessAdminPanel
+                    ? '/admin-dashboard'
+                    : '/dashboard'
+                }
+                aria-label="Dashboard"
+              >
+                <LayoutDashboard className="w-6 h-6" />
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
               className={`icon-btn-zoom ${
                 isActive === 'account' ? 'active' : ''
               }`}
             >
-              <User className="w-6 h-6" />
-            </Link>
-            <Link
-              href="/settings"
-              aria-label="Settings"
+              <Link href="/account" aria-label="Profile">
+                <User className="w-6 h-6" />
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
               className={`icon-btn-zoom ${
                 isActive === 'settings' ? 'active' : ''
               }`}
             >
-              <Settings className="w-6 h-6" />
-            </Link>
+              <Link href="/settings" aria-label="Settings">
+                <Settings className="w-6 h-6" />
+              </Link>
+            </Button>
           </div>
-          <button
+          <Button
             aria-label="Logout"
             className="icon-btn-zoom"
+            variant="ghost"
+            size="icon"
             onClick={handleLogout}
           >
             <LogOut className="w-6 h-6" />
-          </button>
+          </Button>
         </div>
       </div>
     </>

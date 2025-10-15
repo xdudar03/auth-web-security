@@ -1,6 +1,7 @@
 'use client';
 import { useUser } from '@/hooks/useUserContext';
 import { User } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 export default function AccountInfo() {
   const { user } = useUser();
@@ -15,21 +16,21 @@ export default function AccountInfo() {
       </div>
       <div className="grid-section-2 w-full">
         <h1 className="text-lg font-bold col-span-2">Personal Details</h1>
-        <input type="text" className="input" placeholder="First Name" />
-        <input type="text" className="input" placeholder="Last Name" />
+        <Input type="text" placeholder="First Name" />
+        <Input type="text" placeholder="Last Name" />
 
-        <input type="email" className="input" placeholder="Email" />
-        <input type="tel" className="input" placeholder="Phone" />
+        <Input type="email" placeholder="Email" />
+        <Input type="tel" placeholder="Phone" />
 
-        <input type="date" className="input" placeholder="Date of Birth" />
-        <input type="text" className="input" placeholder="Gender" />
+        <Input type="date" placeholder="Date of Birth" />
+        <Input type="text" placeholder="Gender" />
       </div>
       <div className="grid-section-2 w-full">
         <h1 className="text-lg font-bold col-span-2">Address</h1>
-        <input type="text" className="input" placeholder="Country" />
-        <input type="text" className="input" placeholder="City" />
-        <input type="text" className="input" placeholder="Address" />
-        <input type="text" className="input" placeholder="Zip Code" />
+        <Input type="text" placeholder="Country" />
+        <Input type="text" placeholder="City" />
+        <Input type="text" placeholder="Address" />
+        <Input type="text" placeholder="Zip Code" />
       </div>
     </div>
   );

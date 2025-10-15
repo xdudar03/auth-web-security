@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUserContext';
+import { Button } from '@/components/ui/button';
 
 type ProtectedProps = {
   children: React.ReactNode;
@@ -45,12 +46,9 @@ export default function Protected({
           <p className="text-center text-muted">
             You are not authorized to access this page
           </p>
-          <button
-            className="btn-primary"
-            onClick={() => router.push('/dashboard')}
-          >
+          <Button onClick={() => router.push('/dashboard')}>
             Go to Dashboard
-          </button>
+          </Button>
         </div>
       </div>
     );

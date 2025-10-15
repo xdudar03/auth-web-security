@@ -1,3 +1,6 @@
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+
 export default function ConfirmPassword({
   setConfirmPassword,
   message,
@@ -13,11 +16,10 @@ export default function ConfirmPassword({
   };
   return (
     <div className="form-field flex flex-col gap-2 w-full justify-center  ">
-      <label className="form-label" htmlFor="confirmPassword">
+      <Label className="form-label" htmlFor="confirmPassword">
         Confirm your password
-      </label>
-      <input
-        className="form-input"
+      </Label>
+      <Input
         id="confirmPassword"
         type="password"
         name="confirmPassword"

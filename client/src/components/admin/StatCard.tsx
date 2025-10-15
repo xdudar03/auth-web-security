@@ -1,7 +1,7 @@
 export default function StatCard({ title, value, icon }: StatCardProps) {
   return (
-    <div className="col-span-1 bg-surface rounded-lg h-full overflow-hidden">
-      <div className="flex flex-col h-full min-h-0 box-border">
+    <div className="col-span-1 h-full overflow-hidden">
+      <div className="flex flex-col h-full min-h-0 box-border rounded-lg bg-surface shadow-sm">
         <div className="flex items-center justify-center gap-2 p-2 w-full mx-auto muted-panel h-40 md:h-2/3">
           <div className="icon-btn bg-transparent rounded-full w-full h-full flex items-center justify-center">
             {icon}

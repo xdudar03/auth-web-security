@@ -6,6 +6,9 @@ import { Role, useUser, type User } from '@/hooks/useUserContext';
 import { handleRegister } from '@/lib/authentication/registration';
 import { useRouter } from 'next/navigation';
 import { handleAuthenticate } from '@/lib/authentication/authentication';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 export default function FormAuth({
   setTab,
   title,
@@ -106,29 +109,27 @@ export default function FormAuth({
       <h2 className="text-xl font-semibold">{title}</h2>
       <form onSubmit={onSubmit} className="form">
         <div className="form-field">
-          <label htmlFor="username" className="form-label">
+          <Label htmlFor="username" className="form-label">
             Username
-          </label>
-          <input
+          </Label>
+          <Input
             id="username"
             type="text"
             name="username"
             onChange={handleChange}
-            className="form-input"
             placeholder="Enter your username"
             autoComplete="username"
           />
         </div>
         <div className="form-field">
-          <label htmlFor="password" className="form-label">
+          <Label htmlFor="password" className="form-label">
             Password
-          </label>
-          <input
+          </Label>
+          <Input
             id="password"
             type="password"
             name="password"
             onChange={handleChange}
-            className="form-input"
             placeholder="Enter your password"
             autoComplete={
               title === 'Registration' ? 'new-password' : 'current-password'
@@ -140,24 +141,26 @@ export default function FormAuth({
         </div>
         <div className="flex items-center justify-between flex-col gap-2">
           {title === 'Login' && (
-            <button
+            <Button
               type="button"
-              className="btn-link-muted shadow-none self-center w-full"
+              variant="link"
+              className="shadow-none self-center w-full"
               onClick={handlePasswordless}
             >
               Use passwordless {title.toLowerCase()}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             type="button"
-            className="btn-link-muted shadow-none self-center w-full"
+            variant="link"
+            className="shadow-none self-center w-full"
             onClick={handleBiometric}
           >
             Use biometric {title.toLowerCase()}
-          </button>
-          <button type="submit" className="btn-primary cursor-pointer w-full">
+          </Button>
+          <Button type="submit" className="w-full">
             {title}
-          </button>
+          </Button>
         </div>
       </form>
     </div>
