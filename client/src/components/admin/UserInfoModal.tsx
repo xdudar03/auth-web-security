@@ -1,10 +1,17 @@
 import { User, useUser } from '@/hooks/useUserContext';
 import Modal from '../Modal';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
 import { changeUserInfo } from '@/lib/admin/changeUserInfo';
+import { useForm, type SubmitHandler } from 'react-hook-form';
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from '@/components/ui/form';
 
 export default function UserInfoModal({
   activeUser,
@@ -20,56 +27,80 @@ export default function UserInfoModal({
   setMode: (mode: 'view' | 'edit') => void;
 }) {
   const { role } = useUser();
-  const [updatedUser, setUpdatedUser] = useState<User | null>(null);
+
+  type FormValues = {
+    username: string;
+    roleId: string | null;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    phoneNumber: string | null;
+    dateOfBirth: string | null;
+    credentials?: string | null;
+    password?: string;
+  };
+
+  const form = useForm<FormValues>({
+    defaultValues: {
+      username: activeUser.username,
+      roleId: activeUser.roleId?.toString() ?? null,
+      email: activeUser.email,
+      firstName: activeUser.firstName ?? null,
+      lastName: activeUser.lastName ?? null,
+      phoneNumber: activeUser.phoneNumber ?? null,
+      dateOfBirth: activeUser.dateOfBirth ?? null,
+      credentials: activeUser.credentials ?? null,
+      password: activeUser.password,
+    },
+    mode: 'onTouched',
+    reValidateMode: 'onChange',
+  });
+
   const handleClose = () => {
     setActiveUser(null);
     setShowUserInfoModal(false);
     setMode('view');
   };
 
-  const handleEdit = (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    const { name, value } = e.target;
-    console.log('name', name);
-    console.log('value', value);
-    const updates = { [name]: value };
-    console.log('updates', updates);
-    // setUpdatedUser({ ...activeUser, ...updates });
-  };
+  const onSubmit: SubmitHandler<FormValues> = async (values) => {
+    const updates: User = {
+      ...activeUser,
+      ...values,
+      roleId: values.roleId ? Number(values.roleId) : activeUser.roleId,
+    } as User;
 
-  const handleSave = async () => {
-    if (!updatedUser) {
-      alert('No updates to save');
-      return;
-    }
-    const result = await changeUserInfo(activeUser.id, updatedUser as User);
-    console.log('result', result);
-    if (result) {
+    const result = await changeUserInfo(activeUser.id, updates);
+    if (result?.user) {
       setActiveUser(result.user as User);
     }
     setMode('view');
   };
 
-  const editInput = (
+  const renderInput = (
+    name: keyof FormValues,
     label: string,
-    value: string,
-    disabled: boolean,
-    name: string
-  ) => {
-    return (
-      <div className="flex flex-col gap-1 w-72 sm:w-80">
-        <Label htmlFor={label}>{label}</Label>
-        <Input
-          id={label}
-          type="text"
-          value={value}
-          onChange={handleEdit}
-          disabled={disabled}
-          name={name}
-        />
-      </div>
-    );
-  };
+    type: string = 'text',
+    disabled: boolean = false
+  ) => (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <FormItem className="w-72 sm:w-80">
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input
+              {...field}
+              type={type}
+              disabled={disabled}
+              value={field.value ?? ''}
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
 
   return (
     <Modal
@@ -77,65 +108,41 @@ export default function UserInfoModal({
       open={true}
       onClose={handleClose}
       description={mode === 'view' ? 'User Info' : 'Edit User'}
-      footer={mode === 'edit' && <Button onClick={handleSave}>Save</Button>}
+      footer={
+        mode === 'edit' && (
+          <Button type="submit" form="user-info-form">
+            Save
+          </Button>
+        )
+      }
     >
-      <div className="flex flex-col gap-2">
-        {editInput(
-          'Username',
-          activeUser.username,
-          mode === 'view',
-          'username'
-        )}
-        {editInput(
-          'Role',
-          activeUser.roleId?.toString() ?? '',
-          mode === 'view',
-          'roleId'
-        )}
-        {editInput('Email', activeUser.email ?? '', mode === 'view', 'email')}
-        {editInput(
-          'First Name',
-          activeUser.firstName ?? '',
-          mode === 'view',
-          'firstName'
-        )}
-        {editInput(
-          'Last Name',
-          activeUser.lastName ?? '',
-          mode === 'view',
-          'lastName'
-        )}
-        {editInput(
-          'Phone Number',
-          activeUser.phoneNumber ?? '',
-          mode === 'view',
-          'phoneNumber'
-        )}
-        {editInput(
-          'Date of Birth',
-          activeUser.dateOfBirth ?? '',
-          mode === 'view',
-          'dateOfBirth'
-        )}
-        {/* {editInput('Gender', activeUser.gender, mode === 'view')} */}
+      <Form {...form}>
+        <form
+          id="user-info-form"
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="flex flex-col gap-2"
+        >
+          {renderInput('username', 'Username', 'text', mode === 'view')}
+          {renderInput('roleId', 'Role', 'text', mode === 'view')}
+          {renderInput('email', 'Email', 'email', mode === 'view')}
+          {renderInput('firstName', 'First Name', 'text', mode === 'view')}
+          {renderInput('lastName', 'Last Name', 'text', mode === 'view')}
+          {renderInput('phoneNumber', 'Phone Number', 'tel', mode === 'view')}
+          {renderInput('dateOfBirth', 'Date of Birth', 'text', mode === 'view')}
 
-        {role?.canReadUsersCredentials && (
-          <>
-            {editInput(
-              'Credentials',
-              activeUser.credentials ?? '',
-              mode === 'view',
-              'credentials'
-            )}
-            {editInput(
-              'Password',
-              activeUser.password,
-              mode === 'view',
-              'password'
-            )}
-          </>
-        )}
-      </div>
+          {role?.canReadUsersCredentials && (
+            <>
+              {renderInput(
+                'credentials',
+                'Credentials',
+                'text',
+                mode === 'view'
+              )}
+              {renderInput('password', 'Password', 'password', mode === 'view')}
+            </>
+          )}
+        </form>
+      </Form>
     </Modal>
   );
 }

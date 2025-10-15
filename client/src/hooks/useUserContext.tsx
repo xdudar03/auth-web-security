@@ -17,14 +17,14 @@ export type User = {
   id: string;
   username: string;
   password: string;
-  embedding?: string;
-  roleId?: number;
-  credentials?: any;
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-  dateOfBirth?: string;
+  embedding?: string | null;
+  roleId?: number | null;
+  credentials?: any | null;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phoneNumber?: string | null;
+  dateOfBirth?: string | null;
 };
 
 export type Role = {
