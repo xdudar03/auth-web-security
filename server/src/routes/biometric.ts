@@ -6,11 +6,24 @@ const router = Router();
 
 router.post("/registration", async (req, res) => {
   const usersFromDB = db.prepare("SELECT * FROM users").all();
-  const { username, password, embedding, id, roleId } = req.body;
+  const { username, email, password, embedding, id, roleId } = req.body;
   if (usersFromDB.find((query: any) => query.username === username)) {
     return res.status(400).json({ error: "User already exists" });
   }
-  addUser.run(id, username, password, embedding, roleId);
+  // add only id, username, email, password, embedding, roleId
+  addUser.run(
+    id,
+    username,
+    email,
+    "",
+    "",
+    password,
+    roleId,
+    "",
+    "",
+    embedding,
+    ""
+  );
   const query = db
     .prepare(
       "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ?"
@@ -21,12 +34,13 @@ router.post("/registration", async (req, res) => {
 });
 
 router.post("/authentication", async (req, res) => {
+  console.log("authentication", req.body);
   const { username, password } = req.body;
   const query = db
     .prepare(
-      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ?"
+      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ? OR email = ? OR phoneNumber = ?"
     )
-    .get(username);
+    .get(username, username, username);
   if (!query) {
     return res.status(400).json({ error: "User not found" });
   } else if (query.password !== password) {

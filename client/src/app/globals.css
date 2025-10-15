@@ -152,10 +152,10 @@ body {
 
   /* Forms */
   .form {
-    @apply flex flex-col gap-4 w-full;
+    @apply flex flex-col w-full gap-4;
   }
   .form-field {
-    @apply flex flex-col gap-1 w-72 sm:w-80;
+    @apply flex flex-col w-72 sm:w-80;
   }
   .form-label {
     @apply text-sm font-medium text-foreground;
@@ -214,5 +214,13 @@ body {
 
   .dashboard-grid {
     @apply flex max-h-screen bg-background w-full gap-4 pt-2 pr-2 sm:pt-4 sm:pr-4 pb-16 md:pb-4 flex-col md:flex-row mx-auto;
+  }
+
+  .card-header {
+    @apply flex items-center justify-center gap-2 p-2 w-full mx-auto md:h-2/3 bg-muted/20;
+  }
+
+  .card-content {
+    @apply flex flex-col gap-2 flex-1 box-border p-2;
   }
 }

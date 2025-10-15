@@ -8,7 +8,12 @@ const initTable = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       userId TEXT NOT NULL UNIQUE,
       username TEXT NOT NULL UNIQUE,
+      email TEXT NOT NULL,
+      firstName TEXT,
+      lastName TEXT,
       password TEXT NOT NULL,
+      phoneNumber TEXT,
+      dateOfBirth TEXT,
       embedding TEXT,
       credentials TEXT,
       roleId INTEGER NOT NULL,
@@ -34,7 +39,7 @@ const initTable = () => {
 initTable();
 
 const addUser = db.prepare(
-  `INSERT INTO users (userId, username, password, embedding, roleId, credentials) VALUES (?, ?, ?, ?, ?, ?)` // credentials is a base64 string
+  `INSERT INTO users (userId, username, email, firstName, lastName, password, roleId, phoneNumber, dateOfBirth, embedding, credentials) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` // credentials is a base64 string
 );
 // 1 is admin, 2 is user, 3 is shop owner
 const addRole = db.prepare(
@@ -52,10 +57,15 @@ const getUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 function updateUser(userId: number, updates: Record<string, any>) {
   const allowedFields = [
     "username",
+    "email",
     "password",
+    "firstName",
+    "lastName",
+    "phoneNumber",
+    "dateOfBirth",
     "embedding",
-    "roleId",
     "credentials", // credentials is a base64 string
+    "roleId",
   ];
 
   const setClauses = [];

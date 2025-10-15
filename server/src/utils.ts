@@ -10,6 +10,11 @@ export function mapResponseQuery(query: any) {
       embedding: query.embedding,
       roleId: query.roleId,
       credentials: query.credentials,
+      email: query.email,
+      firstName: query.firstName,
+      lastName: query.lastName,
+      phoneNumber: query.phoneNumber,
+      dateOfBirth: query.dateOfBirth,
     },
     role: {
       id: query.roleId,

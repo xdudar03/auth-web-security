@@ -7,10 +7,7 @@ const Card = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn(
-      'rounded-lg border border-border bg-surface text-foreground shadow-sm',
-      className
-    )}
+    className={cn('rounded-lg bg-surface text-foreground shadow-sm', className)}
     {...props}
   />
 ));
@@ -20,13 +17,7 @@ const CardHeader = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn(
-      'flex items-center justify-between p-4 border-b border-border',
-      className
-    )}
-    {...props}
-  />
+  <div className={cn('card-header', className)} {...props} />
 );
 
 const CardTitle = ({
@@ -46,7 +37,7 @@ const CardContent = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('p-4', className)} {...props} />
+  <div className={cn('card-content', className)} {...props} />
 );
 
 const CardFooter = ({
@@ -54,10 +45,7 @@ const CardFooter = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn(
-      'flex items-center p-4 border-t border-border justify-end gap-2',
-      className
-    )}
+    className={cn('flex items-center p-4 justify-end gap-2', className)}
     {...props}
   />
 );

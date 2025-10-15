@@ -17,7 +17,7 @@ const TableHeader = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLTableSectionElement>) => (
-  <thead className={cn('bg-primary/10', className)} {...props} />
+  <thead className={cn('bg-primary/10 ', className)} {...props} />
 );
 
 const TableBody = ({
@@ -43,7 +43,7 @@ const TableHead = ({
 }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
   <th
     className={cn(
-      'text-foreground font-semibold uppercase tracking-wide text-left p-3 border-b border-border',
+      'text-foreground font-semibold uppercase tracking-wide p-3 self-center text-center',
       className
     )}
     {...props}
@@ -56,7 +56,7 @@ const TableCell = ({
 }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
   <td
     className={cn(
-      'p-3 text-foreground/90 border-b border-border align-middle',
+      'p-3 text-foreground/90  align-middle text-center',
       className
     )}
     {...props}

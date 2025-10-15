@@ -1,10 +1,10 @@
 import type { User } from '@/hooks/useUserContext';
 
 export async function handleRegister(user: User) {
-  const { username, password, id, roleId } = user;
+  const { username, email, password, id, roleId } = user;
   console.log('username, password, id', username, password, id, roleId);
-  if (!username || !password || !id) {
-    throw new Error('Username, password, and id are required');
+  if (!username || !password || !id || !email) {
+    throw new Error('Username, password and email are required');
   }
   try {
     const response = await fetch('/api/biometric/registration', {
@@ -14,6 +14,7 @@ export async function handleRegister(user: User) {
       },
       body: JSON.stringify({
         username,
+        email,
         password,
         embedding: '',
         id,

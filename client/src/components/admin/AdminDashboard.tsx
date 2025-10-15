@@ -43,7 +43,6 @@ export default function AdminDashboard() {
         users={users}
         activeUser={activeUser as User}
         setActiveUser={setActiveUser}
-        mode={mode}
         setMode={setMode}
       />
       {showUserInfoModal && activeUser && (

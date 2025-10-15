@@ -9,7 +9,7 @@ export default function AccountInfoCard() {
   return (
     <div className="col-span-1 h-full overflow-hidden">
       <Card className="h-full">
-        <CardHeader className="flex items-center justify-center gap-2 p-2 w-full mx-auto muted-panel h-40 md:h-2/3">
+        <CardHeader>
           <Link
             href="/account"
             className="icon-btn-zoom bg-transparent rounded-full w-full h-full flex items-center justify-center"
@@ -17,12 +17,14 @@ export default function AccountInfoCard() {
             <User className="w-1/2 h-1/2 text-muted" />
           </Link>
         </CardHeader>
-        <CardContent className="flex flex-col gap-2 flex-1 min-h-0 box-border p-2">
+        <CardContent>
           <h3 className="text-lg font-semibold text-center">Account Info</h3>
           <p className="text-sm text-muted-foreground">
             Username: {user?.username}
           </p>
-          <p className="text-sm text-muted-foreground">Full name: Full Name</p>
+          <p className="text-sm text-muted-foreground">
+            Full name: {user?.firstName} {user?.lastName}
+          </p>
           <p className="text-sm text-muted-foreground">Email: Email</p>
         </CardContent>
       </Card>

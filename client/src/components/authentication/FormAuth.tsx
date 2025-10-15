@@ -7,8 +7,18 @@ import { handleRegister } from '@/lib/authentication/registration';
 import { useRouter } from 'next/navigation';
 import { handleAuthenticate } from '@/lib/authentication/authentication';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { useEffect } from 'react';
+import { useForm, type SubmitHandler } from 'react-hook-form';
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+  FormDescription,
+} from '@/components/ui/form';
 export default function FormAuth({
   setTab,
   title,
@@ -22,20 +32,42 @@ export default function FormAuth({
   //   console.log('user updated', user);
   // }, [user]);
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('submitting users', user);
-    if (user?.username === '') {
-      alert('Username is required');
-      return;
-    }
-    if (user?.password === '') {
-      alert('Password is required');
-      return;
-    }
+  type FormValues = { username: string; password: string; email: string };
+
+  const form = useForm<FormValues>({
+    defaultValues: {
+      username: user?.username ?? '',
+      password: user?.password ?? '',
+      email: user?.email ?? '',
+    },
+    mode: 'onTouched',
+    reValidateMode: 'onChange',
+  });
+
+  useEffect(() => {
+    const subscription = form.watch((values: Partial<FormValues>) => {
+      const { username, password, email } = values;
+      setUser({
+        ...(user ?? {}),
+        username: username ?? user?.username ?? '',
+        password: password ?? user?.password ?? '',
+        email: email ?? user?.email ?? '',
+      } as User);
+    });
+    return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.watch, setUser]);
+
+  const onSubmit: SubmitHandler<FormValues> = async (values) => {
+    console.log('submitting users', { ...user, ...values });
     if (title === 'Registration') {
       const id = crypto.randomUUID(); // TODO: generate id from server
-      const userWithId = { ...(user ?? {}), id: id, roleId: 2 } as User;
+      const userWithId = {
+        ...(user ?? {}),
+        ...values,
+        id: id,
+        roleId: 2,
+      } as User;
       const result = await handleRegister(userWithId);
       if (result) {
         setUser(result.user as User);
@@ -48,7 +80,10 @@ export default function FormAuth({
         }
       }
     } else {
-      const resultUser = await handleAuthenticate(user as User);
+      const resultUser = await handleAuthenticate({
+        ...(user as User),
+        ...values,
+      } as User);
       console.log('resultUser', resultUser);
       if (resultUser) {
         setIsAuthenticated(true);
@@ -63,42 +98,27 @@ export default function FormAuth({
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    if (name === 'username') {
-      setUser({ ...(user ?? {}), username: value } as User);
-    } else if (name === 'password') {
-      setUser({ ...(user ?? {}), password: value } as User);
-    }
-  };
-
   const handlePasswordless = async () => {
-    if (user?.username === '') {
-      alert('Username is required');
-      return;
-    }
-    if (user?.username) {
-      const result = await handleAuthenticatePasswordless(
-        user.username,
-        user.id
-      );
-      if (result.user) {
-        setUser(result.user as User);
-        setRole(result.role as Role);
-        setIsAuthenticated(true);
-        if (result.role.canAccessAdminPanel) {
-          router.push('/admin-dashboard');
-        } else {
-          router.push('/dashboard');
-        }
+    const username = form.getValues('username');
+    const result = await handleAuthenticatePasswordless(
+      username,
+      user?.id ?? ''
+    );
+    if (result.user) {
+      setUser(result.user as User);
+      setRole(result.role as Role);
+      setIsAuthenticated(true);
+      if (result.role.canAccessAdminPanel) {
+        router.push('/admin-dashboard');
+      } else {
+        router.push('/dashboard');
       }
-    } else {
-      alert('Username is required');
     }
   };
 
   const handleBiometric = () => {
-    if (user?.username === '') {
+    const username = form.getValues('username');
+    if (!username) {
       alert('Username is required');
       return;
     }
@@ -107,62 +127,101 @@ export default function FormAuth({
   return (
     <div className="flex flex-col items-center justify-center p-6 bg-surface rounded gap-6">
       <h2 className="text-xl font-semibold">{title}</h2>
-      <form onSubmit={onSubmit} className="form">
-        <div className="form-field">
-          <Label htmlFor="username" className="form-label">
-            Username
-          </Label>
-          <Input
-            id="username"
-            type="text"
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="form">
+          <FormField
+            control={form.control}
             name="username"
-            onChange={handleChange}
-            placeholder="Enter your username"
-            autoComplete="username"
+            rules={{ required: 'Username is required' }}
+            render={({ field }) => (
+              <FormItem className="form-field">
+                <FormLabel>Username</FormLabel>
+                <FormControl>
+                  <Input
+                    type="text"
+                    placeholder="Enter your username"
+                    autoComplete="username"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
-        <div className="form-field">
-          <Label htmlFor="password" className="form-label">
-            Password
-          </Label>
-          <Input
-            id="password"
-            type="password"
+
+          {title === 'Registration' && (
+            <FormField
+              control={form.control}
+              name="email"
+              rules={{ required: 'Email is required' }}
+              render={({ field }) => (
+                <FormItem className="form-field">
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="email"
+                      placeholder="Enter your email"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          <FormField
+            control={form.control}
             name="password"
-            onChange={handleChange}
-            placeholder="Enter your password"
-            autoComplete={
-              title === 'Registration' ? 'new-password' : 'current-password'
-            }
+            rules={{ required: 'Password is required' }}
+            render={({ field }) => (
+              <FormItem className="form-field">
+                <FormLabel>Password</FormLabel>
+                <FormControl>
+                  <Input
+                    type="password"
+                    placeholder="Enter your password"
+                    autoComplete={
+                      title === 'Registration'
+                        ? 'new-password'
+                        : 'current-password'
+                    }
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Use at least 8 characters, including a number and a symbol.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-          <span className="helper-text">
-            Use at least 8 characters, including a number and a symbol.
-          </span>
-        </div>
-        <div className="flex items-center justify-between flex-col gap-2">
-          {title === 'Login' && (
+
+          <div className="flex items-center justify-between flex-col">
+            {title === 'Login' && (
+              <Button
+                type="button"
+                variant="link"
+                className="shadow-none self-center w-full p-0"
+                onClick={handlePasswordless}
+              >
+                Use passwordless {title.toLowerCase()}
+              </Button>
+            )}
             <Button
               type="button"
               variant="link"
-              className="shadow-none self-center w-full"
-              onClick={handlePasswordless}
+              className="shadow-none self-center w-full p-0"
+              onClick={handleBiometric}
             >
-              Use passwordless {title.toLowerCase()}
+              Use biometric {title.toLowerCase()}
             </Button>
-          )}
-          <Button
-            type="button"
-            variant="link"
-            className="shadow-none self-center w-full"
-            onClick={handleBiometric}
-          >
-            Use biometric {title.toLowerCase()}
-          </Button>
-          <Button type="submit" className="w-full">
-            {title}
-          </Button>
-        </div>
-      </form>
+            <Button type="submit" className="w-full p-0">
+              {title}
+            </Button>
+          </div>
+        </form>
+      </Form>
     </div>
   );
 }

@@ -20,6 +20,11 @@ export type User = {
   embedding?: string;
   roleId?: number;
   credentials?: any;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  dateOfBirth?: string;
 };
 
 export type Role = {

@@ -19,6 +19,7 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table';
+import { Button } from '../ui/button';
 
 type UserRow = {
   id: string;
@@ -115,25 +116,26 @@ export default function UsersTable({
         id: 'actions',
         header: 'Actions',
         cell: ({ row }: { row: Row<UserRow> }) => (
-          <div className="flex gap-2">
-            <button
-              className="icon-btn"
+          <div className="flex gap-2 justify-center">
+            <Button
+              variant="ghost"
               onClick={() => handleView(row.original.user.id)}
             >
               <Eye className="w-4 h-4" />
-            </button>
-            <button
-              className="icon-btn"
+            </Button>
+            <Button
+              variant="ghost"
               onClick={() => handleEdit(row.original.user.id)}
             >
               <Pencil className="w-4 h-4" />
-            </button>
-            <button
+            </Button>
+            <Button
               className="icon-btn"
+              variant="ghost"
               onClick={() => handleDelete(row.original.user.id)}
             >
               <Trash className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
         ),
         accessorKey: 'actions',
