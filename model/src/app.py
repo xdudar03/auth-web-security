@@ -102,10 +102,6 @@ def new_people_processing_page():
             img_size_unit = request.form.get('img_size_unit')
             img_size_unit = img_size_unit if img_size_unit else None
             response, code = UserCreationController.initialize_new_user(inputs, img_size_value, img_size_unit)
-        case 2:
-            value = request.form.get('k_same_value')
-            value = value if value else None
-            response, code = UserCreationController.apply_k_same_pixel(value)
         case 3:
             inputs = request.form.get('pca_components')
             response, code = UserCreationController.generate_pca_components(inputs)
@@ -160,7 +156,6 @@ def check_photo():
     input= input[0]
     image = MLController.convert_file_storage_to_numpy(input)
     print(image.shape)
-
     # Use the ML prediction
     mlc = MLController()
     result = mlc.predict_image(image)

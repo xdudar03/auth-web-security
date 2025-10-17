@@ -95,9 +95,18 @@ class MLController:
         X, y = [], []
         for user_id, images in image_dict.items():
             X.extend(images)
+            # Y (labels) are the user ids
             y.extend([user_id] * len(images))
         X = np.array(X)
         y = np.array(y)
+        # LabelEncoder is used to convert from user ids to integers (0, 1, 2, ...)
+        # # Sample categorical data
+        # colors = ['red', 'blue', 'green', 'red', 'blue']
+        # # Create and fit encoder, then transform in one step
+        # le = LabelEncoder()
+        # encoded = le.fit_transform(colors)
+        # print(encoded)
+        # # Output: [2 0 1 2 0]
         label_encoder = LabelEncoder()
         y_encoded = label_encoder.fit_transform(y)
         return X, y_encoded, label_encoder
