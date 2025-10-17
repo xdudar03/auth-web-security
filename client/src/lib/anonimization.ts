@@ -1,0 +1,67 @@
+export default function cropImage(
+  canvas: HTMLCanvasElement,
+  videoRect: DOMRect,
+  ellipseRect: DOMRect,
+  TARGET_SIZE: number
+) {
+  const scaleX = canvas.width / videoRect.width;
+  const scaleY = canvas.height / videoRect.height;
+
+  const rawCropX = (ellipseRect.left - videoRect.left) * scaleX;
+  const rawCropY = (ellipseRect.top - videoRect.top) * scaleY;
+  const rawCropWidth = ellipseRect.width * scaleX;
+  const rawCropHeight = ellipseRect.height * scaleY;
+
+  const cropX = Math.max(0, rawCropX);
+  const cropY = Math.max(0, rawCropY);
+  const cropWidth = Math.min(canvas.width - cropX, rawCropWidth);
+  const cropHeight = Math.min(canvas.height - cropY, rawCropHeight);
+
+  if (cropWidth <= 0 || cropHeight <= 0) {
+    return null;
+  }
+
+  const croppedCanvas = document.createElement('canvas');
+  const targetWidth = TARGET_SIZE;
+  const targetHeight = TARGET_SIZE;
+  croppedCanvas.width = targetWidth;
+  croppedCanvas.height = targetHeight;
+  const croppedContext = croppedCanvas.getContext('2d');
+
+  if (!croppedContext) {
+    return null;
+  }
+
+  croppedContext.drawImage(
+    canvas,
+    cropX,
+    cropY,
+    cropWidth,
+    cropHeight,
+    0,
+    0,
+    targetWidth,
+    targetHeight
+  );
+
+  const imageData = croppedCanvas.toDataURL('image/png');
+  return imageData;
+}
+
+export function grayscaleImage(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement
+) {
+  const imageArray = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const pixelData = imageArray.data;
+  for (let i = 0; i < pixelData.length; i += 4) {
+    const luminance =
+      0.2126 * pixelData[i] +
+      0.7152 * pixelData[i + 1] +
+      0.0722 * pixelData[i + 2];
+    pixelData[i] = luminance;
+    pixelData[i + 1] = luminance;
+    pixelData[i + 2] = luminance;
+  }
+  ctx.putImageData(imageArray, 0, 0);
+}

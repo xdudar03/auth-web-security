@@ -1,10 +1,12 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import Image from 'next/image';
 import { User, useUser } from '@/hooks/useUserContext';
 import { handleRegister } from '@/lib/authentication/registration';
 import { handleAuthenticate } from '@/lib/authentication/authentication';
 import { handleBiometricChange } from '@/lib/settings/biometricChange';
 import { Button } from '@/components/ui/button';
+import cropImage, { grayscaleImage } from '@/lib/anonimization';
+import OvalOverlay from './OvalOverlay';
 
 export default function BiometricAuth({
   title,
@@ -15,8 +17,13 @@ export default function BiometricAuth({
 }) {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const ovalRef = useRef<SVGEllipseElement | null>(null);
+  const [isOvalVisible, setIsOvalVisible] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const { user, setUser } = useUser();
+  const maskId = useId();
+  const overlayMaskId = `biometric-mask-${maskId.replace(/:/g, '')}`;
+  const TARGET_SIZE = 100;
 
   async function startCamera() {
     try {
@@ -38,49 +45,90 @@ export default function BiometricAuth({
     }
   };
 
-  const handleClick = () => {
+  const handleClick = async () => {
     if (isCameraActive) {
-      captureFrame();
+      const imageData = await captureFrame();
       stopCamera();
-    } else {
-      startCamera();
-    }
-    setIsCameraActive(!isCameraActive);
-  };
+      setIsCameraActive(false);
+      setIsOvalVisible(false);
 
-  const captureFrame = async () => {
-    if (videoRef.current) {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const imageData = canvas.toDataURL('image/png');
-        setCapturedImage(imageData);
-        const userWithEmbedding = {
-          ...user,
-          embedding: imageData,
-          id: user?.id ?? '',
-        } as User;
-        if (action === 'registration') {
-          const resultUser = await handleRegister(userWithEmbedding);
-          if (resultUser) {
-            setUser(resultUser);
-          }
-        } else if (action === 'login') {
-          const resultUser = await handleAuthenticate(userWithEmbedding);
-          if (resultUser) {
-            setUser(resultUser);
-          }
-        } else if (action === 'change') {
-          const resultUser = await handleBiometricChange(userWithEmbedding);
-          if (resultUser) {
-            setUser(resultUser);
-          }
+      if (!imageData) {
+        return;
+      }
+
+      const userWithEmbedding = {
+        ...user,
+        embedding: imageData,
+        id: user?.id ?? '',
+      } as User;
+
+      if (action === 'registration') {
+        const resultUser = await handleRegister(userWithEmbedding);
+        if (resultUser) {
+          setUser(resultUser);
+        }
+      } else if (action === 'login') {
+        const resultUser = await handleAuthenticate(userWithEmbedding);
+        if (resultUser) {
+          setUser(resultUser);
+        }
+      } else if (action === 'change') {
+        const resultUser = await handleBiometricChange(userWithEmbedding);
+        if (resultUser) {
+          setUser(resultUser);
         }
       }
+    } else {
+      await startCamera();
+      setIsCameraActive(true);
+      setIsOvalVisible(true);
+      setCapturedImage(null);
     }
+  };
+
+  const captureFrame = async (): Promise<string | null> => {
+    if (!videoRef.current || !ovalRef.current) {
+      return null;
+    }
+
+    const video = videoRef.current;
+
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      return null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      return null;
+    }
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const videoRect = video.getBoundingClientRect();
+
+    if (videoRect.width === 0 || videoRect.height === 0) {
+      return null;
+    }
+
+    grayscaleImage(ctx, canvas);
+
+    const imageData = cropImage(
+      canvas,
+      videoRect,
+      ovalRef.current.getBoundingClientRect(),
+      TARGET_SIZE
+    );
+
+    if (imageData) {
+      setCapturedImage(imageData);
+      return imageData;
+    }
+
+    return null;
   };
 
   return (
@@ -95,12 +143,20 @@ export default function BiometricAuth({
           <label className="form-label" htmlFor="biometric-video">
             Camera feed
           </label>
-          <video
-            id="biometric-video"
-            ref={videoRef}
-            autoPlay
-            className="w-64 h-48 bg-transparent border-2 border-dashed border-primary rounded"
-          />
+          <div className="relative">
+            <video
+              id="biometric-video"
+              ref={videoRef}
+              autoPlay
+              className="w-64 h-48 bg-transparent border-2 border-dashed border-primary rounded"
+            ></video>
+            {isOvalVisible && (
+              <OvalOverlay
+                overlayMaskId={overlayMaskId}
+                ovalRef={ovalRef as React.RefObject<SVGEllipseElement>}
+              />
+            )}
+          </div>
           <span className="helper-text">
             Position your face within the frame.
           </span>
