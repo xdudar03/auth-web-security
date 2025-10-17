@@ -108,7 +108,7 @@ class DatabaseController:
         # Download  and processe lfw dataset
         utils.anony_process_pipeline.set_reconstructed_dir(directory)
         df = utils.load_lfw_dataframe(min_faces_per_person=20, n_samples_per_person=20)
-        images64_dict = utils.anony_process_pipeline.run_pipeline(df_images=df, k_same_k_value=10, epsilon=0.0124, n_components_ratio=0.19)
+        images64_dict = utils.anony_process_pipeline.run_pipeline(df_images=df, epsilon=0.0124, n_components_ratio=0.19)
         self.process_dataset(images64_dict)
 
     def load_yalefaces_dataset(self, directory=yalefaces_folder):
@@ -155,7 +155,7 @@ class DatabaseController:
         # Preprocess images
         temps_folder = "temp"
         utils.anony_process_pipeline.set_reconstructed_dir(temps_folder)
-        images64_dict = utils.anony_process_pipeline.run_pipeline(df_images=images_df, k_same_k_value=10, epsilon=0.0024, n_components_ratio=0.19)
+        images64_dict = utils.anony_process_pipeline.run_pipeline(df_images=images_df, epsilon=0.0024, n_components_ratio=0.19)
         shutil.rmtree(temps_folder)
         self.process_dataset(images64_dict)
 

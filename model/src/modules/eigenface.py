@@ -7,29 +7,29 @@ from src.config import IMAGE_SIZE
 
 class EigenfaceGenerator:
     """
-    Génère des eigenfaces à partir d'un ensemble d'images via l'analyse en composantes principales (PCA).
+    Generates eigenfaces from a set of images using Principal Component Analysis (PCA).
 
     Args:
-        images (np.ndarray): Tableau 2D (nombre d'images x taille d'image aplatie).
-        n_components (int, optional): Nombre de composantes principales (eigenfaces) à générer. Défaut: 5.
+        images (np.ndarray): 2D array (number of images x flattened image size).
+        n_components (int, optional): Number of principal components (eigenfaces) to generate. Default: 5.
     """
     def __init__(self, images: np.ndarray, n_components: int = 5) -> None:
         if not isinstance(images, np.ndarray) or images.ndim != 2:
-            raise ValueError("`images` doit être un tableau NumPy 2D (nombre d'images x taille_aplatie).")
+            raise ValueError("`images` must be a 2D NumPy array (num_images x flattened_size).")
         self.images = images
         self.n_components = n_components if n_components is not None else min(images.shape)
         self.pca = None
         self.eigenfaces = None
         self.mean_face = None
-        self.image_shape = IMAGE_SIZE  # On utilise une taille fixée par la config
-        self.original_data = None  # Pour éventuellement la reconstruction
+        self.image_shape = IMAGE_SIZE  # Use size defined in config
+        self.original_data = None  # For potential reconstruction
 
     def generate(self) -> None:
-        """Exécute la PCA pour générer les eigenfaces."""
+        """Runs PCA to generate eigenfaces."""
         if not self.images.any():
-            raise ValueError("Aucune donnée d'image fournie.")
+            raise ValueError("No image data provided.")
         if self.images.shape[0] < 2:
-            raise ValueError("Au moins deux images sont requises pour générer les eigenfaces.")
+            raise ValueError("At least two images are required to generate eigenfaces.")
 
         self.original_data = self.images
         self.pca = PCA(n_components=self.n_components)
@@ -38,48 +38,48 @@ class EigenfaceGenerator:
         self.mean_face = self.pca.mean_.reshape(self.image_shape)
 
     def get_eigenfaces(self) -> list:
-        """Renvoie la liste des eigenfaces générées."""
+        """Returns the list of generated eigenfaces."""
         if self.eigenfaces is None:
             self.generate()
         return self.eigenfaces
 
     def get_mean_face(self) -> np.ndarray:
-        """Renvoie l'image moyenne calculée."""
+        """Returns the computed mean face image."""
         if self.mean_face is None:
             self.generate()
         return self.mean_face
 
     def get_pca_object(self) -> PCA:
-        """Renvoie l'objet PCA utilisé pour la décomposition."""
+        """Returns the PCA object used for the decomposition."""
         if self.pca is None:
             self.generate()
         return self.pca
 
     def reconstruct_image(self, projected_data: np.ndarray) -> np.ndarray:
         """
-        Reconstruit une image à partir de sa projection sur le sous-espace des eigenfaces.
+        Reconstructs an image from its projection onto the eigenface subspace.
 
         Args:
-            projected_data (np.ndarray): Coefficients dans l'espace eigenface.
+            projected_data (np.ndarray): Coefficients in the eigenface space.
 
         Returns:
-            np.ndarray: Image reconstruite (aplatie).
+            np.ndarray: Reconstructed (flattened) image.
         """
         if self.pca is None:
-            raise ValueError("Les eigenfaces doivent être générées avant la reconstruction.")
+            raise ValueError("Eigenfaces must be generated before reconstruction.")
         if projected_data.ndim == 1:
             projected_data = projected_data.reshape(1, -1)
         return self.pca.inverse_transform(projected_data)
 
     def plot_eigenfaces(self, output_folder: str, subject, filename: str = "eigenfaces", show_plot: bool = False) -> None:
         """
-        Affiche et sauvegarde les eigenfaces générées.
+        Displays and saves the generated eigenfaces.
 
         Args:
-            output_folder (str): Dossier où enregistrer la figure.
-            subject (int ou str): Identifiant du sujet pour le nom du fichier.
-            filename (str, optional): Nom de base du fichier. Défaut: "eigenfaces".
-            show_plot (bool, optional): Afficher la figure. Défaut: False.
+            output_folder (str): Folder where the figure will be saved.
+            subject (int or str): Subject identifier for the filename.
+            filename (str, optional): Base filename. Default: "eigenfaces".
+            show_plot (bool, optional): Display the figure. Default: False.
         """
         if self.eigenfaces is None:
             self.generate()
@@ -89,7 +89,7 @@ class EigenfaceGenerator:
 
         plt.figure(figsize=(12, 6))
         num_eigenfaces = len(self.eigenfaces)
-        cols = (num_eigenfaces + 1) // 2  # Calcul du nombre de colonnes
+        cols = (num_eigenfaces + 1) // 2  # Compute number of columns
         for i, eigenface in enumerate(self.eigenfaces):
             plt.subplot(2, cols, i + 1)
             plt.imshow(eigenface, cmap='gray')
@@ -103,12 +103,12 @@ class EigenfaceGenerator:
 
     def plot_mean_face(self, output_folder: str, subject, show_plot: bool = False) -> None:
         """
-        Affiche et sauvegarde l'image moyenne.
+        Displays and saves the mean face image.
 
         Args:
-            output_folder (str): Dossier de sauvegarde.
-            subject (int ou str): Identifiant du sujet pour le nom du fichier.
-            show_plot (bool, optional): Afficher la figure. Défaut: False.
+            output_folder (str): Output folder.
+            subject (int or str): Subject identifier for the filename.
+            show_plot (bool, optional): Display the figure. Default: False.
         """
         if self.mean_face is None:
             self.generate()
@@ -127,11 +127,11 @@ class EigenfaceGenerator:
 
     def plot_explained_variance(self, output_folder: str, show_plot: bool = False) -> None:
         """
-        Trace et sauvegarde le cumul de la variance expliquée par composante.
+        Plots and saves the cumulative explained variance by component.
 
         Args:
-            output_folder (str): Dossier de sauvegarde.
-            show_plot (bool, optional): Afficher la figure. Défaut: False.
+            output_folder (str): Output folder.
+            show_plot (bool, optional): Display the figure. Default: False.
         """
         if self.pca is None:
             self.generate()
@@ -141,8 +141,8 @@ class EigenfaceGenerator:
 
         plt.figure()
         plt.plot(np.cumsum(self.pca.explained_variance_ratio_))
-        plt.xlabel("Nombre de composantes")
-        plt.ylabel("Variance cumulée expliquée")
+        plt.xlabel("Number of components")
+        plt.ylabel("Cumulative explained variance")
         plt.title('Explained Variance Ratio')
         plt.savefig(os.path.join(output_folder, "explained_variance.png"))
         if show_plot:

@@ -331,8 +331,9 @@ def visualize_ratio_impact_line(subject_id_str: str, lfw_id: int, ratios: list[f
         try:
             logging.debug(f"Appel de run_pipeline pour Ratio={ratio:.2f} avec image_size_override={target_size}")
             pipeline_output = anony_process_pipeline.run_pipeline(
-                df_images=df_subject_visu.copy(), k_same_k_value=fixed_k,
-                n_components_ratio=ratio, epsilon=NO_NOISE_EPSILON,
+                df_images=df_subject_visu.copy(),
+                n_components_ratio=ratio,
+                epsilon=NO_NOISE_EPSILON,
                 image_size_override=target_size
             )
             if subject_id_str in pipeline_output:
@@ -401,8 +402,9 @@ def visualize_epsilon_impact_line(subject_id_str: str, lfw_id: int, fixed_ratio:
         try:
             logging.debug(f"Appel de run_pipeline pour Epsilon={eps:.2f} avec image_size_override={target_size}")
             pipeline_output = anony_process_pipeline.run_pipeline(
-                df_images=df_subject_visu.copy(), k_same_k_value=fixed_k,
-                n_components_ratio=fixed_ratio, epsilon=eps,
+                df_images=df_subject_visu.copy(),
+                n_components_ratio=fixed_ratio,
+                epsilon=eps,
                 image_size_override=target_size
             )
             if subject_id_str in pipeline_output:

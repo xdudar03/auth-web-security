@@ -3,17 +3,17 @@ from typing import Tuple, Optional
 
 def build_simple_cnn(input_shape: Tuple[int, int, int], num_classes: int) -> models.Model:
     """
-    Construit un modèle CNN simple pour la classification d'images.
+    Builds a simple CNN model for image classification.
 
     Args:
-        input_shape: Tuple indiquant la forme des images d'entrée (height, width, channels).
-                     Exemple: (64, 64, 1) pour grayscale, (64, 64, 3) pour RGB.
-        num_classes: Nombre de classes de sortie (nombre de sujets uniques).
+        input_shape: Tuple indicating the input image shape (height, width, channels).
+                     Example: (64, 64, 1) for grayscale, (64, 64, 3) for RGB.
+        num_classes: Number of output classes (number of unique subjects).
 
     Returns:
-        Un modèle Keras compilable.
+        A compilable Keras model.
     """
-    print(f"Construction du modèle CNN simple avec input_shape={input_shape} et num_classes={num_classes}")
+    print(f"Building simple CNN model with input_shape={input_shape} and num_classes={num_classes}")
 
     model_input = layers.Input(shape=input_shape, name="input_image")
 
@@ -31,19 +31,19 @@ def build_simple_cnn(input_shape: Tuple[int, int, int], num_classes: int) -> mod
     x = layers.MaxPooling2D((2, 2), name="pool2")(x)
     x = layers.Dropout(0.25, name="drop2")(x)
 
-    # Partie Dense (Classification)
+    # Dense part (classification)
     x = layers.Flatten(name="flatten")(x)
     x = layers.Dense(128, activation='relu', name="dense1")(x)
     x = layers.BatchNormalization(name="bn_dense1")(x)
     x = layers.Dropout(0.5, name="drop_dense1")(x)
 
-    # Couche de Sortie
+    # Output layer
     model_output = layers.Dense(num_classes, activation='softmax', name="output_softmax")(x)
 
-    # Création du modèle final
+    # Create the final model
     model = models.Model(inputs=model_input, outputs=model_output, name="simple_cnn")
 
-    print("Modèle CNN simple construit.")
+    print("Simple CNN model built.")
     return model
 
 
@@ -54,26 +54,26 @@ def build_transfer_model(
     freeze_base: bool = True
 ) -> Optional[models.Model]:
     """
-    Construit un modèle basé sur le transfert d'apprentissage.
+    Builds a model based on transfer learning.
 
-    Charge un modèle pré-entraîné sur ImageNet, retire sa tête de classification,
-    gèle (optionnellement) ses poids, et ajoute une nouvelle tête de classification.
+    Loads a pre-trained ImageNet model, removes its classification head,
+    optionally freezes its weights, and adds a new classification head.
 
     Args:
-        input_shape: Tuple indiquant la forme des images d'entrée (height, width, channels).
-                     DOIT être compatible avec le modèle de base choisi.
-        num_classes: Nombre de classes de sortie.
-        base_model_name: Nom du modèle de base à charger depuis tf.keras.applications.
-        freeze_base: Si True, gèle les poids du modèle de base pendant l'entraînement initial.
+        input_shape: Tuple indicating the input image shape (height, width, channels).
+                     MUST be compatible with the chosen base model.
+        num_classes: Number of output classes.
+        base_model_name: Name of the base model to load from tf.keras.applications.
+        freeze_base: If True, freezes the base model's weights during initial training.
 
     Returns:
-        Un modèle Keras compilable, ou None si le nom du modèle de base est invalide.
+        A compilable Keras model, or None if the base model name is invalid.
     """
-    print(f"Construction du modèle de transfert avec base={base_model_name}, input_shape={input_shape}, num_classes={num_classes}")
+    print(f"Building transfer model with base={base_model_name}, input_shape={input_shape}, num_classes={num_classes}")
 
     if input_shape[-1] != 3:
-        print(f"Attention: Le modèle de base '{base_model_name}' attend typiquement 3 canaux d'entrée (RGB), "
-              f"mais input_shape est {input_shape}. Assurez-vous que vos données sont chargées en RGB.")
+        print(f"Warning: The base model '{base_model_name}' typically expects 3 input channels (RGB), "
+              f"but input_shape is {input_shape}. Make sure your data is loaded in RGB.")
 
     try:
         if base_model_name == 'MobileNetV2':
@@ -83,25 +83,25 @@ def build_transfer_model(
         elif base_model_name == 'EfficientNetB0':
              base_model = applications.EfficientNetB0(input_shape=input_shape, include_top=False, weights='imagenet')
         else:
-            print(f"Erreur: Modèle de base '{base_model_name}' non reconnu ou non implémenté ici.")
+            print(f"Error: Base model '{base_model_name}' not recognized or not implemented here.")
             return None
     except ValueError as e:
-         print(f"Erreur lors du chargement du modèle de base '{base_model_name}' avec input_shape {input_shape}: {e}")
-         print("Vérifiez que la taille d'image est compatible avec le modèle choisi (ex: MobileNetV2 >= 32x32, ResNet50 >= 32x32, EfficientNet >= 32x32).")
+         print(f"Error while loading base model '{base_model_name}' with input_shape {input_shape}: {e}")
+         print("Verify that the image size is compatible with the chosen model (e.g., MobileNetV2 >= 32x32, ResNet50 >= 32x32, EfficientNet >= 32x32).")
          return None
     except Exception as e:
-         print(f"Erreur inattendue lors du chargement du modèle de base: {e}")
+         print(f"Unexpected error while loading the base model: {e}")
          return None
 
 
-    print(f"Modèle de base '{base_model_name}' chargé.")
+    print(f"Base model '{base_model_name}' loaded.")
 
     if freeze_base:
         base_model.trainable = False
-        print("Poids du modèle de base gelés.")
+        print("Base model weights frozen.")
     else:
         base_model.trainable = True
-        print("Poids du modèle de base NON gelés (mode fine-tuning).")
+        print("Base model weights NOT frozen (fine-tuning mode).")
 
     model_input = base_model.input
 
@@ -113,5 +113,5 @@ def build_transfer_model(
 
     model = models.Model(inputs=model_input, outputs=model_output, name=f"transfer_{base_model_name}")
 
-    print(f"Modèle de transfert '{model.name}' construit.")
+    print(f"Transfer model '{model.name}' built.")
     return model

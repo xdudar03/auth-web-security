@@ -69,33 +69,14 @@ class UserCreationController:
         try: ctrl.step1, ctrl.image_size = pipeline.run_preprocessing(filestorage_list=files, image_size_override=image_size)
         except Exception as e:  return {'error': str(e)}, 400
         # Init Pickle file to save GUI Controller
-        ctrl.next_step = 2
+        ctrl.next_step = 3
         ctrl.save_into_pickle()
         # Return validation of the process
         return {}, 200
 
     @classmethod
     def apply_k_same_pixel(cls, k_same_value:int=4):
-        """Step 2 : K-Same-Pixel"""
-        # Retrieve GUI Controller
-        ctrl = UserCreationController.load_pickle_file()
-        if not ctrl: return {'error': 'Please run the fist step before this one'}, 400
-        if not ctrl.can_run_step(2):  return {'error': 'Step not ready to run'}, 400
-        # Check input images format
-        if k_same_value is None: return {'error': 'k_same_value parameter is missing'}, 400
-        try: k_same_value = int(k_same_value)
-        except: return {'error': 'k_same_value must be an int'}, 400
-        ##### Step 2 : K-Same-Pixel #####
-        try:  ctrl.step2 = pipeline.run_k_same_anonymization(ctrl.step1, k_same_value)
-        except Exception as e:  return {'error': str(e)}, 400
-        # Update Pickle GUI Controller
-        ctrl.next_step = 3
-        ctrl.save_into_pickle()
-        # Return validation of the process
-        images = ctrl.step2[list(ctrl.step2.keys())[0]]
-        images = [img['flattened_anonymized_image'] for img in images   ]
-        images = pillow_image_to_bytes(numpy_image_to_pillow(images, ctrl.image_size, True))
-        return {'images': images}, 200
+        return {'error': 'K-Same pixelation step has been removed from the pipeline.'}, 400
 
     @classmethod
     def generate_pca_components(cls, n_components: int=None):
@@ -103,10 +84,19 @@ class UserCreationController:
         # Retrieve GUI Controller
         ctrl = UserCreationController.load_pickle_file()
         if not ctrl: return {'error': 'Please run the fist step before this one'}, 400
-        if not ctrl.can_run_step(3):  return {'error': 'Step not ready to run'}, 400
-        # Check input images format
-        user = list(ctrl.step2.keys())[0]
-        images = [img['flattened_anonymized_image'] for img in ctrl.step2[user]]
+        if not ctrl.can_run_step(3): return {'error': 'Step not ready to run'}, 400
+        if not ctrl.step1:
+            return {'error': 'No preprocessed images available. Please complete step 1.'}, 400
+        # Gather flattened images directly from preprocessing output
+        first_user = next(iter(ctrl.step1))
+        images = []
+        for item in ctrl.step1[first_user]:
+            flattened = item.get('flattened_image')
+            if isinstance(flattened, np.ndarray) and flattened.ndim == 1:
+                images.append(flattened)
+        if len(images) < 2:
+            return {'error': 'Not enough preprocessed images to run PCA.'}, 400
+        images = np.array(images, dtype=np.float32)
         images = np.array(images, dtype=np.float32)
         n_samples, n_features = images.shape
         # TODO: change with anony_test_analysis.py to generate real optimal number + graph et mettre cette partie dans une fonction à part dans le back
