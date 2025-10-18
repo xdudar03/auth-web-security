@@ -1,3 +1,6 @@
+import { PCA } from 'ml-pca';
+import { Matrix } from 'ml-matrix';
+
 export default function cropImage(
   canvas: HTMLCanvasElement,
   videoRect: DOMRect,
@@ -43,9 +46,14 @@ export default function cropImage(
     targetWidth,
     targetHeight
   );
-
-  const imageData = croppedCanvas.toDataURL('image/png');
-  return imageData;
+  const imageData = croppedContext.getImageData(
+    0,
+    0,
+    targetWidth,
+    targetHeight
+  );
+  const imageUrl = croppedCanvas.toDataURL('image/png');
+  return { imageData, imageUrl };
 }
 
 export function grayscaleImage(
@@ -64,4 +72,29 @@ export function grayscaleImage(
     pixelData[i + 2] = luminance;
   }
   ctx.putImageData(imageArray, 0, 0);
+}
+
+export function imageToMatrix(imageData: Uint8ClampedArray, size: number) {
+  const matrix: number[][] = [];
+  for (let i = 0; i < size; i++) {
+    const row = [];
+    for (let j = 0; j < size; j++) {
+      row.push(imageData[i * size + j]);
+    }
+    matrix.push(row);
+  }
+  return matrix;
+}
+
+export function pcaEmbedding(
+  imageData: Uint8ClampedArray,
+  n_components: number
+) {
+  const matrix = imageToMatrix(imageData, 100);
+  const X = new Matrix(matrix);
+  const pca = new PCA(X);
+
+  const reduced = pca.predict(X, { nComponents: n_components });
+  console.log('reduced', reduced);
+  return reduced;
 }

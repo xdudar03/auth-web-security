@@ -5,8 +5,13 @@ import { handleRegister } from '@/lib/authentication/registration';
 import { handleAuthenticate } from '@/lib/authentication/authentication';
 import { handleBiometricChange } from '@/lib/settings/biometricChange';
 import { Button } from '@/components/ui/button';
-import cropImage, { grayscaleImage } from '@/lib/anonimization';
+import cropImage, {
+  grayscaleImage,
+  imageToMatrix,
+  pcaEmbedding,
+} from '@/lib/anonimization';
 import OvalOverlay from './OvalOverlay';
+import { PCAEigenfaces } from '@/lib/pcaEigenface';
 
 export default function BiometricAuth({
   title,
@@ -19,11 +24,15 @@ export default function BiometricAuth({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const ovalRef = useRef<SVGEllipseElement | null>(null);
   const [isOvalVisible, setIsOvalVisible] = useState(false);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [capturedImage, setCapturedImage] = useState<Uint8ClampedArray | null>(
+    null
+  );
+  const [capturedImageUrl, setCapturedImageUrl] = useState<string>();
   const { user, setUser } = useUser();
   const maskId = useId();
   const overlayMaskId = `biometric-mask-${maskId.replace(/:/g, '')}`;
   const TARGET_SIZE = 100;
+  const pcaGen = new PCAEigenfaces([TARGET_SIZE, TARGET_SIZE], 10);
 
   async function startCamera() {
     try {
@@ -47,18 +56,22 @@ export default function BiometricAuth({
 
   const handleClick = async () => {
     if (isCameraActive) {
-      const imageData = await captureFrame();
+      const capturedImage = await captureFrame();
       stopCamera();
       setIsCameraActive(false);
       setIsOvalVisible(false);
 
-      if (!imageData) {
+      if (!capturedImage) {
         return;
       }
 
+      const matrix = imageToMatrix(capturedImage, TARGET_SIZE);
+      pcaGen.addImage(matrix.flat());
+      const { eigenfaces } = pcaGen.generate();
+      console.log('eigenfaces', eigenfaces);
       const userWithEmbedding = {
         ...user,
-        embedding: imageData,
+        embedding: capturedImage,
         id: user?.id ?? '',
       } as User;
 
@@ -86,7 +99,7 @@ export default function BiometricAuth({
     }
   };
 
-  const captureFrame = async (): Promise<string | null> => {
+  const captureFrame = async (): Promise<Uint8ClampedArray | null> => {
     if (!videoRef.current || !ovalRef.current) {
       return null;
     }
@@ -116,19 +129,17 @@ export default function BiometricAuth({
 
     grayscaleImage(ctx, canvas);
 
-    const imageData = cropImage(
+    const cropResult = cropImage(
       canvas,
       videoRect,
       ovalRef.current.getBoundingClientRect(),
       TARGET_SIZE
     );
-
-    if (imageData) {
-      setCapturedImage(imageData);
-      return imageData;
+    if (cropResult) {
+      setCapturedImage(cropResult.imageData.data);
+      setCapturedImageUrl(cropResult.imageUrl);
     }
-
-    return null;
+    return cropResult?.imageData.data ?? null;
   };
 
   return (
@@ -170,10 +181,10 @@ export default function BiometricAuth({
           <div className="flex flex-col items-center gap-2">
             <h3 className="text-md font-semibold">Captured image</h3>
             <Image
-              src={capturedImage}
+              src={capturedImageUrl ?? ''}
               alt="Captured"
-              width={256}
-              height={192}
+              width={TARGET_SIZE}
+              height={TARGET_SIZE}
             />
           </div>
         )}
