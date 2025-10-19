@@ -4,7 +4,10 @@ import * as trpcExpress from "@trpc/server/adapters/express";
 const createContext = ({
   req,
   res,
-}: trpcExpress.CreateExpressContextOptions) => ({}); // no context
+}: trpcExpress.CreateExpressContextOptions) => ({
+  req,
+  res,
+});
 type Context = Awaited<ReturnType<typeof createContext>>;
 /**
  * Initialization of tRPC backend
@@ -19,3 +22,4 @@ const t = initTRPC.context<Context>().create();
 export const router = t.router;
 export const publicProcedure = t.procedure;
 export { createContext };
+export type { Context };

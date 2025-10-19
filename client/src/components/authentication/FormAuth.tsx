@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/form';
 import { useTRPC } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 export default function FormAuth({
   setTab,
   title,
@@ -30,12 +31,44 @@ export default function FormAuth({
 }) {
   const { user, setUser, setIsAuthenticated, setRole } = useUser();
   const trpc = useTRPC();
-  const pingQuery = useQuery(trpc.ping.queryOptions());
-  console.log('ping', pingQuery.data);
   const router = useRouter();
-  // useEffect(() => {
-  //   console.log('user updated', user);
-  // }, [user]);
+
+  const authenticateMutation = useMutation(
+    trpc.biometric.authenticate.mutationOptions({
+      onSuccess: (data) => {
+        console.log('data', data);
+        setUser(data.user as User);
+        setRole(data.role as Role);
+        setIsAuthenticated(true);
+        if (data.role.canAccessAdminPanel) {
+          router.push('/admin-dashboard');
+        } else {
+          router.push('/dashboard');
+        }
+      },
+      onError: (error) => {
+        console.error('error', error);
+      },
+    })
+  );
+  const registerMutation = useMutation(
+    trpc.biometric.register.mutationOptions({
+      onSuccess: (data) => {
+        console.log('data', data);
+        setUser(data.user as User);
+        setRole(data.role as Role);
+        setIsAuthenticated(true);
+        if (data.role.canAccessAdminPanel) {
+          router.push('/admin-dashboard');
+        } else {
+          router.push('/dashboard');
+        }
+      },
+      onError: (error) => {
+        console.error('error', error);
+      },
+    })
+  );
 
   type FormValues = { username: string; password: string; email: string };
 
@@ -73,33 +106,18 @@ export default function FormAuth({
         id: id,
         roleId: 2,
       } as User;
-      const result = await handleRegister(userWithId);
-      if (result) {
-        setUser(result.user as User);
-        setRole(result.role as Role);
-        setIsAuthenticated(true);
-        if (result.role.canAccessAdminPanel) {
-          router.push('/admin-dashboard');
-        } else {
-          router.push('/dashboard');
-        }
-      }
+      registerMutation.mutate({
+        username: values.username,
+        email: values.email,
+        password: values.password,
+        id: id,
+        roleId: 2,
+      });
     } else {
-      const resultUser = await handleAuthenticate({
-        ...(user as User),
-        ...values,
-      } as User);
-      console.log('resultUser', resultUser);
-      if (resultUser) {
-        setIsAuthenticated(true);
-        setUser(resultUser.user as User);
-        setRole(resultUser.role as Role);
-        if (resultUser.role.canAccessAdminPanel) {
-          router.push('/admin-dashboard');
-        } else {
-          router.push('/dashboard');
-        }
-      }
+      authenticateMutation.mutate({
+        username: values.username,
+        password: values.password,
+      });
     }
   };
 

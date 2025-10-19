@@ -7,14 +7,11 @@ import biometricRouter from "./routes/biometric.ts";
 import adminRouter from "./routes/admin.ts";
 import modelRouter from "./routes/model.ts";
 import healthRouter from "./routes/health.ts";
-import { createContext, publicProcedure, router } from "./trpc.ts";
+import { createContext } from "./trpc.ts";
 import * as trpcExpress from "@trpc/server/adapters/express";
+import { appRouter } from "./router.ts";
 
-const appRouter = router({
-  ping: publicProcedure.query(() => "pong"),
-});
-
-export type AppRouter = typeof appRouter;
+export type { AppRouter } from "./router.ts";
 
 const app = express();
 

@@ -1,91 +1,65 @@
 import { Router } from "express";
-import { addUser, db, updateUser } from "../database.ts";
-import { mapResponseQuery } from "../utils.ts";
+import {
+  authenticateBiometricUser,
+  changeBiometricEmbedding,
+  changeBiometricPassword,
+  confirmBiometricPassword,
+  registerBiometricUser,
+} from "../services/biometric.ts";
+import { HttpError } from "../errors.ts";
 
 const router = Router();
 
 router.post("/registration", async (req, res) => {
-  const usersFromDB = db.prepare("SELECT * FROM users").all();
-  const { username, email, password, embedding, id, roleId } = req.body;
-  if (usersFromDB.find((query: any) => query.username === username)) {
-    return res.status(400).json({ error: "User already exists" });
+  try {
+    const result = await registerBiometricUser(req.body);
+    res.status(200).json(result);
+  } catch (error) {
+    handleError(res, error);
   }
-  // add only id, username, email, password, embedding, roleId
-  addUser.run(
-    id,
-    username,
-    email,
-    "",
-    "",
-    password,
-    roleId,
-    "",
-    "",
-    embedding,
-    ""
-  );
-  const query = db
-    .prepare(
-      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ?"
-    )
-    .get(username);
-  const response = mapResponseQuery(query);
-  return res.status(200).json({ message: "Registration successful", response });
 });
 
 router.post("/authentication", async (req, res) => {
-  console.log("authentication", req.body);
-  const { username, password } = req.body;
-  const query = db
-    .prepare(
-      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ? OR email = ? OR phoneNumber = ?"
-    )
-    .get(username, username, username);
-  if (!query) {
-    return res.status(400).json({ error: "User not found" });
-  } else if (query.password !== password) {
-    return res.status(400).json({ error: "Invalid password" });
+  try {
+    const result = await authenticateBiometricUser(req.body);
+    res.status(200).json(result);
+  } catch (error) {
+    handleError(res, error);
   }
-  const response = mapResponseQuery(query);
-  return res.status(200).json({ response });
 });
 
 router.post("/change", async (req, res) => {
-  const { username, embedding } = req.body;
-  const usersFromDB = db.prepare("SELECT * FROM users").all();
-  const query = usersFromDB.find((q: any) => q.username === username);
-  if (!query) {
-    return res.status(400).json({ error: "User not found" });
+  try {
+    const result = await changeBiometricEmbedding(req.body);
+    res.status(200).json(result);
+  } catch (error) {
+    handleError(res, error);
   }
-  updateUser(query.id as number, { embedding: embedding });
-  return res.status(200).json({ message: "Biometric changed successfully" });
 });
 
 router.post("/change-password", async (req, res) => {
-  const { username, oldPassword, newPassword } = req.body;
-  const usersFromDB = db.prepare("SELECT * FROM users").all();
-  const query = usersFromDB.find((q: any) => q.username === username);
-  if (!query) {
-    return res.status(400).json({ error: "User not found" });
+  try {
+    const result = await changeBiometricPassword(req.body);
+    res.status(200).json(result);
+  } catch (error) {
+    handleError(res, error);
   }
-  if (query.password !== oldPassword) {
-    return res.status(400).json({ error: "Invalid password" });
-  }
-  updateUser(query.id as number, { password: newPassword });
-  return res.status(200).json({ message: "Password changed successfully" });
 });
 
 router.post("/confirm-password", async (req, res) => {
-  const { username, password } = req.body;
-  const usersFromDB = db.prepare("SELECT * FROM users").all();
-  const query = usersFromDB.find((q: any) => q.username === username);
-  if (!query) {
-    return res.status(400).json({ error: "User not found" });
+  try {
+    const result = await confirmBiometricPassword(req.body);
+    res.status(200).json(result);
+  } catch (error) {
+    handleError(res, error);
   }
-  if (query.password !== password) {
-    return res.status(400).json({ error: "Invalid password" });
-  }
-  return res.status(200).json({ message: "Password confirmed successfully" });
 });
 
 export default router;
+function handleError(res: any, error: unknown) {
+  if (error instanceof HttpError) {
+    return res.status(error.status).json({ error: error.message });
+  }
+  console.error("Unexpected error in biometric route", error);
+  return res.status(500).json({ error: "Internal server error" });
+}
