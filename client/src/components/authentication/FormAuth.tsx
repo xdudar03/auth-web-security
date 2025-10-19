@@ -14,7 +14,7 @@ import {
   FormMessage,
   FormDescription,
 } from '@/components/ui/form';
-import { useTRPC } from '@/lib/utils';
+import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation } from '@tanstack/react-query';
 import { startAuthentication } from '@simplewebauthn/browser';
 

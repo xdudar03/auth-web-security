@@ -57,9 +57,11 @@ export default function UserInfoModal({
   });
 
   const handleClose = () => {
+    console.log('handleClose');
     setActiveUser(null);
     setShowUserInfoModal(false);
     setMode('view');
+    console.log('setMode', mode);
   };
 
   const onSubmit: SubmitHandler<FormValues> = async (values) => {

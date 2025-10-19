@@ -16,6 +16,11 @@ import {
   registerBiometricUser,
 } from "./services/biometric.ts";
 import {
+  getUserWithRoleById,
+  listUsers,
+  updateUserById,
+} from "./services/admin.ts";
+import {
   checkModelHealth,
   checkPhoto,
   deleteDataset,
@@ -130,10 +135,19 @@ export const appRouter = router({
       .input(
         z.object({
           username: z.string(),
-          embedding: z.instanceof(Uint8ClampedArray),
+          embedding: z.union([
+            z.instanceof(Uint8ClampedArray<ArrayBufferLike>),
+          ]),
         })
       )
-      .mutation(({ input }) => execute(() => changeBiometricEmbedding(input))),
+      .mutation(({ input }) =>
+        execute(() =>
+          changeBiometricEmbedding({
+            username: input.username,
+            embedding: input.embedding,
+          })
+        )
+      ),
     changePassword: publicProcedure
       .input(
         z.object({
@@ -158,6 +172,22 @@ export const appRouter = router({
     deleteDataset: publicProcedure.mutation(() =>
       execute(() => deleteDataset())
     ),
+  }),
+  admin: router({
+    listUsers: publicProcedure.query(() => execute(() => listUsers())),
+    getUser: publicProcedure
+      .input(z.object({ id: z.string().optional() }))
+      .query(({ input }) => execute(() => getUserWithRoleById(input.id ?? ""))),
+    updateUser: publicProcedure
+      .input(
+        z.object({
+          id: z.string(),
+          updates: z.object({}).passthrough(),
+        })
+      )
+      .mutation(({ input }) =>
+        execute(() => updateUserById(input.id, input.updates as any))
+      ),
   }),
 });
 

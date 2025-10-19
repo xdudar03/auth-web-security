@@ -1,11 +1,11 @@
-import { User, useUser } from '@/hooks/useUserContext';
-import { handleConfirmPassword } from '@/lib/confirmPassword';
+import { useUser } from '@/hooks/useUserContext';
 import { useState } from 'react';
 import ConfirmPassword from '../ConfirmPassword';
 import Modal from '../Modal';
-import { handleRegisterPasskey } from '@/lib/authentication/registrationPasswordless';
 import { Button } from '@/components/ui/button';
-import { handleOptions } from '@/lib/authentication/registrationPasswordless';
+import { useTRPC } from '@/hooks/TrpcContext';
+import { startRegistration } from '@simplewebauthn/browser';
+import { useMutation } from '@tanstack/react-query';
 
 export default function PasskeySetupModal({
   setShowPasskeySetupModal,
@@ -17,35 +17,63 @@ export default function PasskeySetupModal({
   const { user } = useUser();
   const username = user?.username;
   const [isConfirmed, setIsConfirmed] = useState(false);
-
-  const handleSubmit = async () => {
-    const result = await handleConfirmPassword(
-      username as string,
-      confirmPassword
-    );
-    if (result) {
-      // After confirming password, immediately start passkey registration
-      try {
-        const attResp = await handleOptions(user as User);
-        const ok = await handleRegisterPasskey(username as string, attResp);
-        if (ok) {
-          setIsConfirmed(true);
-          setMessage({
-            message: 'Passkey registered successfully',
-            type: 'success',
-          });
-        } else {
-          setMessage({ message: 'Passkey registration failed', type: 'error' });
-        }
-      } catch (e) {
-        const err = e as Error;
+  const trpc = useTRPC();
+  const confirmPasswordMutation = useMutation(
+    trpc.biometric.confirmPassword.mutationOptions({
+      onSuccess: (data) => {
+        console.log('data', data);
+        setIsConfirmed(true);
+      },
+      onError: (error) => {
+        console.error('error', error);
         setMessage({
-          message: err?.message || 'Passkey setup failed',
+          message: 'Password confirmation failed',
           type: 'error',
         });
-      }
-    } else {
-      setMessage({ message: 'Password confirmation failed', type: 'error' });
+      },
+    })
+  );
+
+  const getRegistrationOptionsMutation = useMutation(
+    trpc.passwordless.getRegistrationOptions.mutationOptions({
+      onError: (error) => {
+        console.error('error', error);
+      },
+    })
+  );
+
+  const verifyRegistrationMutation = useMutation(
+    trpc.passwordless.verifyRegistration.mutationOptions({
+      onSuccess: (data) => {
+        console.log('data', data);
+        setMessage({
+          message: 'Passkey registered successfully',
+          type: 'success',
+        });
+        setTimeout(() => {
+          setShowPasskeySetupModal(false);
+        }, 2000);
+      },
+      onError: (error) => {
+        console.error('error', error);
+      },
+    })
+  );
+
+  const handleSubmit = async () => {
+    // const isConfirmed = await confirmPasswordMutation.mutateAsync({
+    await confirmPasswordMutation.mutateAsync({
+      username: username as string,
+      password: confirmPassword,
+    });
+    if (isConfirmed) {
+      const options = await getRegistrationOptionsMutation.mutateAsync({
+        username: username as string,
+      });
+      console.log('options', options);
+      const attResp = await startRegistration({ optionsJSON: options });
+      console.log('attResp', attResp);
+      await verifyRegistrationMutation.mutateAsync(attResp);
     }
   };
   const handleClose = () => {
@@ -60,7 +88,16 @@ export default function PasskeySetupModal({
       description="Enter your password to register a passkey."
       onClose={handleClose}
       footer={
-        isConfirmed ? null : <Button onClick={handleSubmit}>Submit</Button>
+        <Button
+          onClick={handleSubmit}
+          disabled={
+            confirmPasswordMutation.isPending ||
+            getRegistrationOptionsMutation.isPending ||
+            verifyRegistrationMutation.isPending
+          }
+        >
+          Submit
+        </Button>
       }
       open={true}
     >

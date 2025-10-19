@@ -1,17 +1,17 @@
 import { useId, useRef, useState } from 'react';
 import Image from 'next/image';
-import { User, useUser } from '@/hooks/useUserContext';
-import { handleRegister } from '@/lib/authentication/registration';
-import { handleAuthenticate } from '@/lib/authentication/authentication';
-import { handleBiometricChange } from '@/lib/settings/biometricChange';
+import { Role, User, useUser } from '@/hooks/useUserContext';
 import { Button } from '@/components/ui/button';
-import cropImage, {
-  grayscaleImage,
-  imageToMatrix,
-  pcaEmbedding,
-} from '@/lib/anonimization';
+import cropImage, { grayscaleImage, imageToMatrix } from '@/lib/anonimization';
 import OvalOverlay from './OvalOverlay';
 import { PCAEigenfaces } from '@/lib/pcaEigenface';
+import { useTRPC } from '@/hooks/TrpcContext';
+import { useMutation } from '@tanstack/react-query';
+
+type SuccessData = {
+  user: User;
+  role: Role;
+};
 
 export default function BiometricAuth({
   title,
@@ -28,11 +28,42 @@ export default function BiometricAuth({
     null
   );
   const [capturedImageUrl, setCapturedImageUrl] = useState<string>();
-  const { user, setUser } = useUser();
+  const { user, setUser, setRole } = useUser();
+  const trpc = useTRPC();
+  const register = useMutation(
+    trpc.biometric.register.mutationOptions({
+      onSuccess: (data: SuccessData) => {
+        console.log('data', data);
+        handleSuccess(data);
+      },
+      onError: (error) => {
+        console.error('error', error);
+      },
+    })
+  );
+  const authenticate = useMutation(
+    trpc.biometric.authenticate.mutationOptions()
+  );
+  const changeEmbedding = useMutation(
+    trpc.biometric.changeEmbedding.mutationOptions({
+      onSuccess: (data: SuccessData) => {
+        console.log('data', data);
+        handleSuccess(data);
+      },
+      onError: (error) => {
+        console.error('error', error);
+      },
+    })
+  );
   const maskId = useId();
   const overlayMaskId = `biometric-mask-${maskId.replace(/:/g, '')}`;
   const TARGET_SIZE = 100;
   const pcaGen = new PCAEigenfaces([TARGET_SIZE, TARGET_SIZE], 10);
+
+  function handleSuccess(data: SuccessData) {
+    setUser(data.user);
+    setRole(data.role);
+  }
 
   async function startCamera() {
     try {
@@ -54,6 +85,31 @@ export default function BiometricAuth({
     }
   };
 
+  const runBiometricAction = async (payload: User) => {
+    if (action === 'registration') {
+      const result = await register.mutateAsync({
+        username: payload.username,
+        email: payload.email,
+        password: payload.password,
+        id: payload.id,
+        roleId: payload.roleId ?? 2,
+      });
+      setUser(result.user as User);
+    } else if (action === 'login') {
+      const result = await authenticate.mutateAsync({
+        username: payload.username,
+        password: payload.password,
+      });
+      setUser(result.user as User);
+    } else if (action === 'change') {
+      const result = await changeEmbedding.mutateAsync({
+        username: payload.username,
+        embedding: payload.embedding ?? new Uint8ClampedArray(0),
+      });
+      setUser(result.user as User);
+    }
+  };
+
   const handleClick = async () => {
     if (isCameraActive) {
       const capturedImage = await captureFrame();
@@ -67,29 +123,17 @@ export default function BiometricAuth({
 
       const matrix = imageToMatrix(capturedImage, TARGET_SIZE);
       pcaGen.addImage(matrix.flat());
-      const { eigenfaces } = pcaGen.generate();
-      console.log('eigenfaces', eigenfaces);
+      pcaGen.generate();
       const userWithEmbedding = {
         ...user,
         embedding: capturedImage,
         id: user?.id ?? '',
       } as User;
 
-      if (action === 'registration') {
-        const resultUser = await handleRegister(userWithEmbedding);
-        if (resultUser) {
-          setUser(resultUser);
-        }
-      } else if (action === 'login') {
-        const resultUser = await handleAuthenticate(userWithEmbedding);
-        if (resultUser) {
-          setUser(resultUser);
-        }
-      } else if (action === 'change') {
-        const resultUser = await handleBiometricChange(userWithEmbedding);
-        if (resultUser) {
-          setUser(resultUser);
-        }
+      try {
+        await runBiometricAction(userWithEmbedding);
+      } catch (error) {
+        console.error('Biometric action failed', error);
       }
     } else {
       await startCamera();
@@ -173,7 +217,14 @@ export default function BiometricAuth({
           </span>
         </div>
         <div className="flex items-center gap-2 self-center">
-          <Button onClick={handleClick}>
+          <Button
+            onClick={handleClick}
+            disabled={
+              register.isPending ||
+              authenticate.isPending ||
+              changeEmbedding.isPending
+            }
+          >
             {isCameraActive ? 'Take Photo' : 'Start Camera'}
           </Button>
         </div>

@@ -7,9 +7,10 @@ import {
   Row,
 } from '@tanstack/react-table';
 import { Eye, Pencil, Trash } from 'lucide-react';
-import { useMemo, useState, useCallback } from 'react';
-import { User, useUser } from '@/hooks/useUserContext';
-import { getUserInfo } from '@/lib/admin/getUserInfo';
+import { useMemo, useState, useCallback, useEffect } from 'react';
+import { Role, User, useUser } from '@/hooks/useUserContext';
+import { useTRPC } from '@/hooks/TrpcContext';
+import { useQuery } from '@tanstack/react-query';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table as UITable,
@@ -21,10 +22,9 @@ import {
 } from '@/components/ui/table';
 import { Button } from '../ui/button';
 
-type UserRow = {
-  id: string;
-  username: string;
-  roleName: string;
+export type AdminUserRow = {
+  user: User;
+  role: Role;
 };
 
 export default function UsersTable({
@@ -35,37 +35,53 @@ export default function UsersTable({
   setMode,
 }: {
   setShowUserInfoModal: (show: boolean) => void;
-  users: UserRow[];
+  users: AdminUserRow[];
   activeUser: User;
   setActiveUser: (user: User) => void;
   setMode: (mode: 'view' | 'edit') => void;
 }) {
   const { role } = useUser();
-  console.log('role', role);
-  console.log('users', users);
+  const [userId, setUserId] = useState<string>('');
+  const trpc = useTRPC();
+  const getUserQuery = useQuery({
+    ...trpc.admin.getUser.queryOptions({ id: userId }),
+    enabled: !!userId, // only auto-fetch if userId exists
+  });
 
+  useEffect(() => {
+    if (userId && getUserQuery.data?.user) {
+      setActiveUser(getUserQuery.data.user as User);
+    }
+  }, [userId, getUserQuery, setActiveUser, setMode, setShowUserInfoModal]);
+
+  console.log('getUserQuery', getUserQuery);
   const handleView = useCallback(
-    async (id: string) => {
-      console.log('viewing user', id);
-      if (role?.canReadUsers) {
-        const userInfo = await getUserInfo(id);
-        setShowUserInfoModal(true);
-        console.log('userInfo', userInfo);
-        setActiveUser(userInfo);
-        setMode('view');
+    async (id: string | number) => {
+      // todo super hack
+      id = id.toString();
+      console.log('id', id);
+      setUserId(id);
+      if (!role?.canReadUsers) {
+        return;
       }
+      setShowUserInfoModal(true);
+      setMode('view');
+      // Refetch user by updating userId, then wait for data to update via query
+      // const userInfo = await getUserQuery.refetch();
     },
-    [role, setActiveUser, setMode, setShowUserInfoModal]
+    [role?.canReadUsers, setMode, setShowUserInfoModal]
   );
 
   const handleEdit = useCallback(
     async (id: string) => {
-      console.log('editing user', id);
       if (role?.canChangeUsersCredentials) {
-        const userInfo = await getUserInfo(id);
-        setShowUserInfoModal(true);
-        setActiveUser(userInfo);
-        setMode('edit');
+        setUserId(id);
+        const userInfo = getUserQuery.data?.user;
+        if (userInfo) {
+          setShowUserInfoModal(true);
+          setActiveUser(userInfo);
+          setMode('edit');
+        }
       } else if (activeUser && role?.canChangeUsersCredentials) {
         setShowUserInfoModal(true);
         setActiveUser(activeUser);
@@ -74,7 +90,14 @@ export default function UsersTable({
         alert('You do not have permission to edit this user');
       }
     },
-    [role, activeUser, setActiveUser, setMode, setShowUserInfoModal]
+    [
+      activeUser,
+      getUserQuery.data?.user,
+      role?.canChangeUsersCredentials,
+      setActiveUser,
+      setMode,
+      setShowUserInfoModal,
+    ]
   );
 
   const handleDelete = useCallback((id: string) => {
@@ -85,14 +108,14 @@ export default function UsersTable({
     () => [
       {
         id: 'select',
-        header: ({ table }: { table: Table<UserRow> }) => (
+        header: ({ table }: { table: Table<AdminUserRow> }) => (
           <Checkbox
             checked={table.getIsAllRowsSelected()}
             onCheckedChange={(v) => table.toggleAllRowsSelected(!!v)}
             aria-label="Select all"
           />
         ),
-        cell: ({ row }: { row: Row<UserRow> }) => (
+        cell: ({ row }: { row: Row<AdminUserRow> }) => (
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={() => row.toggleSelected()}
@@ -115,7 +138,7 @@ export default function UsersTable({
       {
         id: 'actions',
         header: 'Actions',
-        cell: ({ row }: { row: Row<UserRow> }) => (
+        cell: ({ row }: { row: Row<AdminUserRow> }) => (
           <div className="flex gap-2 justify-center">
             <Button
               variant="ghost"

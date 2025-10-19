@@ -1,11 +1,12 @@
 'use client';
-import { handleChangePassword } from '@/lib/settings/changePassword';
 import { useUser } from '@/hooks/useUserContext';
 import { useState } from 'react';
 import Modal from '../Modal';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useTRPC } from '@/hooks/TrpcContext';
+import { useMutation } from '@tanstack/react-query';
 
 export default function ChangePasswordForm({
   setShowChangePasswordModal,
@@ -17,7 +18,25 @@ export default function ChangePasswordForm({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState({ message: '', type: '' });
   const { user } = useUser();
+  const trpc = useTRPC();
   const username = user?.username;
+  const changePassword = useMutation(
+    trpc.biometric.changePassword.mutationOptions({
+      onSuccess: (data) => {
+        console.log('data', data);
+        setMessage({
+          message: 'Password changed successfully',
+          type: 'success',
+        });
+        setTimeout(() => {
+          setShowChangePasswordModal(false);
+        }, 2000);
+      },
+      onError: (error) => {
+        console.error('error', error);
+      },
+    })
+  );
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -32,9 +51,6 @@ export default function ChangePasswordForm({
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('oldPassword', oldPassword);
-    console.log('newPassword', newPassword);
-    console.log('confirmPassword', confirmPassword);
     if (oldPassword === '') {
       setMessage({ message: 'Old password is required', type: 'error' });
       return;
@@ -61,19 +77,12 @@ export default function ChangePasswordForm({
       });
       return;
     }
-    const result = await handleChangePassword(
-      username as string,
+
+    await changePassword.mutateAsync({
+      username: username as string,
       oldPassword,
-      newPassword
-    );
-    if (result) {
-      setMessage({ message: 'Password changed successfully', type: 'success' });
-      setTimeout(() => {
-        setShowChangePasswordModal(false);
-      }, 2000);
-    } else {
-      setMessage({ message: 'Password change failed', type: 'error' });
-    }
+      newPassword,
+    });
   };
   return (
     <Modal
@@ -82,7 +91,11 @@ export default function ChangePasswordForm({
       title="Change Password"
       description="Enter your current password and a new password to change your password."
       footer={
-        <Button form="change-password-form" type="submit">
+        <Button
+          form="change-password-form"
+          type="submit"
+          disabled={changePassword.isPending}
+        >
           Save
         </Button>
       }
@@ -98,6 +111,7 @@ export default function ChangePasswordForm({
             name="oldPassword"
             onChange={handleChange}
             placeholder="Enter your current password"
+            value={oldPassword}
           />
         </div>
         <div className="form-field">
@@ -110,6 +124,7 @@ export default function ChangePasswordForm({
             name="newPassword"
             onChange={handleChange}
             placeholder="Enter a new password"
+            value={newPassword}
           />
         </div>
         <div className="form-field">
@@ -122,6 +137,7 @@ export default function ChangePasswordForm({
             name="confirmPassword"
             onChange={handleChange}
             placeholder="Re-enter the new password"
+            value={confirmPassword}
           />
         </div>
         {message?.message && (

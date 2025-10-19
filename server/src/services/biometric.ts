@@ -2,6 +2,18 @@ import { addUser, db, updateUser } from "../database.ts";
 import { HttpError } from "../errors.ts";
 import { mapResponseQuery } from "../utils.ts";
 
+function normalizeEmbedding(input: unknown): string | null {
+  if (input == null) return null;
+  if (typeof input === "string") return input;
+  if (input instanceof Uint8Array || input instanceof Uint8ClampedArray) {
+    return Buffer.from(input).toString("base64");
+  }
+  if (Array.isArray(input)) {
+    return Buffer.from(Uint8Array.from(input)).toString("base64");
+  }
+  throw new HttpError(400, "Unsupported embedding format");
+}
+
 type RegistrationInput = {
   id: string;
   username: string;
@@ -17,7 +29,7 @@ type AuthenticationInput = {
 
 type ChangeEmbeddingInput = {
   username: string;
-  embedding: Uint8ClampedArray | null;
+  embedding: unknown;
 };
 
 type ChangePasswordInput = {
@@ -99,9 +111,23 @@ export async function changeBiometricEmbedding(input: ChangeEmbeddingInput) {
     throw new HttpError(400, "User not found");
   }
 
-  updateUser(query.id as number, { embedding });
+  const normalized = normalizeEmbedding(embedding);
 
-  return { message: "Biometric changed successfully" };
+  updateUser(query.id as number, { embedding: normalized });
+
+  const updated = db
+    .prepare(
+      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ?"
+    )
+    .get(username);
+
+  const response = mapResponseQuery(updated);
+
+  return {
+    message: "Biometric changed successfully",
+    user: response.user,
+    role: response.role,
+  };
 }
 
 export async function changeBiometricPassword(input: ChangePasswordInput) {

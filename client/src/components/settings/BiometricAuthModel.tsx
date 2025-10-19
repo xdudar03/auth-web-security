@@ -1,11 +1,12 @@
 'use client';
-import { handleConfirmPassword } from '@/lib/confirmPassword';
 import BiometricAuth from '../authentication/BiometricAuth';
 import Modal from '../Modal';
 import { useState } from 'react';
 import { useUser } from '@/hooks/useUserContext';
 import ConfirmPassword from '../ConfirmPassword';
 import { Button } from '@/components/ui/button';
+import { useTRPC } from '@/hooks/TrpcContext';
+import { useMutation } from '@tanstack/react-query';
 
 export default function BiometricAuthModel({
   setShowChangeBiometricModal,
@@ -17,17 +18,25 @@ export default function BiometricAuthModel({
   const [message, setMessage] = useState({ message: '', type: '' });
   const { user } = useUser();
   const username = user?.username;
+  const trpc = useTRPC();
+  const confirmPasswordMutation = useMutation(
+    trpc.biometric.confirmPassword.mutationOptions({
+      onSuccess: (data) => {
+        console.log('data', data);
+        setIsConfirmed(true);
+      },
+      onError: (error) => {
+        console.error('error', error);
+        setMessage({ message: 'Password confirmation failed', type: 'error' });
+      },
+    })
+  );
 
   const handleSubmit = async () => {
-    const result = await handleConfirmPassword(
-      username as string,
-      confirmPassword
-    );
-    if (result) {
-      setIsConfirmed(true);
-    } else {
-      setMessage({ message: 'Password confirmation failed', type: 'error' });
-    }
+    await confirmPasswordMutation.mutateAsync({
+      username: username as string,
+      password: confirmPassword,
+    });
   };
   const handleClose = () => {
     setShowChangeBiometricModal(false);
@@ -42,7 +51,14 @@ export default function BiometricAuthModel({
       open={true}
       onClose={handleClose}
       footer={
-        isConfirmed ? null : <Button onClick={handleSubmit}>Submit</Button>
+        isConfirmed ? null : (
+          <Button
+            onClick={handleSubmit}
+            disabled={confirmPasswordMutation.isPending}
+          >
+            Submit
+          </Button>
+        )
       }
     >
       {isConfirmed ? (
