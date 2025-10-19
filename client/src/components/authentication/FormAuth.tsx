@@ -19,6 +19,8 @@ import {
   FormMessage,
   FormDescription,
 } from '@/components/ui/form';
+import { useTRPC } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
 export default function FormAuth({
   setTab,
   title,
@@ -27,6 +29,9 @@ export default function FormAuth({
   title: string;
 }) {
   const { user, setUser, setIsAuthenticated, setRole } = useUser();
+  const trpc = useTRPC();
+  const pingQuery = useQuery(trpc.ping.queryOptions());
+  console.log('ping', pingQuery.data);
   const router = useRouter();
   // useEffect(() => {
   //   console.log('user updated', user);

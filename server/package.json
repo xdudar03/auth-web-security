@@ -8,20 +8,21 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/express-session": "^1.18.2",
+    "@types/form-data": "^2.5.0",
     "@types/node": "^24.5.1",
     "eslint": "^9.35.0",
     "install": "^0.13.0",
     "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.9.2",
-    "@types/form-data": "^2.5.0"
+    "typescript": "^5.9.2"
   },
   "dependencies": {
     "@simplewebauthn/server": "^13.2.1",
+    "@trpc/server": "^11.6.0",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
-    "cors": "^2.8.5",
     "express-session": "^1.18.2"
   }
 }

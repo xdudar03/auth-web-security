@@ -7,6 +7,14 @@ import biometricRouter from "./routes/biometric.ts";
 import adminRouter from "./routes/admin.ts";
 import modelRouter from "./routes/model.ts";
 import healthRouter from "./routes/health.ts";
+import { createContext, publicProcedure, router } from "./trpc.ts";
+import * as trpcExpress from "@trpc/server/adapters/express";
+
+const appRouter = router({
+  ping: publicProcedure.query(() => "pong"),
+});
+
+export type AppRouter = typeof appRouter;
 
 const app = express();
 
@@ -18,6 +26,13 @@ app.use(
       return callback(new Error("Not allowed by CORS"), false);
     },
     credentials: true,
+  })
+);
+app.use(
+  "/trpc",
+  trpcExpress.createExpressMiddleware({
+    router: appRouter,
+    createContext,
   })
 );
 
