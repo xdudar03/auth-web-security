@@ -18,7 +18,7 @@ export default function Protected({
 }: ProtectedProps) {
   const router = useRouter();
   const { isAuthenticated, user, role } = useUser();
-
+  console.log('user', user);
   console.log('role', role);
   console.log('user?.roleId', user?.roleId);
 

@@ -64,7 +64,10 @@ router.post("/users/:id", async (req, res) => {
   }
 
   updateUser(id, updatesToSave);
-  return res.status(200).json({ message: "User updated successfully" });
+  const updatedUser = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+  return res
+    .status(200)
+    .json({ message: "User updated successfully", user: updatedUser });
 });
 
 export default router;

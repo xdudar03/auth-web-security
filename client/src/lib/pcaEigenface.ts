@@ -43,7 +43,7 @@ export class PCAEigenfaces {
     const X = new Matrix(this.images);
     this.pca = new PCA(X);
 
-    const components = this.pca.getLoadings().to2DArray();
+    const components = this.pca.getLoadings().to2DArray(); // pca object
     const mean = this.pca.means; // shape [n_features]
 
     const eigenfaces = components
