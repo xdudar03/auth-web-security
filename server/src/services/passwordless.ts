@@ -217,7 +217,8 @@ export async function verifyAuthentication(
   session?: ChallengeSession
 ) {
   assertSession(session);
-
+  console.log("responseBody", responseBody);
+  console.log("session", session);
   const expectedChallenge = session.challenge;
   const username = session.username;
 
@@ -286,7 +287,7 @@ export async function verifyAuthentication(
       });
     }
 
-    return { verified, response };
+    return { verified, user: response.user, role: response.role };
   } catch (error) {
     console.error("Error verifying authentication", error);
     if (error instanceof HttpError) {

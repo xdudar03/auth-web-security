@@ -36,6 +36,12 @@ export function TrpcContext({ children }: { children: React.ReactNode }) {
       links: [
         httpBatchLink({
           url: 'http://localhost:4000/trpc',
+          fetch(url, options) {
+            return globalThis.fetch(url, {
+              ...options,
+              credentials: 'include',
+            });
+          },
         }),
       ],
     })

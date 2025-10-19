@@ -25,20 +25,20 @@ app.use(
     credentials: true,
   })
 );
-app.use(
-  "/trpc",
-  trpcExpress.createExpressMiddleware({
-    router: appRouter,
-    createContext,
-  })
-);
-
 app.use(express.json());
 app.use(
   session({
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
+  })
+);
+
+app.use(
+  "/trpc",
+  trpcExpress.createExpressMiddleware({
+    router: appRouter,
+    createContext,
   })
 );
 

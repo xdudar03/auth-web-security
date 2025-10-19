@@ -1,11 +1,6 @@
 'use client';
-
-// import { useEffect } from 'react';
-import { handleAuthenticatePasswordless } from '@/lib/authentication/authenticationPasswordless';
 import { Role, useUser, type User } from '@/hooks/useUserContext';
-import { handleRegister } from '@/lib/authentication/registration';
 import { useRouter } from 'next/navigation';
-import { handleAuthenticate } from '@/lib/authentication/authentication';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useEffect } from 'react';
@@ -20,8 +15,14 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { useTRPC } from '@/lib/utils';
-import { useQuery } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
+import { startAuthentication } from '@simplewebauthn/browser';
+
+type SuccessData = {
+  user: User;
+  role: Role;
+};
+
 export default function FormAuth({
   setTab,
   title,
@@ -33,18 +34,22 @@ export default function FormAuth({
   const trpc = useTRPC();
   const router = useRouter();
 
+  function handleSuccess(data: SuccessData) {
+    setUser(data.user);
+    setRole(data.role);
+    setIsAuthenticated(true);
+    if (data.role.canAccessAdminPanel) {
+      router.push('/admin-dashboard');
+    } else {
+      router.push('/dashboard');
+    }
+  }
+
   const authenticateMutation = useMutation(
     trpc.biometric.authenticate.mutationOptions({
-      onSuccess: (data) => {
+      onSuccess: (data: SuccessData) => {
         console.log('data', data);
-        setUser(data.user as User);
-        setRole(data.role as Role);
-        setIsAuthenticated(true);
-        if (data.role.canAccessAdminPanel) {
-          router.push('/admin-dashboard');
-        } else {
-          router.push('/dashboard');
-        }
+        handleSuccess(data);
       },
       onError: (error) => {
         console.error('error', error);
@@ -53,16 +58,29 @@ export default function FormAuth({
   );
   const registerMutation = useMutation(
     trpc.biometric.register.mutationOptions({
-      onSuccess: (data) => {
+      onSuccess: (data: SuccessData) => {
         console.log('data', data);
-        setUser(data.user as User);
-        setRole(data.role as Role);
-        setIsAuthenticated(true);
-        if (data.role.canAccessAdminPanel) {
-          router.push('/admin-dashboard');
-        } else {
-          router.push('/dashboard');
-        }
+        handleSuccess(data);
+      },
+      onError: (error) => {
+        console.error('error', error);
+      },
+    })
+  );
+
+  const getAuthenticationOptionsMutation = useMutation(
+    trpc.passwordless.getAuthenticationOptions.mutationOptions({
+      onError: (error) => {
+        console.error('error', error);
+      },
+    })
+  );
+
+  const verifyAuthenticationMutation = useMutation(
+    trpc.passwordless.verifyAuthentication.mutationOptions({
+      onSuccess: (data: SuccessData) => {
+        console.log('data', data);
+        handleSuccess(data);
       },
       onError: (error) => {
         console.error('error', error);
@@ -100,12 +118,6 @@ export default function FormAuth({
     console.log('submitting users', { ...user, ...values });
     if (title === 'Registration') {
       const id = crypto.randomUUID(); // TODO: generate id from server
-      const userWithId = {
-        ...(user ?? {}),
-        ...values,
-        id: id,
-        roleId: 2,
-      } as User;
       registerMutation.mutate({
         username: values.username,
         email: values.email,
@@ -123,19 +135,21 @@ export default function FormAuth({
 
   const handlePasswordless = async () => {
     const username = form.getValues('username');
-    const result = await handleAuthenticatePasswordless(
-      username,
-      user?.id ?? ''
-    );
-    if (result.user) {
-      setUser(result.user as User);
-      setRole(result.role as Role);
-      setIsAuthenticated(true);
-      if (result.role.canAccessAdminPanel) {
-        router.push('/admin-dashboard');
-      } else {
-        router.push('/dashboard');
-      }
+    if (!username) {
+      console.error('Username is required for passwordless');
+      return;
+    }
+    try {
+      const options = await getAuthenticationOptionsMutation.mutateAsync({
+        username,
+      });
+      const attResp = await startAuthentication({
+        optionsJSON: options,
+      });
+
+      await verifyAuthenticationMutation.mutateAsync(attResp);
+    } catch (error) {
+      console.error('Passwordless authentication failed', error);
     }
   };
 
