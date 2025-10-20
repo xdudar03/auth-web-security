@@ -34,11 +34,11 @@ export class PCAEigenfaces {
 
   /** Run PCA to generate eigenfaces and mean face */
   generate(): PCAResult {
-    // if (this.images.length < 2) {
-    //   throw new Error(
-    //     'At least two images are required to generate eigenfaces.'
-    //   );
-    // }
+    if (this.images.length < 2) {
+      throw new Error(
+        'At least two images are required to generate eigenfaces.'
+      );
+    }
 
     const X = new Matrix(this.images);
     this.pca = new PCA(X);
@@ -63,13 +63,64 @@ export class PCAEigenfaces {
   /** Project a new image into the PCA space */
   project(image: number[]): number[] {
     if (!this.pca) throw new Error('PCA not generated yet');
-    return this.pca.predict([image])[0];
+    const projection = this.pca.predict([image]);
+
+    if (!projection) {
+      return [];
+    }
+
+    if (typeof projection.to2DArray === 'function') {
+      const twoD = projection.to2DArray();
+      return twoD?.[0] ? [...twoD[0]] : [];
+    }
+
+    if (Array.isArray(projection)) {
+      if (Array.isArray(projection[0])) {
+        return [...projection[0]];
+      }
+      return [...projection];
+    }
+
+    if ('data' in projection && Array.isArray((projection as any).data)) {
+      const matrixLike = projection as { data: number[]; columns?: number };
+      if (!matrixLike.data.length) {
+        return [];
+      }
+      if (matrixLike.columns) {
+        return matrixLike.data.slice(0, matrixLike.columns);
+      }
+      return [...matrixLike.data];
+    }
+
+    return [];
   }
 
   /** Reconstruct an image from PCA projection */
   reconstruct(embedding: number[]): number[] {
     if (!this.pca) throw new Error('PCA not generated yet');
     const reconstructed = this.pca.invert([embedding]);
-    return Array.from(reconstructed[0]);
+
+    if (!reconstructed) {
+      return [];
+    }
+
+    if (typeof reconstructed.to2DArray === 'function') {
+      const twoD = reconstructed.to2DArray();
+      return twoD?.[0] ? [...twoD[0]] : [];
+    }
+
+    if (Array.isArray(reconstructed)) {
+      if (Array.isArray(reconstructed[0])) {
+        return [...reconstructed[0]];
+      }
+      return [...reconstructed];
+    }
+
+    if ('data' in reconstructed && Array.isArray((reconstructed as any).data)) {
+      const matrixLike = reconstructed as { data: number[] };
+      return [...matrixLike.data];
+    }
+
+    return [];
   }
 }

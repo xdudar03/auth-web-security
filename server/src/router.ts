@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { z } from "zod";
+import { number, z } from "zod";
 import { publicProcedure, router } from "./trpc.ts";
 import {
   getAuthenticationOptions,
@@ -135,9 +135,7 @@ export const appRouter = router({
       .input(
         z.object({
           username: z.string(),
-          embedding: z.union([
-            z.instanceof(Uint8ClampedArray<ArrayBufferLike>),
-          ]),
+          embedding: z.string(),
         })
       )
       .mutation(({ input }) =>

@@ -13,6 +13,11 @@ type SuccessData = {
   role: Role;
 };
 
+type CapturedFrame = {
+  data: Uint8ClampedArray;
+  imageUrl: string;
+};
+
 export default function BiometricAuth({
   title,
   action,
@@ -21,6 +26,7 @@ export default function BiometricAuth({
   action: string;
 }) {
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isCapturingStream, setIsCapturingStream] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const ovalRef = useRef<SVGEllipseElement | null>(null);
   const [isOvalVisible, setIsOvalVisible] = useState(false);
@@ -28,6 +34,8 @@ export default function BiometricAuth({
     null
   );
   const [capturedImageUrl, setCapturedImageUrl] = useState<string>();
+  const [reconstructedImageUrl, setReconstructedImageUrl] = useState<string>();
+  const [capturedFrames, setCapturedFrames] = useState<CapturedFrame[]>([]);
   const { user, setUser, setRole } = useUser();
   const trpc = useTRPC();
   const register = useMutation(
@@ -58,12 +66,55 @@ export default function BiometricAuth({
   const maskId = useId();
   const overlayMaskId = `biometric-mask-${maskId.replace(/:/g, '')}`;
   const TARGET_SIZE = 100;
-  const pcaGen = new PCAEigenfaces([TARGET_SIZE, TARGET_SIZE], 10);
+  const MAX_COMPONENTS = 5;
+  const STREAM_FRAME_COUNT = 8;
+  const STREAM_INTERVAL_MS = 150;
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
 
   function handleSuccess(data: SuccessData) {
     setUser(data.user);
     setRole(data.role);
   }
+
+  const createImageUrlFromPixels = (
+    pixels: number[],
+    size: number
+  ): string | undefined => {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      return undefined;
+    }
+
+    // Find min/max for proper normalization
+    const minVal = Math.min(...pixels);
+    const maxVal = Math.max(...pixels);
+    const range = maxVal - minVal;
+
+    const imageData = ctx.createImageData(size, size);
+
+    for (let i = 0; i < pixels.length; i++) {
+      // Normalize to [0, 255] range
+      const normalized = range > 0 ? ((pixels[i] - minVal) / range) * 255 : 0;
+      const value = Math.round(normalized);
+
+      const index = i * 4;
+      imageData.data[index] = value;
+      imageData.data[index + 1] = value;
+      imageData.data[index + 2] = value;
+      imageData.data[index + 3] = 255;
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    return canvas.toDataURL('image/png');
+  };
 
   async function startCamera() {
     try {
@@ -104,7 +155,7 @@ export default function BiometricAuth({
     } else if (action === 'change') {
       const result = await changeEmbedding.mutateAsync({
         username: payload.username,
-        embedding: payload.embedding ?? new Uint8ClampedArray(0),
+        embedding: JSON.stringify(payload.embedding) ?? '',
       });
       setUser(result.user as User);
     }
@@ -112,21 +163,59 @@ export default function BiometricAuth({
 
   const handleClick = async () => {
     if (isCameraActive) {
-      const capturedImage = await captureFrame();
+      setIsCapturingStream(true);
+      const frames = await captureStream(
+        STREAM_FRAME_COUNT,
+        STREAM_INTERVAL_MS
+      );
+      console.log('stream:', frames);
+      setIsCapturingStream(false);
       stopCamera();
       setIsCameraActive(false);
       setIsOvalVisible(false);
 
-      if (!capturedImage) {
+      if (!frames.length) {
         return;
       }
 
-      const matrix = imageToMatrix(capturedImage, TARGET_SIZE);
-      pcaGen.addImage(matrix.flat());
-      pcaGen.generate();
+      setCapturedFrames(frames);
+      const latestFrame = frames[frames.length - 1];
+      setCapturedImage(latestFrame.data);
+      setCapturedImageUrl(latestFrame.imageUrl);
+
+      const pcaGen = new PCAEigenfaces(
+        [TARGET_SIZE, TARGET_SIZE],
+        MAX_COMPONENTS
+      );
+      const flattenedFrames = frames.map((frame) => {
+        const matrix = imageToMatrix(frame.data, TARGET_SIZE);
+        return matrix.flat();
+      });
+
+      flattenedFrames.forEach((flattened) => pcaGen.addImage(flattened));
+      let projection: number[] = [];
+
+      const { eigenfaces, meanFace, components } = pcaGen.generate();
+
+      try {
+        projection = pcaGen.project(
+          flattenedFrames[flattenedFrames.length - 1]
+        );
+        console.log('projection:', projection);
+        const reconstructed = pcaGen.reconstruct(projection);
+        const reconstructedUrl = createImageUrlFromPixels(
+          reconstructed,
+          TARGET_SIZE
+        );
+        setReconstructedImageUrl(reconstructedUrl);
+      } catch (error) {
+        console.error('Eigenface reconstruction failed', error);
+        setReconstructedImageUrl(undefined);
+      }
+
       const userWithEmbedding = {
         ...user,
-        embedding: capturedImage,
+        embedding: projection,
         id: user?.id ?? '',
       } as User;
 
@@ -140,10 +229,14 @@ export default function BiometricAuth({
       setIsCameraActive(true);
       setIsOvalVisible(true);
       setCapturedImage(null);
+      setCapturedImageUrl(undefined);
+      setCapturedFrames([]);
+      setReconstructedImageUrl(undefined);
+      setIsCapturingStream(false);
     }
   };
 
-  const captureFrame = async (): Promise<Uint8ClampedArray | null> => {
+  const captureFrame = async (): Promise<CapturedFrame | null> => {
     if (!videoRef.current || !ovalRef.current) {
       return null;
     }
@@ -179,11 +272,33 @@ export default function BiometricAuth({
       ovalRef.current.getBoundingClientRect(),
       TARGET_SIZE
     );
-    if (cropResult) {
-      setCapturedImage(cropResult.imageData.data);
-      setCapturedImageUrl(cropResult.imageUrl);
+    if (!cropResult) {
+      return null;
     }
-    return cropResult?.imageData.data ?? null;
+
+    return {
+      data: cropResult.imageData.data,
+      imageUrl: cropResult.imageUrl,
+    };
+  };
+
+  const captureStream = async (
+    frameCount: number,
+    interval: number
+  ): Promise<CapturedFrame[]> => {
+    const frames: CapturedFrame[] = [];
+
+    for (let i = 0; i < frameCount; i += 1) {
+      const frame = await captureFrame();
+      if (frame) {
+        frames.push(frame);
+      }
+      if (i < frameCount - 1) {
+        await sleep(interval);
+      }
+    }
+
+    return frames;
   };
 
   return (
@@ -222,10 +337,15 @@ export default function BiometricAuth({
             disabled={
               register.isPending ||
               authenticate.isPending ||
-              changeEmbedding.isPending
+              changeEmbedding.isPending ||
+              isCapturingStream
             }
           >
-            {isCameraActive ? 'Take Photo' : 'Start Camera'}
+            {isCameraActive
+              ? isCapturingStream
+                ? 'Capturing...'
+                : 'Capture Stream'
+              : 'Start Camera'}
           </Button>
         </div>
         {capturedImage && (
@@ -237,6 +357,20 @@ export default function BiometricAuth({
               width={TARGET_SIZE}
               height={TARGET_SIZE}
             />
+          </div>
+        )}
+        {reconstructedImageUrl && (
+          <div className="flex flex-col items-center gap-2 text-center">
+            <h3 className="text-md font-semibold">Reconstructed eigenface</h3>
+            <Image
+              src={reconstructedImageUrl}
+              alt="Reconstructed eigenface"
+              width={TARGET_SIZE}
+              height={TARGET_SIZE}
+            />
+            <span className="helper-text">
+              Approximation of your capture using the current eigenface basis.
+            </span>
           </div>
         )}
       </div>

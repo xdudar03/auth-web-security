@@ -73,28 +73,18 @@ export function grayscaleImage(
   }
   ctx.putImageData(imageArray, 0, 0);
 }
-
 export function imageToMatrix(imageData: Uint8ClampedArray, size: number) {
   const matrix: number[][] = [];
   for (let i = 0; i < size; i++) {
     const row = [];
     for (let j = 0; j < size; j++) {
-      row.push(imageData[i * size + j]);
+      const index = (i * size + j) * 4; // RGBA = 4 channels per pixel
+      // Convert to grayscale (use red channel or average RGB)
+      const gray = imageData[index]; // Just red channel
+      // Or proper grayscale: (imageData[index] + imageData[index+1] + imageData[index+2]) / 3
+      row.push(gray);
     }
     matrix.push(row);
   }
   return matrix;
-}
-
-export function pcaEmbedding(
-  imageData: Uint8ClampedArray,
-  n_components: number
-) {
-  const matrix = imageToMatrix(imageData, 100);
-  const X = new Matrix(matrix);
-  const pca = new PCA(X);
-
-  const reduced = pca.predict(X, { nComponents: n_components });
-  console.log('reduced', reduced);
-  return reduced;
 }

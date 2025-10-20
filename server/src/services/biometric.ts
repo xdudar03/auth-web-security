@@ -103,7 +103,7 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
 
 export async function changeBiometricEmbedding(input: ChangeEmbeddingInput) {
   const { username, embedding } = input;
-
+  console.log("embedding: ", embedding);
   const usersFromDB = db.prepare("SELECT * FROM users").all();
   const query = usersFromDB.find((q: any) => q.username === username);
 
@@ -111,9 +111,7 @@ export async function changeBiometricEmbedding(input: ChangeEmbeddingInput) {
     throw new HttpError(400, "User not found");
   }
 
-  const normalized = normalizeEmbedding(embedding);
-
-  updateUser(query.id as number, { embedding: normalized });
+  updateUser(query.id as number, { embedding: embedding });
 
   const updated = db
     .prepare(

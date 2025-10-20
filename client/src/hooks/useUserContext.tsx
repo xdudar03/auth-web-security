@@ -17,7 +17,7 @@ export type User = {
   id: string;
   username: string;
   password: string;
-  embedding?: Uint8ClampedArray | null;
+  embedding?: number[] | null;
   roleId?: number | null;
   credentials?: any | null;
   email: string;
