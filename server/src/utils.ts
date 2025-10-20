@@ -4,7 +4,7 @@ import { USERS_FILE_TEMP } from "./config.ts";
 export function mapResponseQuery(query: any) {
   const response = {
     user: {
-      id: query.id,
+      id: query.userId,
       username: query.username,
       password: query.password,
       embedding: query.embedding,

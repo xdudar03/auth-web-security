@@ -7,10 +7,8 @@ import {
   Row,
 } from '@tanstack/react-table';
 import { Eye, Pencil, Trash } from 'lucide-react';
-import { useMemo, useState, useCallback, useEffect } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { Role, User, useUser } from '@/hooks/useUserContext';
-import { useTRPC } from '@/hooks/TrpcContext';
-import { useQuery } from '@tanstack/react-query';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table as UITable,
@@ -30,69 +28,48 @@ export type AdminUserRow = {
 export default function UsersTable({
   setShowUserInfoModal,
   users,
-  activeUser,
   setActiveUser,
   setMode,
 }: {
   setShowUserInfoModal: (show: boolean) => void;
   users: AdminUserRow[];
-  activeUser: User;
   setActiveUser: (user: User) => void;
   setMode: (mode: 'view' | 'edit') => void;
 }) {
   const { role } = useUser();
-  const [userId, setUserId] = useState<string>('');
-  const trpc = useTRPC();
-  const getUserQuery = useQuery({
-    ...trpc.admin.getUser.queryOptions({ id: userId }),
-    enabled: !!userId, // only auto-fetch if userId exists
-  });
+  // const [userId, setUserId] = useState<string>('');
 
-  useEffect(() => {
-    if (userId && getUserQuery.data?.user) {
-      setActiveUser(getUserQuery.data.user as User);
-    }
-  }, [userId, getUserQuery, setActiveUser, setMode, setShowUserInfoModal]);
-
-  console.log('getUserQuery', getUserQuery);
   const handleView = useCallback(
-    async (id: string | number) => {
+    (user: User) => {
       // todo super hack
-      id = id.toString();
-      console.log('id', id);
-      setUserId(id);
+      // id = id.toString();
+      // console.log('id', id);
+      console.log('user: ', user);
       if (!role?.canReadUsers) {
         return;
       }
+      // setUserId(user.id);
+      setActiveUser(user);
       setShowUserInfoModal(true);
       setMode('view');
-      // Refetch user by updating userId, then wait for data to update via query
-      // const userInfo = await getUserQuery.refetch();
     },
-    [role?.canReadUsers, setMode, setShowUserInfoModal]
+    [role?.canReadUsers, setActiveUser, setMode, setShowUserInfoModal]
   );
 
   const handleEdit = useCallback(
-    async (id: string) => {
+    async (user: User) => {
       if (role?.canChangeUsersCredentials) {
-        setUserId(id);
-        const userInfo = getUserQuery.data?.user;
-        if (userInfo) {
-          setShowUserInfoModal(true);
-          setActiveUser(userInfo);
-          setMode('edit');
-        }
-      } else if (activeUser && role?.canChangeUsersCredentials) {
+        // setUserId(id);
+        // const userInfo = getUserQuery.data?.user;
+
         setShowUserInfoModal(true);
-        setActiveUser(activeUser);
+        setActiveUser(user);
         setMode('edit');
       } else {
         alert('You do not have permission to edit this user');
       }
     },
     [
-      activeUser,
-      getUserQuery.data?.user,
       role?.canChangeUsersCredentials,
       setActiveUser,
       setMode,
@@ -100,8 +77,8 @@ export default function UsersTable({
     ]
   );
 
-  const handleDelete = useCallback((id: string) => {
-    console.log('deleting user', id);
+  const handleDelete = useCallback((user: User) => {
+    console.log('deleting user', user);
   }, []);
 
   const columns = useMemo(
@@ -142,20 +119,20 @@ export default function UsersTable({
           <div className="flex gap-2 justify-center">
             <Button
               variant="ghost"
-              onClick={() => handleView(row.original.user.id)}
+              onClick={() => handleView(row.original.user)}
             >
               <Eye className="w-4 h-4" />
             </Button>
             <Button
               variant="ghost"
-              onClick={() => handleEdit(row.original.user.id)}
+              onClick={() => handleEdit(row.original.user)}
             >
               <Pencil className="w-4 h-4" />
             </Button>
             <Button
               className="icon-btn"
               variant="ghost"
-              onClick={() => handleDelete(row.original.user.id)}
+              onClick={() => handleDelete(row.original.user)}
             >
               <Trash className="w-4 h-4" />
             </Button>

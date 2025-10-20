@@ -154,7 +154,7 @@ export async function verifyRegistration(
 
     const response = mapResponseQuery(query);
 
-    return { verified, response };
+    return { verified, user: response.user, role: response.role };
   } catch (error) {
     console.error("Error verifying registration", error);
     if (error instanceof HttpError) {

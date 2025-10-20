@@ -2,7 +2,6 @@ import { User, useUser } from '@/hooks/useUserContext';
 import Modal from '../Modal';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { changeUserInfo } from '@/lib/admin/changeUserInfo';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import {
   Form,
@@ -12,6 +11,17 @@ import {
   FormControl,
   FormMessage,
 } from '@/components/ui/form';
+import { useTRPC } from '@/hooks/TrpcContext';
+import { useMutation } from '@tanstack/react-query';
+
+interface UserInfoModalProps {
+  activeUser: User;
+  setShowUserInfoModal: (show: boolean) => void;
+  setActiveUser: (user: User | null) => void;
+  mode: 'view' | 'edit';
+  setMode: (mode: 'view' | 'edit') => void;
+  onUserUpdated?: () => void;
+}
 
 export default function UserInfoModal({
   activeUser,
@@ -19,14 +29,23 @@ export default function UserInfoModal({
   setActiveUser,
   mode,
   setMode,
-}: {
-  activeUser: User;
-  setShowUserInfoModal: (show: boolean) => void;
-  setActiveUser: (user: User | null) => void;
-  mode: 'view' | 'edit';
-  setMode: (mode: 'view' | 'edit') => void;
-}) {
+  onUserUpdated,
+}: UserInfoModalProps) {
   const { role } = useUser();
+  const trpc = useTRPC();
+  const updateUserMutation = useMutation(
+    trpc.admin.updateUser.mutationOptions({
+      onSuccess: (data) => {
+        console.log('data', data);
+        setActiveUser(data.user);
+        setMode('view');
+        onUserUpdated?.();
+      },
+      onError: (error) => {
+        console.error('Error updating user', error);
+      },
+    })
+  );
 
   type FormValues = {
     username: string;
@@ -36,7 +55,6 @@ export default function UserInfoModal({
     lastName: string | null;
     phoneNumber: string | null;
     dateOfBirth: string | null;
-    credentials?: string | null;
     password?: string;
   };
 
@@ -49,7 +67,6 @@ export default function UserInfoModal({
       lastName: activeUser.lastName ?? null,
       phoneNumber: activeUser.phoneNumber ?? null,
       dateOfBirth: activeUser.dateOfBirth ?? null,
-      credentials: activeUser.credentials ?? null,
       password: activeUser.password,
     },
     mode: 'onTouched',
@@ -71,11 +88,10 @@ export default function UserInfoModal({
       roleId: values.roleId ? Number(values.roleId) : activeUser.roleId,
     } as User;
 
-    const result = await changeUserInfo(activeUser.id, updates);
-    if (result?.user) {
-      setActiveUser(result.user as User);
-    }
-    setMode('view');
+    await updateUserMutation.mutateAsync({
+      id: activeUser.id,
+      updates: updates,
+    });
   };
 
   const renderInput = (
@@ -134,12 +150,6 @@ export default function UserInfoModal({
 
           {role?.canReadUsersCredentials && (
             <>
-              {renderInput(
-                'credentials',
-                'Credentials',
-                'text',
-                mode === 'view'
-              )}
               {renderInput('password', 'Password', 'password', mode === 'view')}
             </>
           )}

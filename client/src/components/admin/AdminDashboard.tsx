@@ -13,17 +13,12 @@ import { useQuery } from '@tanstack/react-query';
 export default function AdminDashboard() {
   const trpc = useTRPC();
   const listUsersQuery = useQuery(trpc.admin.listUsers.queryOptions());
-  console.log('listUsersQuery', listUsersQuery);
   const users = listUsersQuery.data?.users || [];
   console.log('users', users);
   const isLoading = listUsersQuery.isLoading;
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
   const [activeUser, setActiveUser] = useState<User | null>(null);
   const [mode, setMode] = useState<'view' | 'edit'>('view');
-
-  console.log('showUserInfoModal', showUserInfoModal);
-  console.log('activeUser', activeUser);
-  console.log('mode', mode);
 
   return (
     <div className="grid w-full gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr">
@@ -42,7 +37,6 @@ export default function AdminDashboard() {
       <UsersTable
         setShowUserInfoModal={setShowUserInfoModal}
         users={users}
-        activeUser={activeUser as User}
         setActiveUser={setActiveUser}
         setMode={setMode}
       />
@@ -53,6 +47,7 @@ export default function AdminDashboard() {
           setActiveUser={setActiveUser}
           mode={mode}
           setMode={setMode}
+          onUserUpdated={listUsersQuery.refetch}
         />
       )}
     </div>

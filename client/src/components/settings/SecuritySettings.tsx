@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button';
 
 export default function SecuritySettings() {
   const { user } = useUser();
-  const isBiometric = !!user?.embedding && user?.embedding !== '';
-  const isPasskey = !!user?.credentials && user?.credentials !== '';
+  const isBiometric = user?.embedding && user?.embedding.length > 0;
+  const isPasskey = user?.credentials && user?.credentials.length > 0;
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [showChangeBiometricModal, setShowChangeBiometricModal] =
     useState(false);

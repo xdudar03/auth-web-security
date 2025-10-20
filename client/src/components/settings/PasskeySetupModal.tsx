@@ -14,7 +14,7 @@ export default function PasskeySetupModal({
 }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState({ message: '', type: '' });
-  const { user } = useUser();
+  const { user, setUser } = useUser();
   const username = user?.username;
   const [isConfirmed, setIsConfirmed] = useState(false);
   const trpc = useTRPC();
@@ -46,6 +46,7 @@ export default function PasskeySetupModal({
     trpc.passwordless.verifyRegistration.mutationOptions({
       onSuccess: (data) => {
         console.log('data', data);
+        setUser(data.user);
         setMessage({
           message: 'Passkey registered successfully',
           type: 'success',
@@ -56,17 +57,21 @@ export default function PasskeySetupModal({
       },
       onError: (error) => {
         console.error('error', error);
+        setMessage({
+          message: 'Passkey registration failed',
+          type: 'error',
+        });
       },
     })
   );
 
   const handleSubmit = async () => {
     // const isConfirmed = await confirmPasswordMutation.mutateAsync({
-    await confirmPasswordMutation.mutateAsync({
+    const confirmed = await confirmPasswordMutation.mutateAsync({
       username: username as string,
       password: confirmPassword,
     });
-    if (isConfirmed) {
+    if (confirmed) {
       const options = await getRegistrationOptionsMutation.mutateAsync({
         username: username as string,
       });
@@ -88,21 +93,25 @@ export default function PasskeySetupModal({
       description="Enter your password to register a passkey."
       onClose={handleClose}
       footer={
-        <Button
-          onClick={handleSubmit}
-          disabled={
-            confirmPasswordMutation.isPending ||
-            getRegistrationOptionsMutation.isPending ||
-            verifyRegistrationMutation.isPending
-          }
-        >
-          Submit
-        </Button>
+        isConfirmed ? (
+          <Button onClick={handleClose}>Done</Button>
+        ) : (
+          <Button
+            onClick={handleSubmit}
+            disabled={
+              confirmPasswordMutation.isPending ||
+              getRegistrationOptionsMutation.isPending ||
+              verifyRegistrationMutation.isPending
+            }
+          >
+            Submit
+          </Button>
+        )
       }
       open={true}
     >
       {isConfirmed ? (
-        <p>Passkey registered successfully</p>
+        <p>{message.message}</p>
       ) : (
         <ConfirmPassword
           setConfirmPassword={setConfirmPassword}

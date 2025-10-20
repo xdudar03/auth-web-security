@@ -62,19 +62,21 @@ type UpdateUserInput = {
   lastName?: string | null;
   phoneNumber?: string | null;
   dateOfBirth?: string | null;
-  embedding?: string | null;
-  credentials?: string | null;
   roleId?: number | string | null;
 };
 
 export function updateUserById(id: string, updates: UpdateUserInput) {
   const existing = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
 
+  console.log("existing: ", existing);
+
   if (!existing) {
     throw new HttpError(404, "User not found");
   }
 
   const preparedUpdates = { ...updates } as Record<string, any>;
+
+  console.log("preparedUpdates: ", preparedUpdates);
 
   if (preparedUpdates.roleId !== undefined && preparedUpdates.roleId !== null) {
     preparedUpdates.roleId = Number(preparedUpdates.roleId);
@@ -86,6 +88,8 @@ export function updateUserById(id: string, updates: UpdateUserInput) {
       return existing[key] !== value;
     })
   );
+
+  console.log("updatesToSave: ", updatesToSave);
 
   if (Object.keys(updatesToSave).length === 0) {
     throw new HttpError(400, "No updates to save");
