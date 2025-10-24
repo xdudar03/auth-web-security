@@ -2,9 +2,9 @@ import { db, updateUser } from "../database.ts";
 import { HttpError } from "../errors.ts";
 import { mapResponseQuery } from "../utils.ts";
 
-function sanitizeUserSummary(row: any) {
+export function sanitizeUserSummary(row: any) {
   const result = mapResponseQuery(row);
-  const { user, role } = result;
+  const { user, role, shop } = result;
 
   const { embedding, credentials, password, ...safeUser } = user;
   const {
@@ -16,12 +16,15 @@ function sanitizeUserSummary(row: any) {
     canReadUsersRoles,
     canAccessAdminPanel,
     canAccessUserPanel,
+    canAccessProviderPanel,
+    hasGlobalAccessToAllShops,
     ...safeRole
   } = role;
 
   return {
     user: safeUser,
     role: safeRole,
+    shop: shop,
   };
 }
 

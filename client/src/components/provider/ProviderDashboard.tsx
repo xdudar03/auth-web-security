@@ -1,25 +1,28 @@
 'use client';
-import { Activity, Users } from 'lucide-react';
-import AccountStatsCard from './AccountStatsCard';
-import SettingsCard from '../dashboard/SettingsCard';
-import StatCard from './StatCard';
-import UsersTable from '../UsersTable';
-import { useState } from 'react';
 import { User } from '@/hooks/useUserContext';
-import UserInfoModal from './UserInfoModal';
+import { Activity, Users } from 'lucide-react';
+import { useState } from 'react';
+import AccountStatsCard from '../admin/AccountStatsCard';
+import StatCard from '../admin/StatCard';
+import UserInfoModal from '../admin/UserInfoModal';
+import SettingsCard from '../dashboard/SettingsCard';
+import UsersTable from '../UsersTable';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useQuery } from '@tanstack/react-query';
+import { useUser } from '@/hooks/useUserContext';
 
-export default function AdminDashboard() {
+export default function ProviderDashboard() {
   const trpc = useTRPC();
-  const listUsersQuery = useQuery(trpc.admin.listUsers.queryOptions());
-  const users = listUsersQuery.data?.users || [];
-  console.log('users', users);
-  const isLoading = listUsersQuery.isLoading;
+  const { shops } = useUser();
+  console.log('shops: ', shops);
+  const shopId = shops?.[0]?.id;
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
   const [activeUser, setActiveUser] = useState<User | null>(null);
-  const [mode, setMode] = useState<'view' | 'edit'>('view');
-
+  const allUsersQuery = useQuery(
+    trpc.shops.getAllUsersFromShop.queryOptions({ shopId: shopId ?? 0 })
+  );
+  const users = allUsersQuery.data?.users ?? [];
+  const isLoading = allUsersQuery.isLoading;
   return (
     <div className="grid w-full gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr">
       <SettingsCard />
@@ -38,16 +41,16 @@ export default function AdminDashboard() {
         setShowUserInfoModal={setShowUserInfoModal}
         users={users}
         setActiveUser={setActiveUser}
-        setMode={setMode}
+        setMode={() => {}}
       />
       {showUserInfoModal && activeUser && (
         <UserInfoModal
           activeUser={activeUser as User}
           setShowUserInfoModal={setShowUserInfoModal}
           setActiveUser={setActiveUser}
-          mode={mode}
-          setMode={setMode}
-          onUserUpdated={listUsersQuery.refetch}
+          mode={'view'}
+          setMode={() => {}}
+          onUserUpdated={allUsersQuery.refetch}
         />
       )}
     </div>

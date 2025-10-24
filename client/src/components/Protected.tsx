@@ -23,6 +23,7 @@ export default function Protected({
   console.log('user?.roleId', user?.roleId);
 
   const isAuthorized = (() => {
+    console.log('requiredPermissions', requiredPermissions);
     if (!requiredPermissions || requiredPermissions.length === 0) return true;
     if (!user?.roleId || !role) return false;
     return requiredPermissions.every(
@@ -31,7 +32,6 @@ export default function Protected({
   })();
 
   console.log('isAuthorized', isAuthorized);
-  console.log('requiredPermissions', requiredPermissions);
 
   useEffect(() => {
     if (!isAuthenticated) {

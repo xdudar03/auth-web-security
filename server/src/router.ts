@@ -28,7 +28,7 @@ import {
 } from "./services/model.ts";
 import { checkHealth, pingHealth } from "./services/health.ts";
 import { HttpError } from "./errors.ts";
-import { getAllShops } from "./services/shops.ts";
+import { getAllShops, getAllUsersFromShop } from "./services/shops.ts";
 
 function mapHttpStatusToTrpcCode(status: number): TRPCError["code"] {
   if (status >= 500) return "INTERNAL_SERVER_ERROR";
@@ -193,6 +193,9 @@ export const appRouter = router({
   }),
   shops: router({
     getAllShops: publicProcedure.query(() => execute(() => getAllShops())),
+    getAllUsersFromShop: publicProcedure
+      .input(z.object({ shopId: z.number() }))
+      .query(({ input }) => execute(() => getAllUsersFromShop(input.shopId))),
   }),
 });
 

@@ -18,7 +18,7 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table';
-import { Button } from '../ui/button';
+import { Button } from './ui/button';
 
 export type AdminUserRow = {
   user: User;
@@ -108,10 +108,13 @@ export default function UsersTable({
         accessorKey: 'user.username',
       },
       {
+        header: 'Shop',
+        accessorKey: 'shop.shopName',
+      },
+      {
         header: 'Role',
         accessorKey: 'role.roleName',
       },
-
       {
         id: 'actions',
         header: 'Actions',
@@ -123,12 +126,14 @@ export default function UsersTable({
             >
               <Eye className="w-4 h-4" />
             </Button>
-            <Button
-              variant="ghost"
-              onClick={() => handleEdit(row.original.user)}
-            >
-              <Pencil className="w-4 h-4" />
-            </Button>
+            {role?.canChangeUsersCredentials ? (
+              <Button
+                variant="ghost"
+                onClick={() => handleEdit(row.original.user)}
+              >
+                <Pencil className="w-4 h-4" />
+              </Button>
+            ) : null}
             <Button
               className="icon-btn"
               variant="ghost"
@@ -141,7 +146,7 @@ export default function UsersTable({
         accessorKey: 'actions',
       },
     ],
-    [handleView, handleEdit, handleDelete]
+    [handleView, handleEdit, handleDelete, role?.canChangeUsersCredentials]
   );
   const [rowSelection, setRowSelection] = useState({});
   const table = useReactTable({
@@ -156,7 +161,7 @@ export default function UsersTable({
   });
   console.log('rowSelection', rowSelection);
   return (
-    <div className="lg:col-span-2 col-span-1 bg-surface rounded-lg h-full overflow-y-scroll">
+    <div className="lg:col-span-2 col-span-1 bg-surface rounded-lg h-full overflow-y-auto">
       <div className="flex flex-col h-full min-h-0 box-border">
         <div className="p-2 flex-1 min-h-0 box-border">
           <h3 className="text-lg font-semibold text-center">User List</h3>

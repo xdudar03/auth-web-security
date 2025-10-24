@@ -8,6 +8,9 @@ const addHardcodedShops = () => {
   addUserToShop.run("1", 2);
   addUserToShop.run("1", 3);
   addUserToShop.run("2", 1);
+  addUserToShop.run("3", 1);
+  addUserToShop.run("4", 2);
+  addUserToShop.run("5", 3);
 };
 
 addHardcodedShops();

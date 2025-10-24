@@ -39,15 +39,19 @@ export default function SideBar() {
               variant="ghost"
               size="icon"
               className={`icon-btn-zoom ${
-                isActive === 'dashboard' || isActive === 'admin-dashboard'
+                isActive === 'dashboard' ||
+                isActive === 'admin-dashboard' ||
+                isActive === 'provider-dashboard'
                   ? 'active'
                   : ''
               }`}
             >
               <Link
                 href={
-                  !!role?.canAccessAdminPanel
+                  !!role?.canAccessAdminPanel && !!role?.canAccessProviderPanel
                     ? '/admin-dashboard'
+                    : !!role?.canAccessProviderPanel
+                    ? '/provider-dashboard'
                     : '/dashboard'
                 }
                 aria-label="Dashboard"

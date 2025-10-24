@@ -148,11 +148,11 @@ export default function UserInfoModal({
           {renderInput('phoneNumber', 'Phone Number', 'tel', mode === 'view')}
           {renderInput('dateOfBirth', 'Date of Birth', 'text', mode === 'view')}
 
-          {role?.canReadUsersCredentials && (
+          {role?.canReadUsersCredentials ? (
             <>
               {renderInput('password', 'Password', 'password', mode === 'view')}
             </>
-          )}
+          ) : null}
         </form>
       </Form>
     </Modal>

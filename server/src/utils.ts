@@ -27,7 +27,15 @@ export function mapResponseQuery(query: any) {
       canReadUsersRoles: query.canReadUsersRoles,
       canAccessAdminPanel: query.canAccessAdminPanel,
       canAccessUserPanel: query.canAccessUserPanel,
+      canAccessProviderPanel: query.canAccessProviderPanel,
       hasGlobalAccessToAllShops: query.hasGlobalAccessToAllShops,
+    },
+    shop: {
+      shopId: query.shop.id,
+      shopName: query.shop.shopName,
+      shopAddress: query.shop.shopAddress,
+      shopDescription: query.shop.shopDescription,
+      shopOwnerId: query.shop.shopOwnerId,
     },
   };
   return response;

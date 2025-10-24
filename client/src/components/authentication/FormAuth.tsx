@@ -61,6 +61,8 @@ export default function FormAuth({
     setIsAuthenticated(true);
     if (data.role.canAccessAdminPanel) {
       router.push('/admin-dashboard');
+    } else if (data.role.canAccessProviderPanel) {
+      router.push('/provider-dashboard');
     } else {
       router.push('/dashboard');
     }

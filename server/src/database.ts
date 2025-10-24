@@ -32,6 +32,7 @@ const initTable = () => {
       canReadUsersRoles BOOLEAN NOT NULL,
       canAccessAdminPanel BOOLEAN NOT NULL,
       canAccessUserPanel BOOLEAN NOT NULL,
+      canAccessProviderPanel BOOLEAN NOT NULL,
       hasGlobalAccessToAllShops BOOLEAN NOT NULL
     )
   `);
@@ -63,7 +64,7 @@ const addUser = db.prepare(
 );
 // 1 is admin, 2 is user, 3 is shop owner
 const addRole = db.prepare(
-  `INSERT INTO roles (roleName, canChangeUsersCredentials, canChangeUsersRoles, canReadUsers, canReadUsersCredentials, canReadUsersSettings, canReadUsersRoles, canAccessAdminPanel, canAccessUserPanel, hasGlobalAccessToAllShops) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  `INSERT INTO roles (roleName, canChangeUsersCredentials, canChangeUsersRoles, canReadUsers, canReadUsersCredentials, canReadUsersSettings, canReadUsersRoles, canAccessAdminPanel, canAccessUserPanel, canAccessProviderPanel, hasGlobalAccessToAllShops) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 );
 
 const addShop = db.prepare(
@@ -89,7 +90,12 @@ const getUserShops = db.prepare(
 );
 
 const getShopUsers = db.prepare(
-  `SELECT users.* FROM users JOIN user_shops ON users.id = user_shops.userId WHERE user_shops.shopId = ?`
+  `SELECT users.*, roles.roleName 
+  FROM users 
+  INNER JOIN user_shops ON users.userId = user_shops.userId 
+  INNER JOIN roles ON roles.id = users.roleId
+  INNER JOIN shops ON shops.id = user_shops.shopId
+  WHERE user_shops.shopId = ?`
 );
 
 const getRoleById = db.prepare(`SELECT * FROM roles WHERE id = ?`);
@@ -136,7 +142,7 @@ function updateUser(userId: string, updates: Record<string, any>) {
 }
 
 const updateRole = db.prepare(
-  `UPDATE roles SET roleName = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ?, canAccessAdminPanel = ?, canAccessUserPanel = ?, hasGlobalAccessToAllShops = ? WHERE id = ?`
+  `UPDATE roles SET roleName = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ?, canAccessAdminPanel = ?, canAccessUserPanel = ?, canAccessProviderPanel = ?, hasGlobalAccessToAllShops = ? WHERE id = ?`
 );
 
 const getRoles = db.prepare(`SELECT * FROM roles`);
