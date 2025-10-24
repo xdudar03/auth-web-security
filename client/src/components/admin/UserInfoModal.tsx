@@ -89,7 +89,7 @@ export default function UserInfoModal({
     } as User;
 
     await updateUserMutation.mutateAsync({
-      id: activeUser.id,
+      userId: activeUser.userId,
       updates: updates,
     });
   };

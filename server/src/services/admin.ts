@@ -65,8 +65,10 @@ type UpdateUserInput = {
   roleId?: number | string | null;
 };
 
-export function updateUserById(id: string, updates: UpdateUserInput) {
-  const existing = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+export function updateUserById(userId: string, updates: UpdateUserInput) {
+  const existing = db
+    .prepare("SELECT * FROM users WHERE userId = ?")
+    .get(userId);
 
   console.log("existing: ", existing);
 
@@ -95,12 +97,12 @@ export function updateUserById(id: string, updates: UpdateUserInput) {
     throw new HttpError(400, "No updates to save");
   }
 
-  updateUser(existing.id as number, updatesToSave);
+  updateUser(existing.userId as string, updatesToSave);
   const updatedRow = db
     .prepare(
-      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE users.id = ?"
+      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE users.userId = ?"
     )
-    .get(id);
+    .get(userId);
 
   if (!updatedRow) {
     throw new HttpError(500, "Failed to load updated user");

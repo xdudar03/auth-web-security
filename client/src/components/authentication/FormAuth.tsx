@@ -122,7 +122,7 @@ export default function FormAuth({
         username: values.username,
         email: values.email,
         password: values.password,
-        id: id,
+        userId: id,
         roleId: 2,
       });
     } else {

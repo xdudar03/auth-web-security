@@ -12,12 +12,26 @@ import {
   FormMessage,
 } from '../ui/form';
 import { useForm } from 'react-hook-form';
-import { changeUserInfo } from '@/lib/admin/changeUserInfo';
+import { useTRPC } from '@/hooks/TrpcContext';
+import { useMutation } from '@tanstack/react-query';
 
 export default function AccountInfo() {
   const { user, setUser } = useUser();
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   console.log('user', user);
+  const trpc = useTRPC();
+  const updateUserMutation = useMutation(
+    trpc.admin.updateUser.mutationOptions({
+      onSuccess: (data) => {
+        console.log('data', data);
+        setUser(data.user);
+        setMode('view');
+      },
+      onError: (error) => {
+        console.error('Error updating user', error);
+      },
+    })
+  );
 
   const handleOnSave = async (values: FormValues) => {
     if (mode === 'edit') {
@@ -28,7 +42,10 @@ export default function AccountInfo() {
           roleId: user?.roleId,
         } as UserType;
         console.log('updates', updates);
-        const result = await changeUserInfo(user?.id ?? '', updates);
+        const result = await updateUserMutation.mutateAsync({
+          userId: user?.userId ?? '',
+          updates: updates,
+        });
         console.log('result', result);
         if (result) {
           setUser(result.user as UserType);

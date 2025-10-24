@@ -53,10 +53,10 @@ export class PCAEigenfaces {
       );
 
     return {
-      eigenfaces,
-      meanFace: mean,
-      components,
-      explainedVariance: this.pca.getExplainedVariance(),
+      eigenfaces, // shape [n_components, n_features], principal components (basis vectors)
+      meanFace: mean, // shape [n_features], average face
+      components, // shape [n_components, n_features], raw pca loadings
+      explainedVariance: this.pca.getExplainedVariance(), // shape [n_components], for analyzing how much variance is explained by each component
     };
   }
 

@@ -141,7 +141,7 @@ export async function verifyRegistration(
         (c: any) => c.credentialID !== newAuthenticator.credentialID
       );
       const updated = [...filtered, newAuthenticator];
-      updateUser(userRecord.id as number, {
+      updateUser(userRecord.userId as string, {
         credentials: JSON.stringify(updated),
       });
     }
@@ -238,6 +238,7 @@ export async function verifyAuthentication(
     }
 
     const response = mapResponseQuery(query);
+    console.log("response", response);
 
     if (response.user?.credentials) {
       try {
@@ -282,7 +283,7 @@ export async function verifyAuthentication(
           ? { ...c, counter: authenticationInfo.newCounter }
           : c
       );
-      updateUser(response.user.id as number, {
+      updateUser(response.user.userId as string, {
         credentials: JSON.stringify(updatedCreds),
       });
     }

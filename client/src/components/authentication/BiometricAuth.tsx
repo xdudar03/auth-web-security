@@ -67,8 +67,8 @@ export default function BiometricAuth({
   const overlayMaskId = `biometric-mask-${maskId.replace(/:/g, '')}`;
   const TARGET_SIZE = 100;
   const MAX_COMPONENTS = 5;
-  const STREAM_FRAME_COUNT = 8;
-  const STREAM_INTERVAL_MS = 150;
+  const STREAM_FRAME_COUNT = 20;
+  const STREAM_INTERVAL_MS = 250;
 
   const sleep = (ms: number) =>
     new Promise<void>((resolve) => {
@@ -142,7 +142,7 @@ export default function BiometricAuth({
         username: payload.username,
         email: payload.email,
         password: payload.password,
-        id: payload.id,
+        userId: payload.userId,
         roleId: payload.roleId ?? 2,
       });
       setUser(result.user as User);
@@ -198,6 +198,7 @@ export default function BiometricAuth({
       const { eigenfaces, meanFace, components } = pcaGen.generate();
 
       try {
+        // eigenvector projection
         projection = pcaGen.project(
           flattenedFrames[flattenedFrames.length - 1]
         );
@@ -216,7 +217,7 @@ export default function BiometricAuth({
       const userWithEmbedding = {
         ...user,
         embedding: projection,
-        id: user?.id ?? '',
+        userId: user?.userId ?? '',
       } as User;
 
       try {

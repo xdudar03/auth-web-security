@@ -120,7 +120,7 @@ export const appRouter = router({
     register: publicProcedure
       .input(
         z.object({
-          id: z.string(),
+          userId: z.string(),
           username: z.string(),
           email: z.string().email(),
           password: z.string(),
@@ -174,17 +174,19 @@ export const appRouter = router({
   admin: router({
     listUsers: publicProcedure.query(() => execute(() => listUsers())),
     getUser: publicProcedure
-      .input(z.object({ id: z.string().optional() }))
-      .query(({ input }) => execute(() => getUserWithRoleById(input.id ?? ""))),
+      .input(z.object({ userId: z.string().optional() }))
+      .query(({ input }) =>
+        execute(() => getUserWithRoleById(input.userId ?? ""))
+      ),
     updateUser: publicProcedure
       .input(
         z.object({
-          id: z.string(),
+          userId: z.string(),
           updates: z.object({}).passthrough(),
         })
       )
       .mutation(({ input }) =>
-        execute(() => updateUserById(input.id, input.updates as any))
+        execute(() => updateUserById(input.userId, input.updates as any))
       ),
   }),
 });

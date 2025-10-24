@@ -14,7 +14,7 @@ export const UserContext = createContext<
 >(undefined);
 
 export type User = {
-  id: string;
+  userId: string;
   username: string;
   password: string;
   embedding?: number[] | null;
@@ -28,7 +28,7 @@ export type User = {
 };
 
 export type Role = {
-  id: number;
+  roleId: number;
   roleName: string;
   canChangeUsersCredentials: boolean;
   canChangeUsersRoles: boolean;

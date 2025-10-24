@@ -15,7 +15,7 @@ function normalizeEmbedding(input: unknown): string | null {
 }
 
 type RegistrationInput = {
-  id: string;
+  userId: string;
   username: string;
   email: string;
   password: string;
@@ -44,7 +44,7 @@ type ConfirmPasswordInput = {
 };
 
 export async function registerBiometricUser(input: RegistrationInput) {
-  const { id, username, email, password, roleId } = input;
+  const { userId, username, email, password, roleId } = input;
 
   const usersFromDB = db.prepare("SELECT * FROM users").all();
 
@@ -53,7 +53,7 @@ export async function registerBiometricUser(input: RegistrationInput) {
   }
 
   addUser.run(
-    id,
+    userId,
     username,
     email,
     "",
@@ -111,7 +111,7 @@ export async function changeBiometricEmbedding(input: ChangeEmbeddingInput) {
     throw new HttpError(400, "User not found");
   }
 
-  updateUser(query.id as number, { embedding: embedding });
+  updateUser(query.userId as string, { embedding: embedding });
 
   const updated = db
     .prepare(
@@ -142,7 +142,7 @@ export async function changeBiometricPassword(input: ChangePasswordInput) {
     throw new HttpError(400, "Invalid password");
   }
 
-  updateUser(query.id as number, { password: newPassword });
+  updateUser(query.userId as string, { password: newPassword });
 
   return { message: "Password changed successfully" };
 }

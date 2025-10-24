@@ -155,7 +155,7 @@ body {
     @apply flex flex-col w-full gap-4;
   }
   .form-field {
-    @apply flex flex-col w-72 sm:w-80;
+    @apply flex flex-col w-72 sm:w-80 gap-2;
   }
   .form-label {
     @apply text-sm font-medium text-foreground;

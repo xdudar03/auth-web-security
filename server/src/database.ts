@@ -54,7 +54,7 @@ const getUserByUsername = db.prepare(`SELECT * FROM users WHERE username = ?`);
 
 const getUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 
-function updateUser(userId: number, updates: Record<string, any>) {
+function updateUser(userId: string, updates: Record<string, any>) {
   const allowedFields = [
     "username",
     "email",
@@ -82,7 +82,7 @@ function updateUser(userId: number, updates: Record<string, any>) {
     throw new Error("No valid fields provided for update");
   }
 
-  const sql = `UPDATE users SET ${setClauses.join(", ")} WHERE id = ?`;
+  const sql = `UPDATE users SET ${setClauses.join(", ")} WHERE userId = ?`;
   values.push(userId);
 
   const stmt = db.prepare(sql);

@@ -4,7 +4,7 @@ import { USERS_FILE_TEMP } from "./config.ts";
 export function mapResponseQuery(query: any) {
   const response = {
     user: {
-      id: query.userId,
+      userId: query.userId,
       username: query.username,
       password: query.password,
       embedding: query.embedding,
@@ -17,7 +17,7 @@ export function mapResponseQuery(query: any) {
       dateOfBirth: query.dateOfBirth,
     },
     role: {
-      id: query.roleId,
+      roleId: query.roleId,
       roleName: query.roleName,
       canChangeUsersCredentials: query.canChangeUsersCredentials,
       canChangeUsersRoles: query.canChangeUsersRoles,
