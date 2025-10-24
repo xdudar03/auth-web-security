@@ -1,9 +1,9 @@
 'use client';
-import { Role, useUser, type User } from '@/hooks/useUserContext';
+import { Role, Shop, useUser, type User } from '@/hooks/useUserContext';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useEffect } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import {
   Form,
@@ -15,13 +15,26 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { useTRPC } from '@/hooks/TrpcContext';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { startAuthentication } from '@simplewebauthn/browser';
+import dynamic from 'next/dynamic';
+import type { MultiValue, StylesConfig } from 'react-select';
 
 type SuccessData = {
   user: User;
   role: Role;
 };
+
+type FormValues = {
+  username: string;
+  password: string;
+  email: string;
+  shopIds: number[];
+};
+
+const AsyncSelect = dynamic(() => import('react-select/async'), {
+  ssr: false,
+});
 
 export default function FormAuth({
   setTab,
@@ -33,6 +46,12 @@ export default function FormAuth({
   const { user, setUser, setIsAuthenticated, setRole } = useUser();
   const trpc = useTRPC();
   const router = useRouter();
+  const listShopsQuery = useQuery(trpc.shops.getAllShops.queryOptions());
+  const allShops = useMemo(
+    () => listShopsQuery.data?.shops ?? [],
+    [listShopsQuery.data?.shops]
+  );
+  console.log('allShops', allShops);
 
   function handleSuccess(data: SuccessData) {
     setUser(data.user);
@@ -88,26 +107,50 @@ export default function FormAuth({
     })
   );
 
-  type FormValues = { username: string; password: string; email: string };
-
   const form = useForm<FormValues>({
     defaultValues: {
       username: user?.username ?? '',
       password: user?.password ?? '',
       email: user?.email ?? '',
+      shopIds: allShops.map((shop: Shop) => shop.id),
     },
     mode: 'onTouched',
     reValidateMode: 'onChange',
   });
 
+  // Debounced async function to load shops
+  const loadShops = useCallback(
+    async (inputValue: string): Promise<{ label: string; value: number }[]> => {
+      try {
+        // Simulate API call delay for demo
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        // Filter shops based on input value (case insensitive)
+        const filteredShops = allShops.filter((shop: Shop) =>
+          shop.shopName.toLowerCase().includes(inputValue.toLowerCase())
+        );
+
+        return filteredShops.map((shop: Shop) => ({
+          label: shop.shopName,
+          value: shop.id,
+        }));
+      } catch (error) {
+        console.error('Error loading shops:', error);
+        return [];
+      }
+    },
+    [allShops]
+  );
+
   useEffect(() => {
-    const subscription = form.watch((values: Partial<FormValues>) => {
-      const { username, password, email } = values;
+    const subscription = form.watch((value) => {
+      const { username, password, email } = value as FormValues;
       setUser({
         ...(user ?? {}),
         username: username ?? user?.username ?? '',
         password: password ?? user?.password ?? '',
         email: email ?? user?.email ?? '',
+        // shopIds: shopIds ?? allShops.map((shop: Shop) => shop.id) ?? [],
       } as User);
     });
     return () => subscription.unsubscribe();
@@ -124,6 +167,7 @@ export default function FormAuth({
         password: values.password,
         userId: id,
         roleId: 2,
+        shopIds: values.shopIds,
       });
     } else {
       authenticateMutation.mutate({
@@ -233,6 +277,61 @@ export default function FormAuth({
               </FormItem>
             )}
           />
+
+          {title === 'Registration' && (
+            <FormField
+              control={form.control}
+              name="shopIds"
+              rules={{ required: 'Shop is required' }}
+              render={() => (
+                <FormItem className="form-field">
+                  <FormLabel>Shops</FormLabel>
+                  <FormControl>
+                    <AsyncSelect
+                      instanceId="shop-select"
+                      loadOptions={loadShops}
+                      defaultOptions={allShops.map((shop: Shop) => ({
+                        label: shop.shopName,
+                        value: shop.id,
+                      }))}
+                      isMulti
+                      isLoading={listShopsQuery.isLoading}
+                      placeholder="Search and select shops..."
+                      loadingMessage={() => 'Loading shops...'}
+                      noOptionsMessage={({
+                        inputValue,
+                      }: {
+                        inputValue: string;
+                      }) =>
+                        inputValue
+                          ? `No shops found for "${inputValue}"`
+                          : 'No shops available'
+                      }
+                      value={form
+                        .watch('shopIds')
+                        ?.map((id: number) => {
+                          const shop = allShops.find((s: Shop) => s.id === id);
+                          return shop
+                            ? { label: shop.shopName, value: shop.id }
+                            : null;
+                        })
+                        .filter(Boolean)}
+                      onChange={(newValue) => {
+                        const selectedOptions = newValue as MultiValue<{
+                          label: string;
+                          value: number;
+                        }>;
+                        const shopIds = selectedOptions.map(
+                          (option) => option.value
+                        );
+                        form.setValue('shopIds', shopIds);
+                      }}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          )}
 
           <div className="flex items-center justify-between flex-col">
             {title === 'Login' && (

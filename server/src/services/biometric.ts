@@ -1,18 +1,6 @@
-import { addUser, db, updateUser } from "../database.ts";
+import { addUser, addUserToShop, db, updateUser } from "../database.ts";
 import { HttpError } from "../errors.ts";
 import { mapResponseQuery } from "../utils.ts";
-
-function normalizeEmbedding(input: unknown): string | null {
-  if (input == null) return null;
-  if (typeof input === "string") return input;
-  if (input instanceof Uint8Array || input instanceof Uint8ClampedArray) {
-    return Buffer.from(input).toString("base64");
-  }
-  if (Array.isArray(input)) {
-    return Buffer.from(Uint8Array.from(input)).toString("base64");
-  }
-  throw new HttpError(400, "Unsupported embedding format");
-}
 
 type RegistrationInput = {
   userId: string;
@@ -20,6 +8,7 @@ type RegistrationInput = {
   email: string;
   password: string;
   roleId: number | string;
+  shopIds: number[];
 };
 
 type AuthenticationInput = {
@@ -44,8 +33,9 @@ type ConfirmPasswordInput = {
 };
 
 export async function registerBiometricUser(input: RegistrationInput) {
-  const { userId, username, email, password, roleId } = input;
-
+  console.log("registerBiometricUser input: ", input);
+  const { userId, username, email, password, roleId, shopIds } = input;
+  console.log("shopIds: ", shopIds.length);
   const usersFromDB = db.prepare("SELECT * FROM users").all();
 
   if (usersFromDB.find((query: any) => query.username === username)) {
@@ -68,9 +58,23 @@ export async function registerBiometricUser(input: RegistrationInput) {
 
   const query = db
     .prepare(
-      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ?"
+      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE userId = ?"
     )
-    .get(username);
+    .get(userId);
+  console.log("query: ", query);
+  if (shopIds.length > 0) {
+    for (const shopId of shopIds) {
+      console.log("shopId: ", shopId);
+      console.log("query?.userId: ", query?.userId);
+      const result = addUserToShop.run(query?.userId as string, shopId);
+      console.log("result: ", result);
+      if (!result) {
+        throw new HttpError(400, "Failed to add user to shop");
+      }
+    }
+  } else {
+    throw new HttpError(400, "No shops provided");
+  }
 
   const response = mapResponseQuery(query);
   return {

@@ -31,7 +31,27 @@ const initTable = () => {
       canReadUsersSettings BOOLEAN NOT NULL,
       canReadUsersRoles BOOLEAN NOT NULL,
       canAccessAdminPanel BOOLEAN NOT NULL,
-      canAccessUserPanel BOOLEAN NOT NULL
+      canAccessUserPanel BOOLEAN NOT NULL,
+      hasGlobalAccessToAllShops BOOLEAN NOT NULL
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shops (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shopName TEXT NOT NULL,
+    shopDescription TEXT,
+    shopAddress TEXT,
+    shopOwnerId TEXT NOT NULL,
+    FOREIGN KEY (shopOwnerId) REFERENCES users(userId)
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_shops (
+    userId TEXT NOT NULL,
+    shopId INTEGER NOT NULL,
+    FOREIGN KEY (userId) REFERENCES users(userId),
+    FOREIGN KEY (shopId) REFERENCES shops(id),
+    PRIMARY KEY (userId, shopId)
     )
   `);
 };
@@ -43,7 +63,33 @@ const addUser = db.prepare(
 );
 // 1 is admin, 2 is user, 3 is shop owner
 const addRole = db.prepare(
-  `INSERT INTO roles (roleName, canChangeUsersCredentials, canChangeUsersRoles, canReadUsers, canReadUsersCredentials, canReadUsersSettings, canReadUsersRoles, canAccessAdminPanel, canAccessUserPanel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  `INSERT INTO roles (roleName, canChangeUsersCredentials, canChangeUsersRoles, canReadUsers, canReadUsersCredentials, canReadUsersSettings, canReadUsersRoles, canAccessAdminPanel, canAccessUserPanel, hasGlobalAccessToAllShops) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+);
+
+const addShop = db.prepare(
+  `INSERT INTO shops (shopName, shopDescription, shopAddress, shopOwnerId) VALUES (?, ?, ?, ?)`
+);
+
+const getShopById = db.prepare(`SELECT * FROM shops WHERE id = ?`);
+
+const getShopByOwnerId = db.prepare(
+  `SELECT * FROM shops WHERE shopOwnerId = ?`
+);
+
+const addUserToShop = db.prepare(
+  `INSERT INTO user_shops (userId, shopId) VALUES (?, ?)`
+);
+
+const addShopOwnerToShop = db.prepare(
+  `UPDATE shops SET shopOwnerId = ? WHERE id = ?`
+);
+
+const getUserShops = db.prepare(
+  `SELECT shops.* FROM shops JOIN user_shops ON shops.id = user_shops.shopId WHERE user_shops.userId = ?`
+);
+
+const getShopUsers = db.prepare(
+  `SELECT users.* FROM users JOIN user_shops ON users.id = user_shops.userId WHERE user_shops.shopId = ?`
 );
 
 const getRoleById = db.prepare(`SELECT * FROM roles WHERE id = ?`);
@@ -52,7 +98,7 @@ const getRoleByName = db.prepare(`SELECT * FROM roles WHERE roleName = ?`);
 
 const getUserByUsername = db.prepare(`SELECT * FROM users WHERE username = ?`);
 
-const getUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
+const getUserById = db.prepare(`SELECT * FROM users WHERE userId = ?`);
 
 function updateUser(userId: string, updates: Record<string, any>) {
   const allowedFields = [
@@ -90,7 +136,7 @@ function updateUser(userId: string, updates: Record<string, any>) {
 }
 
 const updateRole = db.prepare(
-  `UPDATE roles SET roleName = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ?, canAccessAdminPanel = ?, canAccessUserPanel = ? WHERE id = ?`
+  `UPDATE roles SET roleName = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ?, canAccessAdminPanel = ?, canAccessUserPanel = ?, hasGlobalAccessToAllShops = ? WHERE id = ?`
 );
 
 const getRoles = db.prepare(`SELECT * FROM roles`);
@@ -112,4 +158,11 @@ export {
   getRoleByName,
   getRoles,
   deleteRole,
+  addShop,
+  getShopById,
+  getShopByOwnerId,
+  addUserToShop,
+  getUserShops,
+  getShopUsers,
+  addShopOwnerToShop,
 };

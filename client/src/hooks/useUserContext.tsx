@@ -27,6 +27,14 @@ export type User = {
   dateOfBirth?: string | null;
 };
 
+export type Shop = {
+  id: number;
+  shopName: string;
+  shopAddress: string;
+  shopDescription: string;
+  shopOwnerId?: number;
+};
+
 export type Role = {
   roleId: number;
   roleName: string;

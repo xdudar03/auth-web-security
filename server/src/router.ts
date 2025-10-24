@@ -28,6 +28,7 @@ import {
 } from "./services/model.ts";
 import { checkHealth, pingHealth } from "./services/health.ts";
 import { HttpError } from "./errors.ts";
+import { getAllShops } from "./services/shops.ts";
 
 function mapHttpStatusToTrpcCode(status: number): TRPCError["code"] {
   if (status >= 500) return "INTERNAL_SERVER_ERROR";
@@ -125,6 +126,7 @@ export const appRouter = router({
           email: z.string().email(),
           password: z.string(),
           roleId: z.union([z.string(), z.number()]),
+          shopIds: z.array(z.number()),
         })
       )
       .mutation(({ input }) => execute(() => registerBiometricUser(input))),
@@ -188,6 +190,9 @@ export const appRouter = router({
       .mutation(({ input }) =>
         execute(() => updateUserById(input.userId, input.updates as any))
       ),
+  }),
+  shops: router({
+    getAllShops: publicProcedure.query(() => execute(() => getAllShops())),
   }),
 });
 

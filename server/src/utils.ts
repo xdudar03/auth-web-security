@@ -27,6 +27,7 @@ export function mapResponseQuery(query: any) {
       canReadUsersRoles: query.canReadUsersRoles,
       canAccessAdminPanel: query.canAccessAdminPanel,
       canAccessUserPanel: query.canAccessUserPanel,
+      hasGlobalAccessToAllShops: query.hasGlobalAccessToAllShops,
     },
   };
   return response;
