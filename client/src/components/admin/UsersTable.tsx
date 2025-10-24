@@ -156,7 +156,7 @@ export default function UsersTable({
   });
   console.log('rowSelection', rowSelection);
   return (
-    <div className="lg:col-span-2 col-span-1 bg-surface rounded-lg h-full overflow-hidden">
+    <div className="lg:col-span-2 col-span-1 bg-surface rounded-lg h-full overflow-y-scroll">
       <div className="flex flex-col h-full min-h-0 box-border">
         <div className="p-2 flex-1 min-h-0 box-border">
           <h3 className="text-lg font-semibold text-center">User List</h3>

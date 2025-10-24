@@ -1,4 +1,10 @@
-import { addUser, addUserToShop, db, updateUser } from "../database.ts";
+import {
+  addUser,
+  addUserToShop,
+  db,
+  getUserShops,
+  updateUser,
+} from "../database.ts";
 import { HttpError } from "../errors.ts";
 import { mapResponseQuery } from "../utils.ts";
 
@@ -77,10 +83,12 @@ export async function registerBiometricUser(input: RegistrationInput) {
   }
 
   const response = mapResponseQuery(query);
+  const shops = getUserShops.all(query?.userId as string);
   return {
     message: "Registration successful",
     user: response.user,
     role: response.role,
+    shops: shops,
   };
 }
 
@@ -100,9 +108,10 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
   if (query.password !== password) {
     throw new HttpError(400, "Invalid password");
   }
+  const shops = getUserShops.all(query?.userId as string);
 
   const response = mapResponseQuery(query);
-  return { user: response.user, role: response.role };
+  return { user: response.user, role: response.role, shops: shops };
 }
 
 export async function changeBiometricEmbedding(input: ChangeEmbeddingInput) {

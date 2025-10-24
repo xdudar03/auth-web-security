@@ -3,7 +3,7 @@ import { Role, Shop, useUser, type User } from '@/hooks/useUserContext';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useEffect, useCallback, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import {
   Form,
@@ -15,17 +15,12 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { useTRPC } from '@/hooks/TrpcContext';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { startAuthentication } from '@simplewebauthn/browser';
+import { useQuery } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
-import type { MultiValue, StylesConfig } from 'react-select';
+import type { MultiValue } from 'react-select';
+import useAuth, { type SuccessData } from '@/hooks/useAuth';
 
-type SuccessData = {
-  user: User;
-  role: Role;
-};
-
-type FormValues = {
+export type FormValues = {
   username: string;
   password: string;
   email: string;
@@ -43,7 +38,7 @@ export default function FormAuth({
   setTab: (tab: string) => void;
   title: string;
 }) {
-  const { user, setUser, setIsAuthenticated, setRole } = useUser();
+  const { user, setUser, setIsAuthenticated, setRole, setShops } = useUser();
   const trpc = useTRPC();
   const router = useRouter();
   const listShopsQuery = useQuery(trpc.shops.getAllShops.queryOptions());
@@ -52,10 +47,17 @@ export default function FormAuth({
     [listShopsQuery.data?.shops]
   );
   console.log('allShops', allShops);
+  const { handleAuthenticate, handlePasswordless, loadShops } = useAuth({
+    handleSuccess: handleSuccess,
+    allShops: allShops,
+    user: user as User,
+    title: title,
+  });
 
   function handleSuccess(data: SuccessData) {
     setUser(data.user);
     setRole(data.role);
+    setShops(data.shops);
     setIsAuthenticated(true);
     if (data.role.canAccessAdminPanel) {
       router.push('/admin-dashboard');
@@ -63,49 +65,6 @@ export default function FormAuth({
       router.push('/dashboard');
     }
   }
-
-  const authenticateMutation = useMutation(
-    trpc.biometric.authenticate.mutationOptions({
-      onSuccess: (data: SuccessData) => {
-        console.log('data', data);
-        handleSuccess(data);
-      },
-      onError: (error) => {
-        console.error('error', error);
-      },
-    })
-  );
-  const registerMutation = useMutation(
-    trpc.biometric.register.mutationOptions({
-      onSuccess: (data: SuccessData) => {
-        console.log('data', data);
-        handleSuccess(data);
-      },
-      onError: (error) => {
-        console.error('error', error);
-      },
-    })
-  );
-
-  const getAuthenticationOptionsMutation = useMutation(
-    trpc.passwordless.getAuthenticationOptions.mutationOptions({
-      onError: (error) => {
-        console.error('error', error);
-      },
-    })
-  );
-
-  const verifyAuthenticationMutation = useMutation(
-    trpc.passwordless.verifyAuthentication.mutationOptions({
-      onSuccess: (data: SuccessData) => {
-        console.log('data', data);
-        handleSuccess(data);
-      },
-      onError: (error) => {
-        console.error('error', error);
-      },
-    })
-  );
 
   const form = useForm<FormValues>({
     defaultValues: {
@@ -117,30 +76,6 @@ export default function FormAuth({
     mode: 'onTouched',
     reValidateMode: 'onChange',
   });
-
-  // Debounced async function to load shops
-  const loadShops = useCallback(
-    async (inputValue: string): Promise<{ label: string; value: number }[]> => {
-      try {
-        // Simulate API call delay for demo
-        await new Promise((resolve) => setTimeout(resolve, 300));
-
-        // Filter shops based on input value (case insensitive)
-        const filteredShops = allShops.filter((shop: Shop) =>
-          shop.shopName.toLowerCase().includes(inputValue.toLowerCase())
-        );
-
-        return filteredShops.map((shop: Shop) => ({
-          label: shop.shopName,
-          value: shop.id,
-        }));
-      } catch (error) {
-        console.error('Error loading shops:', error);
-        return [];
-      }
-    },
-    [allShops]
-  );
 
   useEffect(() => {
     const subscription = form.watch((value) => {
@@ -158,43 +93,16 @@ export default function FormAuth({
   }, [form.watch, setUser]);
 
   const onSubmit: SubmitHandler<FormValues> = async (values) => {
-    console.log('submitting users', { ...user, ...values });
-    if (title === 'Registration') {
-      const id = crypto.randomUUID(); // TODO: generate id from server
-      registerMutation.mutate({
-        username: values.username,
-        email: values.email,
-        password: values.password,
-        userId: id,
-        roleId: 2,
-        shopIds: values.shopIds,
-      });
-    } else {
-      authenticateMutation.mutate({
-        username: values.username,
-        password: values.password,
-      });
-    }
+    handleAuthenticate(values);
   };
 
-  const handlePasswordless = async () => {
+  const onPasswordless = () => {
     const username = form.getValues('username');
     if (!username) {
-      console.error('Username is required for passwordless');
+      alert('Username is required');
       return;
     }
-    try {
-      const options = await getAuthenticationOptionsMutation.mutateAsync({
-        username,
-      });
-      const attResp = await startAuthentication({
-        optionsJSON: options,
-      });
-
-      await verifyAuthenticationMutation.mutateAsync(attResp);
-    } catch (error) {
-      console.error('Passwordless authentication failed', error);
-    }
+    handlePasswordless(username);
   };
 
   const handleBiometric = () => {
@@ -339,7 +247,7 @@ export default function FormAuth({
                 type="button"
                 variant="link"
                 className="shadow-none self-center w-full p-0"
-                onClick={handlePasswordless}
+                onClick={onPasswordless}
               >
                 Use passwordless {title.toLowerCase()}
               </Button>

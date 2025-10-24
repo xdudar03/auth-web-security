@@ -25,7 +25,7 @@ export default function AccountInfoCard() {
           <p className="text-sm text-muted-foreground">
             Full name: {user?.firstName} {user?.lastName}
           </p>
-          <p className="text-sm text-muted-foreground">Email: Email</p>
+          <p className="text-sm text-muted-foreground">Email: {user?.email}</p>
         </CardContent>
       </Card>
     </div>

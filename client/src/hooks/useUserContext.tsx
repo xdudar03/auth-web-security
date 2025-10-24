@@ -9,6 +9,8 @@ export const UserContext = createContext<
       setUser: (user: User | null) => void;
       role: Role | null;
       setRole: (role: Role | null) => void;
+      shops: Shop[] | null;
+      setShops: (shops: Shop[] | null) => void;
     }
   | undefined
 >(undefined);
@@ -52,6 +54,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState<Role | null>(null);
+  const [shops, setShops] = useState<Shop[] | null>(null);
   // console.log('user in context', user);
   return (
     <UserContext.Provider
@@ -62,6 +65,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         setIsAuthenticated,
         role,
         setRole,
+        shops,
+        setShops,
       }}
     >
       {children}

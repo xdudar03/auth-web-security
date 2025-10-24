@@ -1,5 +1,5 @@
 'use client';
-import { useUser, type User as UserType } from '@/hooks/useUserContext';
+import { Shop, useUser, type User as UserType } from '@/hooks/useUserContext';
 import { Check, Pencil, User } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useState } from 'react';
@@ -16,7 +16,7 @@ import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation } from '@tanstack/react-query';
 
 export default function AccountInfo() {
-  const { user, setUser } = useUser();
+  const { user, setUser, shops } = useUser();
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   console.log('user', user);
   const trpc = useTRPC();
@@ -61,6 +61,7 @@ export default function AccountInfo() {
   const form = useForm<FormValues>({
     defaultValues: {
       username: user?.username,
+      shops: shops?.map((shop: Shop) => shop.shopName),
       firstName: user?.firstName ?? '',
       lastName: user?.lastName ?? '',
       email: user?.email,
@@ -78,6 +79,7 @@ export default function AccountInfo() {
 
   type FormValues = {
     username: string;
+    shops: string[];
     firstName: string | null;
     lastName: string | null;
     email: string;
@@ -122,13 +124,22 @@ export default function AccountInfo() {
   return (
     <div className="flex flex-col gap-4 w-full bg-surface rounded-lg p-4">
       <Form {...form}>
-        <form id="account-info-form" onSubmit={form.handleSubmit(handleOnSave)}>
+        <form
+          id="account-info-form"
+          onSubmit={form.handleSubmit(handleOnSave)}
+          className="flex flex-col gap-2"
+        >
           <h1 className="text-2xl font-bold">Account Information</h1>
-          <div className="flex items-center justify-start felx-row gap-2 w-full">
+          <div className="flex items-center justify-start flex-row gap-2 w-full">
             <User className="avatar-lg" />
-            <p className="text-sm text-foreground font-bold">
-              Username {user?.username}
-            </p>
+            <div className="flex items-start justify-start flex-col gap-2">
+              <p className="text-sm text-foreground font-bold">
+                Username: {user?.username}
+              </p>
+              <p className="text-sm text-foreground font-bold">
+                Shops: {shops?.map((shop: Shop) => shop.shopName).join(', ')}
+              </p>
+            </div>
             <Button
               variant="ghost"
               className="ml-auto"

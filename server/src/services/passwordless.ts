@@ -7,7 +7,7 @@ import {
 import { isoUint8Array } from "@simplewebauthn/server/helpers";
 import type { Session } from "express-session";
 import { HttpError } from "../errors.ts";
-import { db, updateUser } from "../database.ts";
+import { db, getUserShops, updateUser } from "../database.ts";
 import { mapResponseQuery } from "../utils.ts";
 
 export type ChallengeSession = Session & {
@@ -153,8 +153,8 @@ export async function verifyRegistration(
       .get(username);
 
     const response = mapResponseQuery(query);
-
-    return { verified, user: response.user, role: response.role };
+    const shops = getUserShops.all(response.user.userId as string);
+    return { verified, user: response.user, role: response.role, shops: shops };
   } catch (error) {
     console.error("Error verifying registration", error);
     if (error instanceof HttpError) {
@@ -288,7 +288,8 @@ export async function verifyAuthentication(
       });
     }
 
-    return { verified, user: response.user, role: response.role };
+    const shops = getUserShops.all(response.user.userId as string);
+    return { verified, user: response.user, role: response.role, shops: shops };
   } catch (error) {
     console.error("Error verifying authentication", error);
     if (error instanceof HttpError) {
