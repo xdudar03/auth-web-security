@@ -17,11 +17,11 @@ export default function Protected({
   fallback,
 }: ProtectedProps) {
   const router = useRouter();
-  const { isAuthenticated, user, role } = useUser();
+  const { isAuthenticated, user, role, isLoading } = useUser();
   console.log('user', user);
   console.log('role', role);
   console.log('user?.roleId', user?.roleId);
-
+  console.log('isLoading', isLoading);
   const isAuthorized = (() => {
     console.log('requiredPermissions', requiredPermissions);
     if (!requiredPermissions || requiredPermissions.length === 0) return true;
@@ -34,10 +34,20 @@ export default function Protected({
   console.log('isAuthorized', isAuthorized);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !isLoading) {
       router.replace('/login');
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, isLoading]);
+
+  if (isLoading) {
+    return (
+      <div className="center-screen">
+        <div className="card">
+          <p className="text-center text-muted">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthorized) {
     return (

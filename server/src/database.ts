@@ -100,6 +100,10 @@ const getShopUsers = db.prepare(
 
 const getRoleById = db.prepare(`SELECT * FROM roles WHERE roleId = ?`);
 
+const getRoleByUserId = db.prepare(
+  `SELECT * FROM roles WHERE roleId = (SELECT roleId FROM users WHERE userId = ?)`
+);
+
 const getRoleByName = db.prepare(`SELECT * FROM roles WHERE roleName = ?`);
 
 const getUserByUsername = db.prepare(`SELECT * FROM users WHERE username = ?`);
@@ -156,6 +160,7 @@ export {
   addUser,
   getUserByUsername,
   getUserById,
+  getRoleByUserId,
   updateUser,
   updateRole,
   deleteUser,

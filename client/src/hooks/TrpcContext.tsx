@@ -1,7 +1,7 @@
 'use client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { createTRPCContext } from '@trpc/tanstack-react-query';
 import type { AppRouter } from '../../../server/src/app';
 import useJwt from './useJwt';

@@ -30,6 +30,8 @@ import { checkHealth, pingHealth } from "./services/health.ts";
 import { HttpError } from "./errors.ts";
 import { getAllShops, getAllUsersFromShop } from "./services/shops.ts";
 import { sendConfirmationEmail } from "./services/email.ts";
+import getUserInfo from "./services/info.ts";
+import type { JwtPayload } from "jsonwebtoken";
 
 function mapHttpStatusToTrpcCode(status: number): TRPCError["code"] {
   if (status >= 500) return "INTERNAL_SERVER_ERROR";
@@ -204,6 +206,11 @@ export const appRouter = router({
     sendConfirmationEmail: publicProcedure
       .input(z.object({ to: z.string() }))
       .mutation(({ input }) => execute(() => sendConfirmationEmail(input.to))),
+  }),
+  info: router({
+    getUserInfo: publicProcedure.query(({ ctx }) =>
+      execute(() => getUserInfo(ctx.user as JwtPayload))
+    ),
   }),
 });
 

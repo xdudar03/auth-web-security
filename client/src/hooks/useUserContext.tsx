@@ -1,16 +1,16 @@
 'use client';
 import { createContext, useContext, useState } from 'react';
+import useJwt from './useJwt';
+import { useTRPC } from './TrpcContext';
+import { useQuery } from '@tanstack/react-query';
 
 export const UserContext = createContext<
   | {
       isAuthenticated: boolean;
-      setIsAuthenticated: (isAuthenticated: boolean) => void;
       user: User | null;
-      setUser: (user: User | null) => void;
       role: Role | null;
-      setRole: (role: Role | null) => void;
       shops: Shop[] | null;
-      setShops: (shops: Shop[] | null) => void;
+      isLoading: boolean;
     }
   | undefined
 >(undefined);
@@ -53,23 +53,28 @@ export type Role = {
 };
 
 export const UserProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [role, setRole] = useState<Role | null>(null);
-  const [shops, setShops] = useState<Shop[] | null>(null);
+  const { jwt } = useJwt();
+  console.log('jwt in user context: ', jwt);
+  const trpc = useTRPC();
+  const getUserInfoQuery = useQuery(trpc.info.getUserInfo.queryOptions());
+  console.log('getUserInfoQuery', getUserInfoQuery);
+
+  const user = getUserInfoQuery.data?.user ?? null;
+  const role = getUserInfoQuery.data?.role ?? null;
+  const shops = getUserInfoQuery.data?.shops ?? null;
+  const isAuthenticated = getUserInfoQuery.isSuccess;
+
+  const isLoading = getUserInfoQuery.isLoading;
 
   // console.log('user in context', user);
   return (
     <UserContext.Provider
       value={{
         user,
-        setUser,
         isAuthenticated,
-        setIsAuthenticated,
         role,
-        setRole,
         shops,
-        setShops,
+        isLoading,
       }}
     >
       {children}

@@ -39,7 +39,7 @@ export default function FormAuth({
   setTab: (tab: string) => void;
   title: string;
 }) {
-  const { user, setUser, setIsAuthenticated, setRole, setShops } = useUser();
+  const { user, isAuthenticated, shops } = useUser();
   const { setJwt } = useJwt();
   const trpc = useTRPC();
   const router = useRouter();
@@ -62,13 +62,9 @@ export default function FormAuth({
   });
 
   function handleSuccess(data: SuccessData) {
-    setUser(data.user);
-    setRole(data.role);
-    setShops(data.shops);
     if (data.jwt) {
       setJwt(data.jwt);
     }
-    setIsAuthenticated(true);
     if (data.role.canAccessAdminPanel) {
       router.push('/admin-dashboard');
     } else if (data.role.canAccessProviderPanel) {
