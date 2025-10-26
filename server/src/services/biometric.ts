@@ -64,7 +64,7 @@ export async function registerBiometricUser(input: RegistrationInput) {
 
   const query = db
     .prepare(
-      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE userId = ?"
+      "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE userId = ?"
     )
     .get(userId);
   console.log("query: ", query);
@@ -73,6 +73,7 @@ export async function registerBiometricUser(input: RegistrationInput) {
       console.log("shopId: ", shopId);
       console.log("query?.userId: ", query?.userId);
       const result = addUserToShop.run(query?.userId as string, shopId);
+
       console.log("result: ", result);
       if (!result) {
         throw new HttpError(400, "Failed to add user to shop");
@@ -82,8 +83,13 @@ export async function registerBiometricUser(input: RegistrationInput) {
     throw new HttpError(400, "No shops provided");
   }
 
-  const response = mapResponseQuery(query);
   const shops = getUserShops.all(query?.userId as string);
+  console.log("shops: ", shops);
+  const response = mapResponseQuery({
+    ...query,
+    shops,
+  });
+  console.log("response: ", response);
   return {
     message: "Registration successful",
     user: response.user,
@@ -97,7 +103,7 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
 
   const query = db
     .prepare(
-      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ? OR email = ? OR phoneNumber = ?"
+      "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE username = ? OR email = ? OR phoneNumber = ?"
     )
     .get(username, username, username);
 
@@ -110,7 +116,10 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
   }
   const shops = getUserShops.all(query?.userId as string);
 
-  const response = mapResponseQuery(query);
+  const response = mapResponseQuery({
+    ...query,
+    shops,
+  });
   return { user: response.user, role: response.role, shops: shops };
 }
 
@@ -128,11 +137,16 @@ export async function changeBiometricEmbedding(input: ChangeEmbeddingInput) {
 
   const updated = db
     .prepare(
-      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ?"
+      "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE username = ?"
     )
     .get(username);
 
-  const response = mapResponseQuery(updated);
+  const shops = getUserShops.all(updated?.userId as string);
+
+  const response = mapResponseQuery({
+    ...updated,
+    shops,
+  });
 
   return {
     message: "Biometric changed successfully",

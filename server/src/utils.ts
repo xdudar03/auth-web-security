@@ -30,13 +30,15 @@ export function mapResponseQuery(query: any) {
       canAccessProviderPanel: query.canAccessProviderPanel,
       hasGlobalAccessToAllShops: query.hasGlobalAccessToAllShops,
     },
-    shop: {
-      shopId: query.shop.id,
-      shopName: query.shop.shopName,
-      shopAddress: query.shop.shopAddress,
-      shopDescription: query.shop.shopDescription,
-      shopOwnerId: query.shop.shopOwnerId,
-    },
+    shops: Array.isArray(query.shops)
+      ? query.shops.map((s: any) => ({
+          shopId: s.shopId,
+          shopName: s.shopName,
+          shopAddress: s.shopAddress,
+          shopDescription: s.shopDescription,
+          shopOwnerId: s.shopOwnerId,
+        }))
+      : [],
   };
   return response;
 }

@@ -63,6 +63,17 @@ export default function useAuth({
       },
     })
   );
+  const sendConfirmationEmailMutation = useMutation(
+    trpc.email.sendConfirmationEmail.mutationOptions({
+      onSuccess: (data) => {
+        console.log('data', data);
+      },
+      onError: (error) => {
+        console.error('error', error);
+      },
+    })
+  );
+
   const loadShops = useCallback(
     async (inputValue: string): Promise<{ label: string; value: number }[]> => {
       try {
@@ -76,7 +87,7 @@ export default function useAuth({
 
         return filteredShops.map((shop: Shop) => ({
           label: shop.shopName,
-          value: shop.id,
+          value: shop.shopId,
         }));
       } catch (error) {
         console.error('Error loading shops:', error);
@@ -89,7 +100,8 @@ export default function useAuth({
     console.log('submitting users', { ...user, ...values });
     if (title === 'Registration') {
       const id = crypto.randomUUID(); // TODO: generate id from server
-      registerMutation.mutate({
+      console.log('id', id);
+      const result = await registerMutation.mutateAsync({
         username: values.username,
         email: values.email,
         password: values.password,
@@ -97,6 +109,17 @@ export default function useAuth({
         roleId: 2,
         shopIds: values.shopIds,
       });
+      console.log('result', result);
+      if (!result) {
+        throw new Error('Failed to register user');
+      }
+      const email = await sendConfirmationEmailMutation.mutateAsync({
+        to: values.email,
+      });
+      console.log('email', email);
+      if (!email) {
+        throw new Error('Failed to send confirmation email');
+      }
     } else {
       authenticateMutation.mutate({
         username: values.username,
@@ -123,9 +146,5 @@ export default function useAuth({
     handleAuthenticate,
     handlePasswordless,
     loadShops,
-    authenticateMutation,
-    registerMutation,
-    getAuthenticationOptionsMutation,
-    verifyAuthenticationMutation,
   };
 }

@@ -30,7 +30,7 @@ export type User = {
 };
 
 export type Shop = {
-  id: number;
+  shopId: number;
   shopName: string;
   shopAddress: string;
   shopDescription: string;

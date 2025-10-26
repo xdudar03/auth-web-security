@@ -17,12 +17,12 @@ const initTable = () => {
       embedding TEXT,
       credentials TEXT,
       roleId INTEGER NOT NULL,
-      FOREIGN KEY (roleId) REFERENCES roles(id)
+      FOREIGN KEY (roleId) REFERENCES roles(roleId)
     )
   `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      roleId INTEGER PRIMARY KEY AUTOINCREMENT,
       roleName TEXT NOT NULL,
       canChangeUsersCredentials BOOLEAN NOT NULL,
       canChangeUsersRoles BOOLEAN NOT NULL,
@@ -38,7 +38,7 @@ const initTable = () => {
   `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS shops (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shopId INTEGER PRIMARY KEY AUTOINCREMENT,
     shopName TEXT NOT NULL,
     shopDescription TEXT,
     shopAddress TEXT,
@@ -51,7 +51,7 @@ const initTable = () => {
     userId TEXT NOT NULL,
     shopId INTEGER NOT NULL,
     FOREIGN KEY (userId) REFERENCES users(userId),
-    FOREIGN KEY (shopId) REFERENCES shops(id),
+    FOREIGN KEY (shopId) REFERENCES shops(shopId),
     PRIMARY KEY (userId, shopId)
     )
   `);
@@ -71,7 +71,7 @@ const addShop = db.prepare(
   `INSERT INTO shops (shopName, shopDescription, shopAddress, shopOwnerId) VALUES (?, ?, ?, ?)`
 );
 
-const getShopById = db.prepare(`SELECT * FROM shops WHERE id = ?`);
+const getShopById = db.prepare(`SELECT * FROM shops WHERE shopId = ?`);
 
 const getShopByOwnerId = db.prepare(
   `SELECT * FROM shops WHERE shopOwnerId = ?`
@@ -82,23 +82,23 @@ const addUserToShop = db.prepare(
 );
 
 const addShopOwnerToShop = db.prepare(
-  `UPDATE shops SET shopOwnerId = ? WHERE id = ?`
+  `UPDATE shops SET shopOwnerId = ? WHERE shopId = ?`
 );
 
 const getUserShops = db.prepare(
-  `SELECT shops.* FROM shops JOIN user_shops ON shops.id = user_shops.shopId WHERE user_shops.userId = ?`
+  `SELECT shops.* FROM shops JOIN user_shops ON shops.shopId = user_shops.shopId WHERE user_shops.userId = ?`
 );
 
 const getShopUsers = db.prepare(
   `SELECT users.*, roles.roleName 
   FROM users 
   INNER JOIN user_shops ON users.userId = user_shops.userId 
-  INNER JOIN roles ON roles.id = users.roleId
-  INNER JOIN shops ON shops.id = user_shops.shopId
+  INNER JOIN roles ON roles.roleId = users.roleId
+  INNER JOIN shops ON shops.shopId = user_shops.shopId
   WHERE user_shops.shopId = ?`
 );
 
-const getRoleById = db.prepare(`SELECT * FROM roles WHERE id = ?`);
+const getRoleById = db.prepare(`SELECT * FROM roles WHERE roleId = ?`);
 
 const getRoleByName = db.prepare(`SELECT * FROM roles WHERE roleName = ?`);
 
@@ -142,14 +142,14 @@ function updateUser(userId: string, updates: Record<string, any>) {
 }
 
 const updateRole = db.prepare(
-  `UPDATE roles SET roleName = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ?, canAccessAdminPanel = ?, canAccessUserPanel = ?, canAccessProviderPanel = ?, hasGlobalAccessToAllShops = ? WHERE id = ?`
+  `UPDATE roles SET roleName = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ?, canAccessAdminPanel = ?, canAccessUserPanel = ?, canAccessProviderPanel = ?, hasGlobalAccessToAllShops = ? WHERE roleId = ?`
 );
 
 const getRoles = db.prepare(`SELECT * FROM roles`);
 
-const deleteUser = db.prepare(`DELETE FROM users WHERE id = ?`);
+const deleteUser = db.prepare(`DELETE FROM users WHERE userId = ?`);
 
-const deleteRole = db.prepare(`DELETE FROM roles WHERE id = ?`);
+const deleteRole = db.prepare(`DELETE FROM roles WHERE roleId = ?`);
 
 export {
   db,

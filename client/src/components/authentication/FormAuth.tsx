@@ -73,7 +73,7 @@ export default function FormAuth({
       username: user?.username ?? '',
       password: user?.password ?? '',
       email: user?.email ?? '',
-      shopIds: allShops.map((shop: Shop) => shop.id),
+      shopIds: allShops.map((shop: Shop) => shop.shopId),
     },
     mode: 'onTouched',
     reValidateMode: 'onChange',
@@ -202,7 +202,7 @@ export default function FormAuth({
                       loadOptions={loadShops}
                       defaultOptions={allShops.map((shop: Shop) => ({
                         label: shop.shopName,
-                        value: shop.id,
+                        value: shop.shopId,
                       }))}
                       isMulti
                       isLoading={listShopsQuery.isLoading}
@@ -220,9 +220,11 @@ export default function FormAuth({
                       value={form
                         .watch('shopIds')
                         ?.map((id: number) => {
-                          const shop = allShops.find((s: Shop) => s.id === id);
+                          const shop = allShops.find(
+                            (s: Shop) => s.shopId === id
+                          );
                           return shop
-                            ? { label: shop.shopName, value: shop.id }
+                            ? { label: shop.shopName, value: shop.shopId }
                             : null;
                         })
                         .filter(Boolean)}

@@ -148,12 +148,15 @@ export async function verifyRegistration(
 
     const query = db
       .prepare(
-        "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ?"
+        "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE username = ?"
       )
       .get(username);
 
-    const response = mapResponseQuery(query);
-    const shops = getUserShops.all(response.user.userId as string);
+    const shops = getUserShops.all(query?.userId as string);
+    const response = mapResponseQuery({
+      ...query,
+      shops,
+    });
     return { verified, user: response.user, role: response.role, shops: shops };
   } catch (error) {
     console.error("Error verifying registration", error);
@@ -229,7 +232,7 @@ export async function verifyAuthentication(
   try {
     const query = db
       .prepare(
-        "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE username = ?"
+        "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE username = ?"
       )
       .get(username);
 
@@ -237,7 +240,11 @@ export async function verifyAuthentication(
       throw new HttpError(404, "User not found");
     }
 
-    const response = mapResponseQuery(query);
+    const shops = getUserShops.all(query?.userId as string);
+    const response = mapResponseQuery({
+      ...query,
+      shops,
+    });
     console.log("response", response);
 
     if (response.user?.credentials) {
@@ -288,8 +295,13 @@ export async function verifyAuthentication(
       });
     }
 
-    const shops = getUserShops.all(response.user.userId as string);
-    return { verified, user: response.user, role: response.role, shops: shops };
+    const userShops = getUserShops.all(response.user.userId as string);
+    return {
+      verified,
+      user: response.user,
+      role: response.role,
+      shops: userShops,
+    };
   } catch (error) {
     console.error("Error verifying authentication", error);
     if (error instanceof HttpError) {

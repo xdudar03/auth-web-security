@@ -1,10 +1,14 @@
-import { db, updateUser } from "../database.ts";
+import { db, getUserShops, updateUser } from "../database.ts";
 import { HttpError } from "../errors.ts";
 import { mapResponseQuery } from "../utils.ts";
 
 export function sanitizeUserSummary(row: any) {
-  const result = mapResponseQuery(row);
-  const { user, role, shop } = result;
+  const shops = getUserShops.all(row?.userId as string);
+  const result = mapResponseQuery({
+    ...row,
+    shops,
+  });
+  const { user, role, shops: mappedShops } = result;
 
   const { embedding, credentials, password, ...safeUser } = user;
   const {
@@ -24,13 +28,13 @@ export function sanitizeUserSummary(row: any) {
   return {
     user: safeUser,
     role: safeRole,
-    shop: shop,
+    shops: mappedShops,
   };
 }
 
 export function listUsers() {
   const usersFromDB = db
-    .prepare("SELECT * FROM users JOIN roles ON roles.id = users.roleId")
+    .prepare("SELECT * FROM users JOIN roles ON roles.roleId = users.roleId")
     .all();
 
   const response = usersFromDB.map((row: any) => sanitizeUserSummary(row));
@@ -43,14 +47,18 @@ export function listUsers() {
 export function getUserWithRoleById(id: string) {
   const row = db
     .prepare(
-      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE users.id = ?"
+      "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE users.userId = ?"
     )
     .get(id);
 
   if (!row) {
     throw new HttpError(404, "User not found");
   }
-  const response = mapResponseQuery(row);
+  const shops = getUserShops.all(row?.userId as string);
+  const response = mapResponseQuery({
+    ...row,
+    shops,
+  });
   return {
     user: response.user,
     role: response.role,
@@ -103,7 +111,7 @@ export function updateUserById(userId: string, updates: UpdateUserInput) {
   updateUser(existing.userId as string, updatesToSave);
   const updatedRow = db
     .prepare(
-      "SELECT * FROM users JOIN roles ON roles.id = users.roleId WHERE users.userId = ?"
+      "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE users.userId = ?"
     )
     .get(userId);
 
@@ -111,7 +119,12 @@ export function updateUserById(userId: string, updates: UpdateUserInput) {
     throw new HttpError(500, "Failed to load updated user");
   }
 
-  const response = mapResponseQuery(updatedRow);
+  const shops = getUserShops.all(updatedRow?.userId as string);
+
+  const response = mapResponseQuery({
+    ...updatedRow,
+    shops,
+  });
 
   return {
     message: "User updated successfully",
