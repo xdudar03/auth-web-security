@@ -157,7 +157,9 @@ export const appRouter = router({
           newPassword: z.string(),
         })
       )
-      .mutation(({ input }) => execute(() => changeBiometricPassword(input))),
+      .mutation(({ input, ctx }) =>
+        execute(() => changeBiometricPassword(input, ctx.user))
+      ),
     confirmPassword: publicProcedure
       .input(z.object({ username: z.string(), password: z.string() }))
       .mutation(({ input }) => execute(() => confirmBiometricPassword(input))),

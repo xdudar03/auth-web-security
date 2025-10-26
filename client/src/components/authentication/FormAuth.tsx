@@ -19,6 +19,7 @@ import { useQuery } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import type { MultiValue } from 'react-select';
 import useAuth, { type SuccessData } from '@/hooks/useAuth';
+import useJwt from '@/hooks/useJwt';
 
 export type FormValues = {
   username: string;
@@ -39,6 +40,7 @@ export default function FormAuth({
   title: string;
 }) {
   const { user, setUser, setIsAuthenticated, setRole, setShops } = useUser();
+  const { setJwt } = useJwt();
   const trpc = useTRPC();
   const router = useRouter();
   const listShopsQuery = useQuery(trpc.shops.getAllShops.queryOptions());
@@ -63,6 +65,9 @@ export default function FormAuth({
     setUser(data.user);
     setRole(data.role);
     setShops(data.shops);
+    if (data.jwt) {
+      setJwt(data.jwt);
+    }
     setIsAuthenticated(true);
     if (data.role.canAccessAdminPanel) {
       router.push('/admin-dashboard');

@@ -57,6 +57,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState<Role | null>(null);
   const [shops, setShops] = useState<Shop[] | null>(null);
+
   // console.log('user in context', user);
   return (
     <UserContext.Provider

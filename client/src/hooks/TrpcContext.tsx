@@ -1,9 +1,10 @@
 'use client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { createTRPCContext } from '@trpc/tanstack-react-query';
 import type { AppRouter } from '../../../server/src/app';
+import useJwt from './useJwt';
 
 export const { TRPCProvider, useTRPC, useTRPCClient } =
   createTRPCContext<AppRouter>();
@@ -33,21 +34,30 @@ function getQueryClient() {
 }
 export function TrpcContext({ children }: { children: React.ReactNode }) {
   const queryClient = getQueryClient();
-  const [trpcClient] = useState(() =>
-    createTRPCClient<AppRouter>({
-      links: [
-        httpBatchLink({
-          url: 'http://localhost:4000/trpc',
-          fetch(url, options) {
-            return globalThis.fetch(url, {
-              ...options,
-              credentials: 'include',
-            });
-          },
-        }),
-      ],
-    })
+  const { jwt } = useJwt();
+  console.log('jwt in trpc context before creating client: ', jwt);
+
+  const trpcClient = useMemo(
+    () =>
+      createTRPCClient<AppRouter>({
+        links: [
+          httpBatchLink({
+            url: 'http://localhost:4000/trpc',
+            headers() {
+              return jwt ? { Authorization: `Bearer ${jwt}` } : {};
+            },
+            fetch(url, options) {
+              return globalThis.fetch(url, {
+                ...options,
+                credentials: 'include',
+              });
+            },
+          }),
+        ],
+      }),
+    [jwt] // Recreate client when JWT changes
   );
+
   return (
     <QueryClientProvider client={queryClient}>
       <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>

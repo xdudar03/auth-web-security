@@ -7,6 +7,8 @@ import {
 } from "../database.ts";
 import { HttpError } from "../errors.ts";
 import { mapResponseQuery } from "../utils.ts";
+import jwt from "jsonwebtoken";
+import { jwtSecret } from "../tools/trpc.ts";
 
 type RegistrationInput = {
   userId: string;
@@ -37,6 +39,10 @@ type ConfirmPasswordInput = {
   username: string;
   password: string;
 };
+
+export function generateJwt(userId: string) {
+  return jwt.sign({ userId }, jwtSecret, { expiresIn: "1h" });
+}
 
 export async function registerBiometricUser(input: RegistrationInput) {
   console.log("registerBiometricUser input: ", input);
@@ -120,7 +126,9 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
     ...query,
     shops,
   });
-  return { user: response.user, role: response.role, shops: shops };
+  const jwt = generateJwt(query?.userId as string);
+  console.log("jwt in authenticateBiometricUser: ", jwt);
+  return { user: response.user, role: response.role, shops: shops, jwt: jwt };
 }
 
 export async function changeBiometricEmbedding(input: ChangeEmbeddingInput) {
@@ -155,8 +163,12 @@ export async function changeBiometricEmbedding(input: ChangeEmbeddingInput) {
   };
 }
 
-export async function changeBiometricPassword(input: ChangePasswordInput) {
+export async function changeBiometricPassword(
+  input: ChangePasswordInput,
+  user: any
+) {
   const { username, oldPassword, newPassword } = input;
+  console.log("user jwt: ", user);
 
   const usersFromDB = db.prepare("SELECT * FROM users").all();
   const query = usersFromDB.find((q: any) => q.username === username);

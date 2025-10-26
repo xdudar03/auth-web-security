@@ -9,6 +9,7 @@ export type SuccessData = {
   user: User;
   role: Role;
   shops: Shop[];
+  jwt?: string;
 };
 
 export default function useAuth({
