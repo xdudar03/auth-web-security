@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { number, z } from "zod";
-import { publicProcedure, router } from "./trpc.ts";
+import { publicProcedure, router } from "./tools/trpc.ts";
 import {
   getAuthenticationOptions,
   getRegistrationOptions,

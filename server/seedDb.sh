@@ -1,4 +1,4 @@
-node src/addRoles.ts
-node src/addUsers.ts
-node src/addShops.ts
+node src/seed/addRoles.ts
+node src/seed/addUsers.ts
+node src/seed/addShops.ts
 npm run dev

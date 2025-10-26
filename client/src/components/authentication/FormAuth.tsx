@@ -1,9 +1,9 @@
 'use client';
-import { Role, Shop, useUser, type User } from '@/hooks/useUserContext';
+import { Shop, useUser, type User } from '@/hooks/useUserContext';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import {
   Form,
@@ -46,8 +46,13 @@ export default function FormAuth({
     () => listShopsQuery.data?.shops ?? [],
     [listShopsQuery.data?.shops]
   );
-  console.log('allShops', allShops);
-  const { handleAuthenticate, handlePasswordless, loadShops } = useAuth({
+  const {
+    handleAuthenticate,
+    handlePasswordless,
+    loadShops,
+    isRegistering,
+    isAuthenticating,
+  } = useAuth({
     handleSuccess: handleSuccess,
     allShops: allShops,
     user: user as User,
@@ -73,26 +78,25 @@ export default function FormAuth({
       username: user?.username ?? '',
       password: user?.password ?? '',
       email: user?.email ?? '',
-      shopIds: allShops.map((shop: Shop) => shop.shopId),
+      shopIds: [],
     },
     mode: 'onTouched',
     reValidateMode: 'onChange',
   });
 
+  // Initialize shopIds once when shops load on Registration
+  const initializedShopsRef = useRef(false);
   useEffect(() => {
-    const subscription = form.watch((value) => {
-      const { username, password, email } = value as FormValues;
-      setUser({
-        ...(user ?? {}),
-        username: username ?? user?.username ?? '',
-        password: password ?? user?.password ?? '',
-        email: email ?? user?.email ?? '',
-        // shopIds: shopIds ?? allShops.map((shop: Shop) => shop.id) ?? [],
-      } as User);
-    });
-    return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.watch, setUser]);
+    if (title !== 'Registration') return;
+    if (initializedShopsRef.current) return;
+    if (!allShops || allShops.length === 0) return;
+    form.setValue(
+      'shopIds',
+      allShops.map((shop: Shop) => shop.shopId),
+      { shouldDirty: false, shouldTouch: false, shouldValidate: false }
+    );
+    initializedShopsRef.current = true;
+  }, [allShops, form, title]);
 
   const onSubmit: SubmitHandler<FormValues> = async (values) => {
     handleAuthenticate(values);
@@ -264,7 +268,11 @@ export default function FormAuth({
             >
               Use biometric {title.toLowerCase()}
             </Button>
-            <Button type="submit" className="w-full p-0">
+            <Button
+              type="submit"
+              className="w-full p-0"
+              disabled={isRegistering || isAuthenticating}
+            >
               {title}
             </Button>
           </div>

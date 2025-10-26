@@ -99,6 +99,12 @@ export default function useAuth({
   const handleAuthenticate = async (values: FormValues) => {
     console.log('submitting users', { ...user, ...values });
     if (title === 'Registration') {
+      if (
+        registerMutation.isPending ||
+        sendConfirmationEmailMutation.isPending
+      ) {
+        return;
+      }
       const id = crypto.randomUUID(); // TODO: generate id from server
       console.log('id', id);
       const result = await registerMutation.mutateAsync({
@@ -121,6 +127,9 @@ export default function useAuth({
         throw new Error('Failed to send confirmation email');
       }
     } else {
+      if (authenticateMutation.isPending) {
+        return;
+      }
       authenticateMutation.mutate({
         username: values.username,
         password: values.password,
@@ -129,6 +138,12 @@ export default function useAuth({
   };
   const handlePasswordless = async (username: string) => {
     try {
+      if (
+        getAuthenticationOptionsMutation.isPending ||
+        verifyAuthenticationMutation.isPending
+      ) {
+        return;
+      }
       const options = await getAuthenticationOptionsMutation.mutateAsync({
         username,
       });
@@ -146,5 +161,10 @@ export default function useAuth({
     handleAuthenticate,
     handlePasswordless,
     loadShops,
+    isRegistering: registerMutation.isPending,
+    isAuthenticating:
+      authenticateMutation.isPending ||
+      getAuthenticationOptionsMutation.isPending ||
+      verifyAuthenticationMutation.isPending,
   };
 }

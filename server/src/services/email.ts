@@ -1,4 +1,4 @@
-import { sendEmail } from "../mailer.ts";
+import { sendEmail } from "../tools/mailer.ts";
 
 // without token for now
 export async function sendConfirmationEmail(to: string) {

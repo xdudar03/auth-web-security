@@ -1,4 +1,4 @@
-import { addUser } from "./database.ts";
+import { addUser } from "../database.ts";
 
 const addUsers = () => {
   addUser.run(

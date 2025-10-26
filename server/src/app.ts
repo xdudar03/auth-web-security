@@ -7,7 +7,7 @@ import biometricRouter from "./routes/biometric.ts";
 import adminRouter from "./routes/admin.ts";
 import modelRouter from "./routes/model.ts";
 import healthRouter from "./routes/health.ts";
-import { createContext } from "./trpc.ts";
+import { createContext } from "./tools/trpc.ts";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import { appRouter } from "./router.ts";
 

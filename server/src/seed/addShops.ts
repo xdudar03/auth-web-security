@@ -1,4 +1,4 @@
-import { addShop, addUserToShop } from "./database.ts";
+import { addShop, addUserToShop } from "../database.ts";
 
 const addHardcodedShops = () => {
   addShop.run("Shop 1", "Shop 1 description", "Shop 1 address", "3");
