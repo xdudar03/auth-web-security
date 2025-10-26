@@ -7,8 +7,8 @@ import {
 import { isoUint8Array } from "@simplewebauthn/server/helpers";
 import type { Session } from "express-session";
 import { HttpError } from "../errors.ts";
-import { db, getUserShops, updateUser } from "../database.ts";
-import { mapResponseQuery } from "../utils.ts";
+import { db, updateUser } from "../database.ts";
+import { generateJwt } from "./biometric.ts";
 
 export type ChallengeSession = Session & {
   challenge?: string;
@@ -146,18 +146,7 @@ export async function verifyRegistration(
       });
     }
 
-    const query = db
-      .prepare(
-        "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE username = ?"
-      )
-      .get(username);
-
-    const shops = getUserShops.all(query?.userId as string);
-    const response = mapResponseQuery({
-      ...query,
-      shops,
-    });
-    return { verified, user: response.user, role: response.role, shops: shops };
+    return { verified };
   } catch (error) {
     console.error("Error verifying registration", error);
     if (error instanceof HttpError) {
@@ -231,35 +220,22 @@ export async function verifyAuthentication(
 
   try {
     const query = db
-      .prepare(
-        "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE username = ?"
-      )
+      .prepare("SELECT * FROM users WHERE username = ?")
       .get(username);
 
     if (!query) {
       throw new HttpError(404, "User not found");
     }
 
-    const shops = getUserShops.all(query?.userId as string);
-    const response = mapResponseQuery({
-      ...query,
-      shops,
-    });
-    console.log("response", response);
-
-    if (response.user?.credentials) {
+    let credentialsArray: any[] = [];
+    if (query.credentials) {
       try {
-        response.user.credentials = JSON.parse(
-          response.user.credentials as string
-        );
+        const parsed = JSON.parse(query.credentials as string);
+        credentialsArray = Array.isArray(parsed) ? parsed : [];
       } catch {
-        response.user.credentials = [];
+        credentialsArray = [];
       }
     }
-
-    const credentialsArray: any[] = Array.isArray(response.user?.credentials)
-      ? (response.user?.credentials as any[])
-      : [];
 
     const authenticator = credentialsArray.find(
       (c: any) => c.credentialID === responseBody.id
@@ -290,18 +266,12 @@ export async function verifyAuthentication(
           ? { ...c, counter: authenticationInfo.newCounter }
           : c
       );
-      updateUser(response.user.userId as string, {
+      updateUser(query.userId as string, {
         credentials: JSON.stringify(updatedCreds),
       });
     }
 
-    const userShops = getUserShops.all(response.user.userId as string);
-    return {
-      verified,
-      user: response.user,
-      role: response.role,
-      shops: userShops,
-    };
+    return { verified, jwt: generateJwt(query.userId as string) };
   } catch (error) {
     console.error("Error verifying authentication", error);
     if (error instanceof HttpError) {

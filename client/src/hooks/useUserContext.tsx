@@ -11,6 +11,7 @@ export const UserContext = createContext<
       role: Role | null;
       shops: Shop[] | null;
       isLoading: boolean;
+      isPending: boolean;
     }
   | undefined
 >(undefined);
@@ -65,6 +66,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = getUserInfoQuery.isSuccess;
 
   const isLoading = getUserInfoQuery.isLoading;
+  const isPending = getUserInfoQuery.isPending;
 
   // console.log('user in context', user);
   return (
@@ -75,6 +77,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         role,
         shops,
         isLoading,
+        isPending,
       }}
     >
       {children}

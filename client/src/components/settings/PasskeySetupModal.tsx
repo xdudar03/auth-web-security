@@ -14,7 +14,7 @@ export default function PasskeySetupModal({
 }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState({ message: '', type: '' });
-  const { user, setUser } = useUser();
+  const { user } = useUser();
   const username = user?.username;
   const [isConfirmed, setIsConfirmed] = useState(false);
   const trpc = useTRPC();
@@ -44,9 +44,7 @@ export default function PasskeySetupModal({
 
   const verifyRegistrationMutation = useMutation(
     trpc.passwordless.verifyRegistration.mutationOptions({
-      onSuccess: (data) => {
-        console.log('data', data);
-        setUser(data.user);
+      onSuccess: () => {
         setMessage({
           message: 'Passkey registered successfully',
           type: 'success',

@@ -1,17 +1,12 @@
 import { useId, useRef, useState } from 'react';
 import Image from 'next/image';
-import { Role, User, useUser } from '@/hooks/useUserContext';
+import { User, useUser } from '@/hooks/useUserContext';
 import { Button } from '@/components/ui/button';
 import cropImage, { grayscaleImage, imageToMatrix } from '@/lib/anonimization';
 import OvalOverlay from './OvalOverlay';
 import { PCAEigenfaces } from '@/lib/pcaEigenface';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation } from '@tanstack/react-query';
-
-type SuccessData = {
-  user: User;
-  role: Role;
-};
 
 type CapturedFrame = {
   data: Uint8ClampedArray;
@@ -36,14 +31,10 @@ export default function BiometricAuth({
   const [capturedImageUrl, setCapturedImageUrl] = useState<string>();
   const [reconstructedImageUrl, setReconstructedImageUrl] = useState<string>();
   const [capturedFrames, setCapturedFrames] = useState<CapturedFrame[]>([]);
-  const { user, setUser, setRole } = useUser();
+  const { user } = useUser();
   const trpc = useTRPC();
   const register = useMutation(
     trpc.biometric.register.mutationOptions({
-      onSuccess: (data: SuccessData) => {
-        console.log('data', data);
-        handleSuccess(data);
-      },
       onError: (error) => {
         console.error('error', error);
       },
@@ -54,10 +45,6 @@ export default function BiometricAuth({
   );
   const changeEmbedding = useMutation(
     trpc.biometric.changeEmbedding.mutationOptions({
-      onSuccess: (data: SuccessData) => {
-        console.log('data', data);
-        handleSuccess(data);
-      },
       onError: (error) => {
         console.error('error', error);
       },
@@ -74,11 +61,6 @@ export default function BiometricAuth({
     new Promise<void>((resolve) => {
       window.setTimeout(resolve, ms);
     });
-
-  function handleSuccess(data: SuccessData) {
-    setUser(data.user);
-    setRole(data.role);
-  }
 
   const createImageUrlFromPixels = (
     pixels: number[],
@@ -148,17 +130,15 @@ export default function BiometricAuth({
       // });
       // setUser(result.user as User);
     } else if (action === 'login') {
-      const result = await authenticate.mutateAsync({
+      await authenticate.mutateAsync({
         username: payload.username,
         password: payload.password,
       });
-      setUser(result.user as User);
     } else if (action === 'change') {
-      const result = await changeEmbedding.mutateAsync({
+      await changeEmbedding.mutateAsync({
         username: payload.username,
         embedding: JSON.stringify(payload.embedding) ?? '',
       });
-      setUser(result.user as User);
     }
   };
 

@@ -6,6 +6,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useUser } from '@/hooks/useUserContext';
 import MobileBottomBar from './MobileBottomBar';
+import useJwt from '@/hooks/useJwt';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function SideBar() {
   // get current path
@@ -13,11 +15,13 @@ export default function SideBar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const { setUser, setIsAuthenticated, role } = useUser();
+  const { user, role } = useUser();
+  const { removeJwt } = useJwt();
+  const queryClient = useQueryClient();
   const handleLogout = () => {
-    setUser(null);
-    setIsAuthenticated(false);
-    router.push('/');
+    removeJwt();
+    queryClient.invalidateQueries();
+    router.replace('/login');
   };
   useEffect(() => {
     setIsActive(pathname.split('/').pop() ?? '');

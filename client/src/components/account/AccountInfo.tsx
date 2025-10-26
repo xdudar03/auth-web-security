@@ -16,15 +16,12 @@ import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation } from '@tanstack/react-query';
 
 export default function AccountInfo() {
-  const { user, setUser, shops } = useUser();
+  const { user, shops } = useUser();
   const [mode, setMode] = useState<'view' | 'edit'>('view');
-  console.log('user', user);
   const trpc = useTRPC();
   const updateUserMutation = useMutation(
     trpc.admin.updateUser.mutationOptions({
-      onSuccess: (data) => {
-        console.log('data', data);
-        setUser(data.user);
+      onSuccess: () => {
         setMode('view');
       },
       onError: (error) => {
@@ -41,16 +38,10 @@ export default function AccountInfo() {
           ...values,
           roleId: user?.roleId,
         } as UserType;
-        console.log('updates', updates);
-        const result = await updateUserMutation.mutateAsync({
+        await updateUserMutation.mutateAsync({
           userId: user?.userId ?? '',
           updates: updates,
         });
-        console.log('result', result);
-        if (result) {
-          setUser(result.user as UserType);
-          console.log('user', user);
-        }
       } catch (error) {
         console.error('Error saving account info', error);
       }

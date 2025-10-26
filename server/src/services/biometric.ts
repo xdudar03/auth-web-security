@@ -1,12 +1,5 @@
-import {
-  addUser,
-  addUserToShop,
-  db,
-  getUserShops,
-  updateUser,
-} from "../database.ts";
+import { addUser, addUserToShop, db, updateUser } from "../database.ts";
 import { HttpError } from "../errors.ts";
-import { mapResponseQuery } from "../utils.ts";
 import jwt from "jsonwebtoken";
 import { jwtSecret } from "../tools/trpc.ts";
 
@@ -89,18 +82,9 @@ export async function registerBiometricUser(input: RegistrationInput) {
     throw new HttpError(400, "No shops provided");
   }
 
-  const shops = getUserShops.all(query?.userId as string);
-  console.log("shops: ", shops);
-  const response = mapResponseQuery({
-    ...query,
-    shops,
-  });
-  console.log("response: ", response);
   return {
     message: "Registration successful",
-    user: response.user,
-    role: response.role,
-    shops: shops,
+    jwt: generateJwt(userId),
   };
 }
 
@@ -120,15 +104,9 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
   if (query.password !== password) {
     throw new HttpError(400, "Invalid password");
   }
-  const shops = getUserShops.all(query?.userId as string);
-
-  const response = mapResponseQuery({
-    ...query,
-    shops,
-  });
   const jwt = generateJwt(query?.userId as string);
   console.log("jwt in authenticateBiometricUser: ", jwt);
-  return { user: response.user, role: response.role, shops: shops, jwt: jwt };
+  return { jwt };
 }
 
 export async function changeBiometricEmbedding(input: ChangeEmbeddingInput) {
@@ -143,23 +121,8 @@ export async function changeBiometricEmbedding(input: ChangeEmbeddingInput) {
 
   updateUser(query.userId as string, { embedding: embedding });
 
-  const updated = db
-    .prepare(
-      "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE username = ?"
-    )
-    .get(username);
-
-  const shops = getUserShops.all(updated?.userId as string);
-
-  const response = mapResponseQuery({
-    ...updated,
-    shops,
-  });
-
   return {
     message: "Biometric changed successfully",
-    user: response.user,
-    role: response.role,
   };
 }
 

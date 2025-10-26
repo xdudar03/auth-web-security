@@ -6,10 +6,7 @@ import { FormValues } from '@/components/authentication/FormAuth';
 import { startAuthentication } from '@simplewebauthn/browser';
 
 export type SuccessData = {
-  user: User;
-  role: Role;
-  shops: Shop[];
-  jwt?: string;
+  jwt: string;
 };
 
 export default function useAuth({
@@ -26,9 +23,9 @@ export default function useAuth({
   const trpc = useTRPC();
   const authenticateMutation = useMutation(
     trpc.biometric.authenticate.mutationOptions({
-      onSuccess: (data) => {
+      onSuccess: (data: { jwt: string }) => {
         console.log('data', data);
-        handleSuccess(data);
+        handleSuccess({ jwt: data.jwt });
       },
       onError: (error) => {
         console.error('error', error);

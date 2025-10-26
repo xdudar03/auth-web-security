@@ -15,7 +15,7 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { useTRPC } from '@/hooks/TrpcContext';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import type { MultiValue } from 'react-select';
 import useAuth, { type SuccessData } from '@/hooks/useAuth';
@@ -39,10 +39,11 @@ export default function FormAuth({
   setTab: (tab: string) => void;
   title: string;
 }) {
-  const { user, isAuthenticated, shops } = useUser();
+  const { user, role, isAuthenticated, shops } = useUser();
   const { setJwt } = useJwt();
   const trpc = useTRPC();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const listShopsQuery = useQuery(trpc.shops.getAllShops.queryOptions());
   const allShops = useMemo(
     () => listShopsQuery.data?.shops ?? [],
@@ -61,13 +62,16 @@ export default function FormAuth({
     title: title,
   });
 
-  function handleSuccess(data: SuccessData) {
-    if (data.jwt) {
-      setJwt(data.jwt);
-    }
-    if (data.role.canAccessAdminPanel) {
+  function handleSuccess({ jwt }: { jwt: string }) {
+    setJwt(jwt);
+    queryClient.invalidateQueries();
+    redirectToDashboard();
+  }
+
+  function redirectToDashboard() {
+    if (role?.canAccessAdminPanel) {
       router.push('/admin-dashboard');
-    } else if (data.role.canAccessProviderPanel) {
+    } else if (role?.canAccessProviderPanel) {
       router.push('/provider-dashboard');
     } else {
       router.push('/dashboard');

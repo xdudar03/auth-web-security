@@ -1,6 +1,7 @@
 import { initTRPC } from "@trpc/server";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import jwt from "jsonwebtoken";
+import { getUserById } from "../database.ts";
 
 export const jwtSecret = process.env.JWT_SECRET || "change-me";
 
@@ -8,6 +9,7 @@ async function createContext({
   req,
   res,
 }: trpcExpress.CreateExpressContextOptions) {
+  let userId = null;
   let user = null;
 
   const authHeader = req.headers.authorization;
@@ -17,7 +19,17 @@ async function createContext({
     try {
       const decoded = jwt.verify(token as string, jwtSecret);
       console.log("decoded: ", decoded);
-      user = decoded;
+
+      // If decoded is an object (JwtPayload), extract userId. If it's a string, ignore.
+      if (
+        typeof decoded === "object" &&
+        decoded !== null &&
+        "userId" in decoded
+      ) {
+        userId = decoded.userId;
+        user = getUserById.get(userId as string);
+      }
+      console.log("user: ", user);
     } catch (error) {
       console.error("Error verifying token", error);
     }

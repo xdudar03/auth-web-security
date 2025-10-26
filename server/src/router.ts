@@ -209,7 +209,7 @@ export const appRouter = router({
   }),
   info: router({
     getUserInfo: publicProcedure.query(({ ctx }) =>
-      execute(() => getUserInfo(ctx.user as JwtPayload))
+      execute(() => getUserInfo((ctx.user as JwtPayload) ?? {}))
     ),
   }),
 });
