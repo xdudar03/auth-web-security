@@ -43,6 +43,7 @@ export default function SecuritySettings() {
       </div>
       {showChangePasswordModal && (
         <ChangePasswordForm
+          mode="change"
           setShowChangePasswordModal={setShowChangePasswordModal}
         />
       )}

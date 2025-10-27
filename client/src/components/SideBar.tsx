@@ -1,5 +1,5 @@
 'use client';
-import { LayoutDashboard, LogOut, Settings, User } from 'lucide-react';
+import { LayoutDashboard, LogOut, Settings, User, Users } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { usePathname, useRouter } from 'next/navigation';
@@ -52,9 +52,9 @@ export default function SideBar() {
             >
               <Link
                 href={
-                  !!role?.canAccessAdminPanel && !!role?.canAccessProviderPanel
+                  role?.canAccessAdminPanel
                     ? '/admin-dashboard'
-                    : !!role?.canAccessProviderPanel
+                    : role?.canAccessProviderPanel
                     ? '/provider-dashboard'
                     : '/dashboard'
                 }
@@ -63,6 +63,20 @@ export default function SideBar() {
                 <LayoutDashboard className="w-6 h-6" />
               </Link>
             </Button>
+            {role?.canAccessAdminPanel ? (
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                className={`icon-btn-zoom ${
+                  isActive === 'users-table' ? 'active' : ''
+                }`}
+              >
+                <Link href="/users-table" aria-label="Users Table">
+                  <Users className="w-6 h-6" />
+                </Link>
+              </Button>
+            ) : null}
             <Button
               asChild
               variant="ghost"

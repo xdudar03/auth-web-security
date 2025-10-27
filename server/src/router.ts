@@ -29,7 +29,11 @@ import {
 import { checkHealth, pingHealth } from "./services/health.ts";
 import { HttpError } from "./errors.ts";
 import { getAllShops, getAllUsersFromShop } from "./services/shops.ts";
-import { sendConfirmationEmail } from "./services/email.ts";
+import {
+  resetPassword,
+  sendEmailWithToken,
+  verifyToken,
+} from "./services/email.ts";
 import getUserInfo from "./services/info.ts";
 import type { JwtPayload } from "jsonwebtoken";
 
@@ -204,8 +208,42 @@ export const appRouter = router({
   }),
   email: router({
     sendConfirmationEmail: publicProcedure
-      .input(z.object({ to: z.string() }))
-      .mutation(({ input }) => execute(() => sendConfirmationEmail(input.to))),
+      .input(z.object({ to: z.string(), userId: z.string() }))
+      .mutation(({ input }) =>
+        execute(() =>
+          sendEmailWithToken(input.to, input.userId, "confirmation")
+        )
+      ),
+    sendResetPasswordEmail: publicProcedure
+      .input(z.object({ to: z.string(), userId: z.string() }))
+      .mutation(({ input }) =>
+        execute(() =>
+          sendEmailWithToken(input.to, input.userId, "reset_password")
+        )
+      ),
+    verifyToken: publicProcedure
+      .input(
+        z.object({
+          token: z.string(),
+          purpose: z.enum(["reset_password", "confirmation"]),
+        })
+      )
+      .mutation(({ input }) =>
+        execute(() => verifyToken(input.token, input.purpose))
+      ),
+    resetPassword: publicProcedure
+      .input(
+        z.object({
+          token: z.string(),
+          newPassword: z.string(),
+          userId: z.string(),
+        })
+      )
+      .mutation(({ input }) =>
+        execute(() =>
+          resetPassword(input.token, input.newPassword, input.userId)
+        )
+      ),
   }),
   info: router({
     getUserInfo: publicProcedure.query(({ ctx }) =>

@@ -14,7 +14,7 @@ export default function AdminDashboard() {
   const trpc = useTRPC();
   const listUsersQuery = useQuery(trpc.admin.listUsers.queryOptions());
   const users = listUsersQuery.data?.users || [];
-  console.log('users', users);
+  console.log('users in admin dashboard: ', users);
   const isLoading = listUsersQuery.isLoading;
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
   const [activeUser, setActiveUser] = useState<User | null>(null);

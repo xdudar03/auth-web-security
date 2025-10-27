@@ -55,6 +55,16 @@ const initTable = () => {
     PRIMARY KEY (userId, shopId)
     )
   `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tokens (
+    token TEXT NOT NULL,
+    expiresAt TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    userId TEXT NOT NULL,
+    FOREIGN KEY (userId) REFERENCES users(userId),
+    PRIMARY KEY (token, userId, purpose)
+    )
+  `);
 };
 
 initTable();
@@ -69,6 +79,18 @@ const addRole = db.prepare(
 
 const addShop = db.prepare(
   `INSERT INTO shops (shopName, shopDescription, shopAddress, shopOwnerId) VALUES (?, ?, ?, ?)`
+);
+
+const addToken = db.prepare(
+  `INSERT INTO tokens (token, expiresAt, purpose, userId) VALUES (?, ?, ?, ?)`
+);
+
+const getToken = db.prepare(
+  `SELECT * FROM tokens WHERE token = ? AND purpose = ?`
+);
+
+const deleteToken = db.prepare(
+  `DELETE FROM tokens WHERE token = ? AND purpose = ?`
 );
 
 const getShopById = db.prepare(`SELECT * FROM shops WHERE shopId = ?`);
@@ -176,4 +198,7 @@ export {
   getUserShops,
   getShopUsers,
   addShopOwnerToShop,
+  addToken,
+  getToken,
+  deleteToken,
 };

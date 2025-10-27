@@ -36,13 +36,23 @@ export default function UserInfoModal({
   const updateUserMutation = useMutation(
     trpc.admin.updateUser.mutationOptions({
       onSuccess: (data) => {
-        console.log('data', data);
+        console.log('updated user data: ', data);
         setActiveUser(data.user);
         setMode('view');
         onUserUpdated?.();
       },
       onError: (error) => {
         console.error('Error updating user', error);
+      },
+    })
+  );
+  const sendResetPasswordEmailMutation = useMutation(
+    trpc.email.sendResetPasswordEmail.mutationOptions({
+      onSuccess: (data) => {
+        console.log('reset password email sent: ', data);
+      },
+      onError: (error) => {
+        console.error('Error sending reset password email', error);
       },
     })
   );
@@ -55,7 +65,6 @@ export default function UserInfoModal({
     lastName: string | null;
     phoneNumber: string | null;
     dateOfBirth: string | null;
-    password?: string;
   };
 
   const form = useForm<FormValues>({
@@ -67,7 +76,6 @@ export default function UserInfoModal({
       lastName: activeUser.lastName ?? null,
       phoneNumber: activeUser.phoneNumber ?? null,
       dateOfBirth: activeUser.dateOfBirth ?? null,
-      password: activeUser.password,
     },
     mode: 'onTouched',
     reValidateMode: 'onChange',
@@ -120,6 +128,18 @@ export default function UserInfoModal({
     />
   );
 
+  const handleSendResetPasswordEmail = async () => {
+    console.log(
+      'sending reset password email to: ',
+      activeUser.email,
+      activeUser.userId
+    );
+    await sendResetPasswordEmailMutation.mutateAsync({
+      to: activeUser.email,
+      userId: activeUser.userId,
+    });
+  };
+
   return (
     <Modal
       title={mode === 'view' ? 'User Info' : 'Edit User'}
@@ -128,9 +148,14 @@ export default function UserInfoModal({
       description={mode === 'view' ? 'User Info' : 'Edit User'}
       footer={
         mode === 'edit' && (
-          <Button type="submit" form="user-info-form">
-            Save
-          </Button>
+          <>
+            <Button type="button" onClick={handleSendResetPasswordEmail}>
+              Send Reset Password Email
+            </Button>
+            <Button type="submit" form="user-info-form">
+              Save
+            </Button>
+          </>
         )
       }
     >
@@ -147,12 +172,6 @@ export default function UserInfoModal({
           {renderInput('lastName', 'Last Name', 'text', mode === 'view')}
           {renderInput('phoneNumber', 'Phone Number', 'tel', mode === 'view')}
           {renderInput('dateOfBirth', 'Date of Birth', 'text', mode === 'view')}
-
-          {role?.canReadUsersCredentials ? (
-            <>
-              {renderInput('password', 'Password', 'password', mode === 'view')}
-            </>
-          ) : null}
         </form>
       </Form>
     </Modal>

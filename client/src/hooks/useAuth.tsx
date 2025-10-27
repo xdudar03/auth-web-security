@@ -14,11 +14,13 @@ export default function useAuth({
   allShops,
   user,
   title,
+  setMessage,
 }: {
   handleSuccess: (data: SuccessData) => void;
   allShops: Shop[];
   user: User;
   title: string;
+  setMessage: (message: { message: string; type: 'success' | 'error' }) => void;
 }) {
   const trpc = useTRPC();
   const authenticateMutation = useMutation(
@@ -36,10 +38,17 @@ export default function useAuth({
     trpc.biometric.register.mutationOptions({
       onSuccess: (data: SuccessData) => {
         console.log('data', data);
-        handleSuccess(data);
+        setMessage({
+          message: 'Please check your email for confirmation',
+          type: 'success',
+        });
       },
       onError: (error) => {
         console.error('error', error);
+        setMessage({
+          message: 'Failed to register user',
+          type: 'error',
+        });
       },
     })
   );
@@ -47,6 +56,10 @@ export default function useAuth({
     trpc.passwordless.getAuthenticationOptions.mutationOptions({
       onError: (error) => {
         console.error('error', error);
+        setMessage({
+          message: 'Failed to get authentication options',
+          type: 'error',
+        });
       },
     })
   );
@@ -58,6 +71,10 @@ export default function useAuth({
       },
       onError: (error) => {
         console.error('error', error);
+        setMessage({
+          message: 'Failed to verify authentication',
+          type: 'error',
+        });
       },
     })
   );
@@ -68,6 +85,10 @@ export default function useAuth({
       },
       onError: (error) => {
         console.error('error', error);
+        setMessage({
+          message: 'Failed to send confirmation email',
+          type: 'error',
+        });
       },
     })
   );
@@ -101,6 +122,10 @@ export default function useAuth({
         registerMutation.isPending ||
         sendConfirmationEmailMutation.isPending
       ) {
+        setMessage({
+          message: 'Please wait for the previous request to complete',
+          type: 'error',
+        });
         return;
       }
       const id = crypto.randomUUID(); // TODO: generate id from server
@@ -115,17 +140,30 @@ export default function useAuth({
       });
       console.log('result', result);
       if (!result) {
-        throw new Error('Failed to register user');
+        setMessage({
+          message: 'Failed to register user',
+          type: 'error',
+        });
+        return;
       }
       const email = await sendConfirmationEmailMutation.mutateAsync({
         to: values.email,
+        userId: id,
       });
       console.log('email', email);
       if (!email) {
-        throw new Error('Failed to send confirmation email');
+        setMessage({
+          message: 'Failed to send confirmation email',
+          type: 'error',
+        });
+        return;
       }
     } else {
       if (authenticateMutation.isPending) {
+        setMessage({
+          message: 'Please wait for the previous request to complete',
+          type: 'error',
+        });
         return;
       }
       authenticateMutation.mutate({
@@ -140,6 +178,10 @@ export default function useAuth({
         getAuthenticationOptionsMutation.isPending ||
         verifyAuthenticationMutation.isPending
       ) {
+        setMessage({
+          message: 'Please wait for the previous request to complete',
+          type: 'error',
+        });
         return;
       }
       const options = await getAuthenticationOptionsMutation.mutateAsync({
@@ -152,6 +194,10 @@ export default function useAuth({
       await verifyAuthenticationMutation.mutateAsync(attResp);
     } catch (error) {
       console.error('Passwordless authentication failed', error);
+      setMessage({
+        message: 'Passwordless authentication failed',
+        type: 'error',
+      });
     }
   };
 

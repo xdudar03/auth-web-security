@@ -15,7 +15,7 @@ export default function ProviderDashboard() {
   const trpc = useTRPC();
   const { shops } = useUser();
   console.log('shops: ', shops);
-  const shopId = shops?.[0]?.id;
+  const shopId = shops?.[0]?.shopId;
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
   const [activeUser, setActiveUser] = useState<User | null>(null);
   const allUsersQuery = useQuery(

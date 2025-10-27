@@ -35,7 +35,7 @@ function getQueryClient() {
 export function TrpcContext({ children }: { children: React.ReactNode }) {
   const queryClient = getQueryClient();
   const { jwt } = useJwt();
-  console.log('jwt in trpc context before creating client: ', jwt);
+  // console.log('jwt in trpc context before creating client: ', jwt);
 
   const trpcClient = useMemo(
     () =>

@@ -89,7 +89,7 @@ const DialogFooter = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex justify-end gap-2', className)} {...props} />
+  <div className={cn('flex justify-between gap-2', className)} {...props} />
 );
 
 export {

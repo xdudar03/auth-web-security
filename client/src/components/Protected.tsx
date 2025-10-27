@@ -21,8 +21,7 @@ export default function Protected({
   console.log('user', user);
   console.log('role', role);
   console.log('user?.roleId', user?.roleId);
-  console.log('isLoading', isLoading);
-  console.log('isPending', isPending);
+
   const isAuthorized = (() => {
     console.log('requiredPermissions', requiredPermissions);
     if (!requiredPermissions || requiredPermissions.length === 0) return true;

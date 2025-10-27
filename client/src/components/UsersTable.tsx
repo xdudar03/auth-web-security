@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-table';
 import { Eye, Pencil, Trash } from 'lucide-react';
 import { useMemo, useState, useCallback } from 'react';
-import { Role, User, useUser } from '@/hooks/useUserContext';
+import { Role, Shop, User, useUser } from '@/hooks/useUserContext';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table as UITable,
@@ -23,6 +23,7 @@ import { Button } from './ui/button';
 export type AdminUserRow = {
   user: User;
   role: Role;
+  shops: Shop[];
 };
 
 export default function UsersTable({
@@ -44,7 +45,7 @@ export default function UsersTable({
       // todo super hack
       // id = id.toString();
       // console.log('id', id);
-      console.log('user: ', user);
+      console.log('user in handleView: ', user);
       if (!role?.canReadUsers) {
         return;
       }
@@ -108,8 +109,16 @@ export default function UsersTable({
         accessorKey: 'user.username',
       },
       {
-        header: 'Shop',
-        accessorKey: 'shop.shopName',
+        header: 'Shops',
+        cell: ({ row }: { row: Row<AdminUserRow> }) => {
+          return (
+            <div className="flex gap-2">
+              {row.original.shops.map((shop) => (
+                <span key={shop.shopId}>{shop.shopName}</span>
+              ))}
+            </div>
+          );
+        },
       },
       {
         header: 'Role',
@@ -159,7 +168,7 @@ export default function UsersTable({
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
   });
-  console.log('rowSelection', rowSelection);
+  // console.log('rowSelection', rowSelection);
   return (
     <div className="lg:col-span-2 col-span-1 bg-surface rounded-lg h-full overflow-y-auto">
       <div className="flex flex-col h-full min-h-0 box-border">

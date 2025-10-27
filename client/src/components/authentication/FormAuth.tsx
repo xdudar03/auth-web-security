@@ -3,7 +3,7 @@ import { Shop, useUser, type User } from '@/hooks/useUserContext';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import {
   Form,
@@ -44,6 +44,7 @@ export default function FormAuth({
   const trpc = useTRPC();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [message, setMessage] = useState({ message: '', type: '' });
   const listShopsQuery = useQuery(trpc.shops.getAllShops.queryOptions());
   const allShops = useMemo(
     () => listShopsQuery.data?.shops ?? [],
@@ -60,6 +61,7 @@ export default function FormAuth({
     allShops: allShops,
     user: user as User,
     title: title,
+    setMessage: setMessage,
   });
 
   function handleSuccess({ jwt }: { jwt: string }) {
@@ -110,7 +112,7 @@ export default function FormAuth({
   const onPasswordless = () => {
     const username = form.getValues('username');
     if (!username) {
-      alert('Username is required');
+      setMessage({ message: 'Username is required', type: 'error' });
       return;
     }
     handlePasswordless(username);
@@ -119,7 +121,7 @@ export default function FormAuth({
   const handleBiometric = () => {
     const username = form.getValues('username');
     if (!username) {
-      alert('Username is required');
+      setMessage({ message: 'Username is required', type: 'error' });
       return;
     }
     setTab('multi-factor');
@@ -283,6 +285,15 @@ export default function FormAuth({
           </div>
         </form>
       </Form>
+      {message.message && (
+        <div
+          className={`${
+            message.type === 'success' ? 'text-green-500' : 'text-red-500'
+          }`}
+        >
+          {message.message}
+        </div>
+      )}
     </div>
   );
 }
