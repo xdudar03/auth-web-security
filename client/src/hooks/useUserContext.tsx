@@ -1,7 +1,8 @@
 'use client';
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext } from 'react';
 import { useTRPC } from './TrpcContext';
 import { useQuery } from '@tanstack/react-query';
+import useJwt from './useJwt';
 
 export const UserContext = createContext<
   | {
@@ -21,7 +22,7 @@ export type User = {
   password: string;
   embedding?: number[] | null;
   roleId?: number | null;
-  credentials?: any | null;
+  credentials?: unknown | null;
   email: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -54,7 +55,11 @@ export type Role = {
 
 export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const trpc = useTRPC();
-  const getUserInfoQuery = useQuery(trpc.info.getUserInfo.queryOptions()); // TODO: dont fetch user info on every page load, only when user is authenticated
+  const { jwt } = useJwt();
+  const getUserInfoQuery = useQuery({
+    ...trpc.info.getUserInfo.queryOptions(),
+    enabled: Boolean(jwt),
+  }); // only fetch when authenticated
   console.log('getUserInfoQuery', getUserInfoQuery);
 
   const user = getUserInfoQuery.data?.user ?? null;

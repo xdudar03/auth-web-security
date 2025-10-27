@@ -15,7 +15,6 @@ export default function PasskeySetupModal({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState({ message: '', type: '' });
   const { user } = useUser();
-  const username = user?.username;
   const [isConfirmed, setIsConfirmed] = useState(false);
   const trpc = useTRPC();
   const confirmPasswordMutation = useMutation(
@@ -66,12 +65,11 @@ export default function PasskeySetupModal({
   const handleSubmit = async () => {
     // const isConfirmed = await confirmPasswordMutation.mutateAsync({
     const confirmed = await confirmPasswordMutation.mutateAsync({
-      username: username as string,
       password: confirmPassword,
     });
     if (confirmed) {
       const options = await getRegistrationOptionsMutation.mutateAsync({
-        username: username as string,
+        username: user?.username as string,
       });
       console.log('options', options);
       const attResp = await startRegistration({ optionsJSON: options });

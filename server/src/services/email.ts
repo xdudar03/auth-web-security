@@ -4,6 +4,7 @@ dotenv.config();
 import crypto from "crypto";
 import { addToken, deleteToken, getToken, updateUser } from "../database.ts";
 import { HttpError } from "../errors.ts";
+import { generateJwt } from "./biometric.ts";
 
 export async function sendEmailWithToken(
   to: string,
@@ -45,7 +46,7 @@ export async function sendEmailWithToken(
   return { message: `Email sent for ${purpose}` };
 }
 
-export function verifyToken(token: string, purpose: string) {
+export async function verifyToken(token: string, purpose: string) {
   const result = getToken.get(token, purpose);
   console.log("result of verifying token for ", purpose, result);
   if (!result) {
@@ -53,6 +54,13 @@ export function verifyToken(token: string, purpose: string) {
   }
   if (result.expiresAt && result.expiresAt < new Date().toISOString()) {
     throw new HttpError(400, "Token expired");
+  }
+  // If it's a confirmation token, issue JWT and delete token
+  if (purpose === "confirmation") {
+    const jwt = generateJwt(String(result.userId));
+    console.log("jwt in verifyToken: ", jwt);
+    deleteToken.run(token, purpose);
+    return { userId: result.userId, jwt: jwt };
   }
   return { userId: result.userId };
 }

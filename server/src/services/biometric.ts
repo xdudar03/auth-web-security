@@ -1,4 +1,10 @@
-import { addUser, addUserToShop, db, updateUser } from "../database.ts";
+import {
+  addUser,
+  addUserToShop,
+  db,
+  updateUser,
+  getUserById,
+} from "../database.ts";
 import { HttpError } from "../errors.ts";
 import jwt from "jsonwebtoken";
 import { jwtSecret } from "../tools/trpc.ts";
@@ -18,18 +24,15 @@ type AuthenticationInput = {
 };
 
 type ChangeEmbeddingInput = {
-  username: string;
   embedding: unknown;
 };
 
 type ChangePasswordInput = {
-  username: string;
   oldPassword: string;
   newPassword: string;
 };
 
 type ConfirmPasswordInput = {
-  username: string;
   password: string;
 };
 
@@ -109,12 +112,18 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
   return { jwt };
 }
 
-export async function changeBiometricEmbedding(input: ChangeEmbeddingInput) {
-  const { username, embedding } = input;
+export async function changeBiometricEmbedding(
+  input: ChangeEmbeddingInput,
+  user: any
+) {
+  const { embedding } = input;
   console.log("embedding: ", embedding);
-  const usersFromDB = db.prepare("SELECT * FROM users").all();
-  const query = usersFromDB.find((q: any) => q.username === username);
 
+  if (!user?.userId) {
+    throw new HttpError(401, "Unauthorized");
+  }
+
+  const query = getUserById.get(user.userId as string);
   if (!query) {
     throw new HttpError(400, "User not found");
   }
@@ -130,11 +139,14 @@ export async function changeBiometricPassword(
   input: ChangePasswordInput,
   user: any
 ) {
-  const { username, oldPassword, newPassword } = input;
+  const { oldPassword, newPassword } = input;
   console.log("user jwt: ", user);
 
-  const usersFromDB = db.prepare("SELECT * FROM users").all();
-  const query = usersFromDB.find((q: any) => q.username === username);
+  if (!user?.userId) {
+    throw new HttpError(401, "Unauthorized");
+  }
+
+  const query = getUserById.get(user.userId as string);
 
   if (!query) {
     throw new HttpError(400, "User not found");
@@ -149,11 +161,17 @@ export async function changeBiometricPassword(
   return { message: "Password changed successfully" };
 }
 
-export async function confirmBiometricPassword(input: ConfirmPasswordInput) {
-  const { username, password } = input;
+export async function confirmBiometricPassword(
+  input: ConfirmPasswordInput,
+  user: any
+) {
+  const { password } = input;
 
-  const usersFromDB = db.prepare("SELECT * FROM users").all();
-  const query = usersFromDB.find((q: any) => q.username === username);
+  if (!user?.userId) {
+    throw new HttpError(401, "Unauthorized");
+  }
+
+  const query = getUserById.get(user.userId as string);
 
   if (!query) {
     throw new HttpError(400, "User not found");

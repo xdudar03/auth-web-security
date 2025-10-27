@@ -141,24 +141,15 @@ export const appRouter = router({
       .input(z.object({ username: z.string(), password: z.string() }))
       .mutation(({ input }) => execute(() => authenticateBiometricUser(input))),
     changeEmbedding: publicProcedure
-      .input(
-        z.object({
-          username: z.string(),
-          embedding: z.string(),
-        })
-      )
-      .mutation(({ input }) =>
+      .input(z.object({ embedding: z.string() }))
+      .mutation(({ input, ctx }) =>
         execute(() =>
-          changeBiometricEmbedding({
-            username: input.username,
-            embedding: input.embedding,
-          })
+          changeBiometricEmbedding({ embedding: input.embedding }, ctx.user)
         )
       ),
     changePassword: publicProcedure
       .input(
         z.object({
-          username: z.string(),
           oldPassword: z.string(),
           newPassword: z.string(),
         })
@@ -167,8 +158,10 @@ export const appRouter = router({
         execute(() => changeBiometricPassword(input, ctx.user))
       ),
     confirmPassword: publicProcedure
-      .input(z.object({ username: z.string(), password: z.string() }))
-      .mutation(({ input }) => execute(() => confirmBiometricPassword(input))),
+      .input(z.object({ password: z.string() }))
+      .mutation(({ input, ctx }) =>
+        execute(() => confirmBiometricPassword(input, ctx.user))
+      ),
   }),
   model: router({
     health: publicProcedure.query(() => execute(() => checkModelHealth())),

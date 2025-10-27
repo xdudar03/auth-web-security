@@ -3,21 +3,24 @@
 import Modal from '../Modal';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '../ui/button';
-import { useUser } from '@/hooks/useUserContext';
+import useJwt from '@/hooks/useJwt';
 
 export default function ConfirmEmailModal({ token }: { token: string | null }) {
   const [message, setMessage] = useState({ message: '', type: '' });
   const trpc = useTRPC();
-  const { user } = useUser();
-  console.log('user', user);
+
   const router = useRouter();
+  const { setJwt } = useJwt();
   const verifyTokenMutation = useMutation(
     trpc.email.verifyToken.mutationOptions({
-      onSuccess: (data: { userId: string }) => {
+      onSuccess: (data) => {
         console.log('token verified: ', data);
+        if (data?.jwt) {
+          setJwt(data.jwt);
+        }
         setMessage({
           message: 'Email confirmed successfully',
           type: 'success',
@@ -32,7 +35,8 @@ export default function ConfirmEmailModal({ token }: { token: string | null }) {
       },
     })
   );
-  const redirectToDashboard = async () => {
+
+  useEffect(() => {
     if (!token) {
       setMessage({
         message: 'Token is required',
@@ -40,20 +44,13 @@ export default function ConfirmEmailModal({ token }: { token: string | null }) {
       });
       return;
     }
-    const data = await verifyTokenMutation.mutateAsync({
+    console.log('token', token);
+    console.log('purpose', 'confirmation');
+    verifyTokenMutation.mutate({
       token: token,
       purpose: 'confirmation',
     });
-    console.log('data', data);
-    if (!data?.userId) {
-      setMessage({
-        message: 'Error verifying token',
-        type: 'error',
-      });
-      return;
-    }
-    router.push('/dashboard'); // TODO: redirect to dashboard based on role
-  };
+  }, []);
   return (
     <Modal
       title="Confirming your email..."
@@ -66,15 +63,17 @@ export default function ConfirmEmailModal({ token }: { token: string | null }) {
       onClose={() => {}}
       footer={
         verifyTokenMutation.isSuccess ? (
-          <Button onClick={redirectToDashboard}>Go to Dashboard</Button>
+          <Button onClick={() => router.push('/dashboard')}>
+            Go to Dashboard
+          </Button>
         ) : null
       }
     >
       {message.message && (
         <div
-          className={`${
+          className={
             message.type === 'success' ? 'text-green-500' : 'text-red-500'
-          }`}
+          }
         >
           {message.message}
         </div>

@@ -1,5 +1,4 @@
 'use client';
-import { useUser } from '@/hooks/useUserContext';
 import { useState } from 'react';
 import Modal from '../Modal';
 import { Label } from '@/components/ui/label';
@@ -21,9 +20,7 @@ export default function ChangePasswordForm({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState({ message: '', type: '' });
-  const { user } = useUser();
   const trpc = useTRPC();
-  const username = user?.username;
 
   const verifyResetPasswordTokenMutation = useMutation(
     trpc.email.verifyToken.mutationOptions({
@@ -123,7 +120,6 @@ export default function ChangePasswordForm({
         return;
       }
       await changePassword.mutateAsync({
-        username: username as string,
         oldPassword,
         newPassword,
       });

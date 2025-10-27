@@ -17,7 +17,6 @@ export default function BiometricAuthModel({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState({ message: '', type: '' });
   const { user } = useUser();
-  const username = user?.username;
   const trpc = useTRPC();
   const confirmPasswordMutation = useMutation(
     trpc.biometric.confirmPassword.mutationOptions({
@@ -34,7 +33,6 @@ export default function BiometricAuthModel({
 
   const handleSubmit = async () => {
     await confirmPasswordMutation.mutateAsync({
-      username: username as string,
       password: confirmPassword,
     });
   };

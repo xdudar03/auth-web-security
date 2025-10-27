@@ -136,7 +136,6 @@ export default function BiometricAuth({
       });
     } else if (action === 'change') {
       await changeEmbedding.mutateAsync({
-        username: payload.username,
         embedding: JSON.stringify(payload.embedding) ?? '',
       });
     }
