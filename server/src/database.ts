@@ -12,11 +12,19 @@ const initTable = () => {
       firstName TEXT,
       lastName TEXT,
       password TEXT NOT NULL,
+      roleId INTEGER NOT NULL,
       phoneNumber TEXT,
       dateOfBirth TEXT,
+      gender TEXT,
+      address TEXT,
+      city TEXT,
+      state TEXT,
+      zip TEXT,
+      country TEXT,
+      spendings TEXT,
+      shoppingHistory TEXT,
       embedding TEXT,
       credentials TEXT,
-      roleId INTEGER NOT NULL,
       FOREIGN KEY (roleId) REFERENCES roles(roleId)
     )
   `);
@@ -65,16 +73,31 @@ const initTable = () => {
     PRIMARY KEY (token, userId, purpose)
     )
   `);
+  // the options for privacy settings are: show nothing, show some of it, show anonymized data and show all data
+  db.exec(` 
+    CREATE TABLE IF NOT EXISTS privacy_settings (
+      privacyId INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId TEXT NOT NULL,
+      field TEXT NOT NULL,             -- e.g. 'email', 'address', 'gender'
+      visibility TEXT NOT NULL,        -- 'hidden' | 'anonymized' | 'visible'
+      FOREIGN KEY (userId) REFERENCES users(userId),
+      UNIQUE (userId, field)
+    )
+    `);
 };
 
 initTable();
 
 const addUser = db.prepare(
-  `INSERT INTO users (userId, username, email, firstName, lastName, password, roleId, phoneNumber, dateOfBirth, embedding, credentials) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` // credentials is a base64 string
+  `INSERT INTO users (userId, username, email, firstName, lastName, password, roleId, phoneNumber, dateOfBirth, gender, address, city, state, zip, country, spendings, shoppingHistory, embedding, credentials) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` // credentials is a base64 string
 );
 // 1 is admin, 2 is user, 3 is shop owner
 const addRole = db.prepare(
   `INSERT INTO roles (roleName, canChangeUsersCredentials, canChangeUsersRoles, canReadUsers, canReadUsersCredentials, canReadUsersSettings, canReadUsersRoles, canAccessAdminPanel, canAccessUserPanel, canAccessProviderPanel, hasGlobalAccessToAllShops) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+);
+
+const addUserPrivacy = db.prepare(
+  `INSERT INTO privacy_settings (userId, field, visibility) VALUES (?, ?, ?)`
 );
 
 const addShop = db.prepare(
@@ -98,6 +121,60 @@ const getShopById = db.prepare(`SELECT * FROM shops WHERE shopId = ?`);
 const getShopByOwnerId = db.prepare(
   `SELECT * FROM shops WHERE shopOwnerId = ?`
 );
+
+const getUserPrivacyByUserId = db.prepare(
+  `SELECT * FROM privacy_settings WHERE userId = ?`
+);
+
+function updateUserPrivacy(userId: string, updates: Record<string, any>) {
+  const allowedFields = [
+    "showFirstName",
+    "anonymizeFirstName",
+    "showLastName",
+    "anonymizeLastName",
+    "showEmail",
+    "anonymizeEmail",
+    "showPhoneNumber",
+    "anonymizePhoneNumber",
+    "showDateOfBirth",
+    "anonymizeDateOfBirth",
+    "showGender",
+    "anonymizeGender",
+    "showAddress",
+    "anonymizeAddress",
+    "showCity",
+    "anonymizeCity",
+    "showState",
+    "anonymizeState",
+    "showZip",
+    "anonymizeZip",
+    "showCountry",
+    "anonymizeCountry",
+    "showSpendings",
+    "anonymizeSpendings",
+    "showShoppingHistory",
+    "anonymizeShoppingHistory",
+    "showShops",
+    "anonymizeShops",
+  ];
+
+  const setClauses = [];
+  const values = [];
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (allowedFields.includes(key) && value !== undefined) {
+      setClauses.push(`${key} = ?`);
+      values.push(value);
+    }
+  }
+  if (setClauses.length === 0) {
+    throw new Error("No valid fields provided for update");
+  }
+  const sql = `UPDATE privacy_settings SET ${setClauses.join(", ")} WHERE userId = ?`;
+  values.push(userId);
+  const stmt = db.prepare(sql);
+  return stmt.run(...values);
+}
 
 const addUserToShop = db.prepare(
   `INSERT INTO user_shops (userId, shopId) VALUES (?, ?)`
@@ -144,6 +221,14 @@ function updateUser(userId: string, updates: Record<string, any>) {
     "embedding",
     "credentials", // credentials is a base64 string
     "roleId",
+    "gender",
+    "address",
+    "city",
+    "state",
+    "zip",
+    "country",
+    "spendings",
+    "shoppingHistory",
   ];
 
   const setClauses = [];
@@ -201,4 +286,7 @@ export {
   addToken,
   getToken,
   deleteToken,
+  addUserPrivacy,
+  getUserPrivacyByUserId,
+  updateUserPrivacy,
 };
