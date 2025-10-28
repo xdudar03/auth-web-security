@@ -4,16 +4,21 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import useJwt from '@/hooks/useJwt';
 
 export default function MobileBottomBar() {
   const [isActive, setIsActive] = useState('');
   const pathname = usePathname();
   const router = useRouter();
 
-  const { setUser, setIsAuthenticated, role } = useUser();
+  const { role } = useUser();
+  const queryClient = useQueryClient();
+  const { removeJwt } = useJwt();
   const handleLogout = () => {
-    setUser(null);
-    setIsAuthenticated(false);
+    // Clear cache and token to avoid stale flashes
+    queryClient.clear();
+    removeJwt();
     router.push('/');
   };
   useEffect(() => {

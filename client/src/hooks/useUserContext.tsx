@@ -59,6 +59,9 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const getUserInfoQuery = useQuery({
     ...trpc.info.getUserInfo.queryOptions(),
     enabled: Boolean(jwt),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   }); // only fetch when authenticated
   console.log('getUserInfoQuery', getUserInfoQuery);
 

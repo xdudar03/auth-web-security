@@ -1,5 +1,9 @@
 'use client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import { useMemo } from 'react';
 import { createTRPCContext } from '@trpc/tanstack-react-query';

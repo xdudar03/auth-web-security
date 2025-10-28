@@ -19,8 +19,9 @@ export default function SideBar() {
   const { removeJwt } = useJwt();
   const queryClient = useQueryClient();
   const handleLogout = () => {
+    // Clear all cached queries to prevent showing stale user from previous session
+    queryClient.clear();
     removeJwt();
-    queryClient.invalidateQueries();
     router.replace('/login');
   };
   useEffect(() => {

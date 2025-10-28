@@ -3,7 +3,7 @@ import { Shop, useUser, type User } from '@/hooks/useUserContext';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import {
   Form,
@@ -18,7 +18,7 @@ import { useTRPC } from '@/hooks/TrpcContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import type { MultiValue } from 'react-select';
-import useAuth, { type SuccessData } from '@/hooks/useAuth';
+import useAuth from '@/hooks/useAuth';
 import useJwt from '@/hooks/useJwt';
 
 export type FormValues = {
@@ -39,7 +39,7 @@ export default function FormAuth({
   setTab: (tab: string) => void;
   title: string;
 }) {
-  const { user, role, isAuthenticated, shops } = useUser();
+  const { user, role, isAuthenticated } = useUser();
   const { setJwt } = useJwt();
   const trpc = useTRPC();
   const router = useRouter();
@@ -65,12 +65,13 @@ export default function FormAuth({
   });
 
   function handleSuccess({ jwt }: { jwt: string }) {
+    // Clear cache before setting new token to avoid stale data from previous session
+    queryClient.clear();
     setJwt(jwt);
-    queryClient.invalidateQueries();
-    redirectToDashboard();
   }
 
-  function redirectToDashboard() {
+  const redirectToDashboard = useCallback(() => {
+    console.log('redirecting to dashboard', role);
     if (role?.canAccessAdminPanel) {
       router.push('/admin-dashboard');
     } else if (role?.canAccessProviderPanel) {
@@ -78,7 +79,14 @@ export default function FormAuth({
     } else {
       router.push('/dashboard');
     }
-  }
+  }, [role, router]);
+
+  // After JWT is set, wait for user info (including role) to load, then redirect
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (!role) return;
+    redirectToDashboard();
+  }, [isAuthenticated, role, redirectToDashboard]);
 
   const form = useForm<FormValues>({
     defaultValues: {
