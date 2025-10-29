@@ -1,6 +1,11 @@
 'use client';
-import { Shop, useUser, type User as UserType } from '@/hooks/useUserContext';
-import { Check, Pencil, User } from 'lucide-react';
+import {
+  PrivacySettings,
+  Shop,
+  useUser,
+  type User as UserType,
+} from '@/hooks/useUserContext';
+import { Check, Eye, EyeClosed, HatGlasses, Pencil, User } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useState } from 'react';
 import { Button } from '../ui/button';
@@ -13,19 +18,38 @@ import {
 } from '../ui/form';
 import { useForm } from 'react-hook-form';
 import { useTRPC } from '@/hooks/TrpcContext';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 
 export default function AccountInfo() {
-  const { user, shops } = useUser();
+  const { user, shops, privacy } = useUser();
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const updateUserMutation = useMutation(
     trpc.admin.updateUser.mutationOptions({
       onSuccess: () => {
         setMode('view');
+        // Refresh user info so context reflects latest data immediately
+        queryClient.invalidateQueries({
+          queryKey: trpc.info.getUserInfo.queryOptions().queryKey,
+        });
       },
       onError: (error) => {
         console.error('Error updating user', error);
+      },
+    })
+  );
+  const toggleUserPrivacyMutation = useMutation(
+    trpc.privacy.toggleUserPrivacy.mutationOptions({
+      onSuccess: (data) => {
+        console.log(`this fiels ${data.field} is now ${data.visibility}`);
+        queryClient.invalidateQueries({
+          queryKey: trpc.info.getUserInfo.queryOptions().queryKey,
+        });
+      },
+      onError: (error) => {
+        console.error('Error toggling user privacy', error);
       },
     })
   );
@@ -58,11 +82,13 @@ export default function AccountInfo() {
       email: user?.email,
       phoneNumber: user?.phoneNumber ?? '',
       dateOfBirth: user?.dateOfBirth ?? '',
-      // gender: '',
-      // country: '',
-      // city: '',
-      // address: '',
-      // zipCode: '',
+      gender: user?.gender ?? '',
+      country: user?.country ?? '',
+      city: user?.city ?? '',
+      address: user?.address ?? '',
+      zipCode: user?.zip ?? '',
+      spendings: user?.spendings ?? '',
+      shoppingHistory: user?.shoppingHistory ?? '',
     },
     mode: 'onTouched',
     reValidateMode: 'onChange',
@@ -81,7 +107,22 @@ export default function AccountInfo() {
     city: string | null;
     address: string | null;
     zipCode: string | null;
+    spendings: string | null;
+    shoppingHistory: string | null;
   };
+
+  const handleToggleVisibility =
+    (name: string, visibility: 'hidden' | 'anonymized' | 'visible') =>
+    async () => {
+      try {
+        await toggleUserPrivacyMutation.mutateAsync({
+          field: name,
+          visibility: visibility,
+        });
+      } catch (error) {
+        console.error('Error toggling user privacy', error);
+      }
+    };
 
   const input = (
     label: string,
@@ -96,14 +137,64 @@ export default function AccountInfo() {
         render={({ field }) => (
           <FormItem>
             <FormControl>
-              <Input
-                {...field}
-                type={type}
-                placeholder={label}
-                value={field.value ?? ''}
-                disabled={disabled}
-                // onChange={field.onChange}
-              />
+              <div className="flex items-center justify-start flex-row gap-2">
+                <Input
+                  {...field}
+                  type={type}
+                  placeholder={label}
+                  value={field.value ?? ''}
+                  disabled={disabled}
+                />
+                {privacy?.find((p: PrivacySettings) => p.field === name)
+                  ?.visibility === 'visible' ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleToggleVisibility(name, 'hidden')}
+                      >
+                        <Eye />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Hide this field</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleToggleVisibility(name, 'visible')}
+                      >
+                        <EyeClosed />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Show this field</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleToggleVisibility(name, 'anonymized')}
+                    >
+                      <HatGlasses />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Anonymize this field</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </FormControl>
             <FormMessage />
           </FormItem>

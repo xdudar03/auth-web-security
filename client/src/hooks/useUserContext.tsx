@@ -10,6 +10,7 @@ export const UserContext = createContext<
       user: User | null;
       role: Role | null;
       shops: Shop[] | null;
+      privacy: PrivacySettings[] | null;
       isLoading: boolean;
       isPending: boolean;
     }
@@ -28,6 +29,14 @@ export type User = {
   lastName?: string | null;
   phoneNumber?: string | null;
   dateOfBirth?: string | null;
+  gender?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  country?: string | null;
+  spendings?: string | null;
+  shoppingHistory?: string | null;
 };
 
 export type Shop = {
@@ -53,6 +62,13 @@ export type Role = {
   hasGlobalAccessToAllShops: boolean;
 };
 
+export type Visibility = 'hidden' | 'anonymized' | 'visible';
+
+export type PrivacySettings = {
+  field: string;
+  visibility: Visibility;
+};
+
 export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const trpc = useTRPC();
   const { jwt } = useJwt();
@@ -68,6 +84,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const user = getUserInfoQuery.data?.user ?? null;
   const role = getUserInfoQuery.data?.role ?? null;
   const shops = getUserInfoQuery.data?.shops ?? null;
+  const privacy = getUserInfoQuery.data?.privacy ?? null;
   const isAuthenticated = getUserInfoQuery.isSuccess;
 
   const isLoading = getUserInfoQuery.isLoading;
@@ -81,6 +98,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         isAuthenticated,
         role,
         shops,
+        privacy,
         isLoading,
         isPending,
       }}

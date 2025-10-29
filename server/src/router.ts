@@ -36,6 +36,7 @@ import {
 } from "./services/email.ts";
 import getUserInfo from "./services/info.ts";
 import type { JwtPayload } from "jsonwebtoken";
+import toggleUserPrivacy from "./services/privacy.ts";
 
 function mapHttpStatusToTrpcCode(status: number): TRPCError["code"] {
   if (status >= 500) return "INTERNAL_SERVER_ERROR";
@@ -242,6 +243,24 @@ export const appRouter = router({
     getUserInfo: publicProcedure.query(({ ctx }) =>
       execute(() => getUserInfo((ctx.user as JwtPayload) ?? {}))
     ),
+  }),
+  privacy: router({
+    toggleUserPrivacy: publicProcedure
+      .input(
+        z.object({
+          field: z.string(),
+          visibility: z.enum(["hidden", "anonymized", "visible"]),
+        })
+      )
+      .mutation(({ input, ctx }) =>
+        execute(() =>
+          toggleUserPrivacy(
+            ctx.user?.userId as string,
+            input.field,
+            input.visibility
+          )
+        )
+      ),
   }),
 });
 

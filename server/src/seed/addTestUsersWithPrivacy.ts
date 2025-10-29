@@ -1,4 +1,4 @@
-import { addUser, addUserPrivacy } from "../database.ts";
+import { addUser, addUserPrivacy, addUserToShop } from "../database.ts";
 
 type UserRecord = {
   userId: string;
@@ -101,6 +101,7 @@ function seedUsersWithPrivacy() {
     "u101",
     Object.fromEntries(FIELDS.map((f) => [f, "hidden"])) as any
   );
+  addUserToShop.run("u101", 3);
 
   // 2) All anonymized
   insertUser({
@@ -126,6 +127,7 @@ function seedUsersWithPrivacy() {
     "u102",
     Object.fromEntries(FIELDS.map((f) => [f, "anonymized"])) as any
   );
+  addUserToShop.run("u102", 1);
 
   // 3) All visible
   insertUser({
@@ -154,6 +156,8 @@ function seedUsersWithPrivacy() {
     "u103",
     Object.fromEntries(FIELDS.map((f) => [f, "visible"])) as any
   );
+  addUserToShop.run("u103", 2);
+  addUserToShop.run("u103", 3);
 
   // 4) Mixed A: contact visible, demographics anonymized, finances hidden
   insertUser({
@@ -191,6 +195,8 @@ function seedUsersWithPrivacy() {
     shoppingHistory: "hidden",
     shops: "hidden",
   });
+  addUserToShop.run("u104", 1);
+  addUserToShop.run("u104", 2);
 
   // 5) Mixed B: profile hidden, location visible, purchase anonymized
   insertUser({
@@ -231,6 +237,9 @@ function seedUsersWithPrivacy() {
     shoppingHistory: "anonymized",
     shops: "anonymized",
   });
+  addUserToShop.run("u105", 1);
+  addUserToShop.run("u105", 2);
+  addUserToShop.run("u105", 3);
 }
 
 seedUsersWithPrivacy();

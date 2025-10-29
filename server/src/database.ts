@@ -123,58 +123,12 @@ const getShopByOwnerId = db.prepare(
 );
 
 const getUserPrivacyByUserId = db.prepare(
-  `SELECT * FROM privacy_settings WHERE userId = ?`
+  `SELECT field, visibility FROM privacy_settings WHERE userId = ?`
 );
 
-function updateUserPrivacy(userId: string, updates: Record<string, any>) {
-  const allowedFields = [
-    "showFirstName",
-    "anonymizeFirstName",
-    "showLastName",
-    "anonymizeLastName",
-    "showEmail",
-    "anonymizeEmail",
-    "showPhoneNumber",
-    "anonymizePhoneNumber",
-    "showDateOfBirth",
-    "anonymizeDateOfBirth",
-    "showGender",
-    "anonymizeGender",
-    "showAddress",
-    "anonymizeAddress",
-    "showCity",
-    "anonymizeCity",
-    "showState",
-    "anonymizeState",
-    "showZip",
-    "anonymizeZip",
-    "showCountry",
-    "anonymizeCountry",
-    "showSpendings",
-    "anonymizeSpendings",
-    "showShoppingHistory",
-    "anonymizeShoppingHistory",
-    "showShops",
-    "anonymizeShops",
-  ];
-
-  const setClauses = [];
-  const values = [];
-
-  for (const [key, value] of Object.entries(updates)) {
-    if (allowedFields.includes(key) && value !== undefined) {
-      setClauses.push(`${key} = ?`);
-      values.push(value);
-    }
-  }
-  if (setClauses.length === 0) {
-    throw new Error("No valid fields provided for update");
-  }
-  const sql = `UPDATE privacy_settings SET ${setClauses.join(", ")} WHERE userId = ?`;
-  values.push(userId);
-  const stmt = db.prepare(sql);
-  return stmt.run(...values);
-}
+const updateUserPrivacy = db.prepare(
+  `UPDATE privacy_settings SET visibility = ? WHERE userId = ? AND field = ?`
+);
 
 const addUserToShop = db.prepare(
   `INSERT INTO user_shops (userId, shopId) VALUES (?, ?)`
