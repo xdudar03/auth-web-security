@@ -2,9 +2,12 @@ import { useId, useRef, useState } from 'react';
 import Image from 'next/image';
 import { User, useUser } from '@/hooks/useUserContext';
 import { Button } from '@/components/ui/button';
-import cropImage, { grayscaleImage, imageToMatrix } from '@/lib/anonimization';
+import cropImage, {
+  grayscaleImage,
+  imageToMatrix,
+} from '@/lib/anonymization/anonimizationImage';
 import OvalOverlay from './OvalOverlay';
-import { PCAEigenfaces } from '@/lib/pcaEigenface';
+import { PCAEigenfaces } from '@/lib/anonymization/pcaEigenface';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation } from '@tanstack/react-query';
 

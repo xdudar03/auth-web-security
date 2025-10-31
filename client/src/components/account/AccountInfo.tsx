@@ -20,6 +20,13 @@ import { useForm } from 'react-hook-form';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import {
+  ageGeneralization,
+  masking,
+  namePseudonymization,
+  suppression,
+} from '@/lib/anonymization/anonimizationData';
+import { faker } from '@faker-js/faker';
 
 export default function AccountInfo() {
   const { user, shops, privacy } = useUser();
@@ -86,7 +93,7 @@ export default function AccountInfo() {
       country: user?.country ?? '',
       city: user?.city ?? '',
       address: user?.address ?? '',
-      zipCode: user?.zip ?? '',
+      zip: user?.zip ?? '',
       spendings: user?.spendings ?? '',
       shoppingHistory: user?.shoppingHistory ?? '',
     },
@@ -106,7 +113,7 @@ export default function AccountInfo() {
     country: string | null;
     city: string | null;
     address: string | null;
-    zipCode: string | null;
+    zip: string | null;
     spendings: string | null;
     shoppingHistory: string | null;
   };
@@ -121,6 +128,50 @@ export default function AccountInfo() {
         });
       } catch (error) {
         console.error('Error toggling user privacy', error);
+      }
+      if (visibility === 'anonymized') {
+        switch (name) {
+          case 'firstName':
+            form.setValue('firstName', namePseudonymization().firstName);
+            break;
+          case 'lastName':
+            form.setValue('lastName', namePseudonymization().lastName);
+            break;
+          case 'email':
+            form.setValue('email', masking(form.getValues('email')));
+            break;
+          case 'dateOfBirth':
+            form.setValue(
+              'dateOfBirth',
+              ageGeneralization(form.getValues('dateOfBirth') ?? '')
+            );
+            break;
+          case 'phoneNumber':
+            form.setValue(
+              'phoneNumber',
+              masking(form.getValues('phoneNumber') ?? '')
+            );
+            break;
+          case 'zip':
+            form.setValue('zip', masking(form.getValues('zip') ?? ''));
+            break;
+          case 'dateOfBirth':
+            // form.setValue('dateOfBirth', ageGeneralization(form.getValues('dateOfBirth') ?? ''));
+            form.setValue('dateOfBirth', faker.date.birthdate().toISOString());
+            break;
+          case 'gender':
+            form.setValue('gender', suppression());
+            break;
+          case 'country':
+            form.setValue('country', suppression());
+            break;
+          case 'city':
+            form.setValue('city', suppression());
+            break;
+          case 'address':
+            form.setValue('address', suppression());
+            break;
+        }
       }
     };
 
@@ -245,7 +296,7 @@ export default function AccountInfo() {
             {input('Country', mode === 'view', 'country', 'text')}
             {input('City', mode === 'view', 'city', 'text')}
             {input('Address', mode === 'view', 'address', 'text')}
-            {input('Zip Code', mode === 'view', 'zipCode', 'text')}
+            {input('Zip Code', mode === 'view', 'zip', 'text')}
           </div>
         </form>
       </Form>

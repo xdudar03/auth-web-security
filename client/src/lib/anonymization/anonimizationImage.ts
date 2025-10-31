@@ -1,6 +1,3 @@
-import { PCA } from 'ml-pca';
-import { Matrix } from 'ml-matrix';
-
 export default function cropImage(
   canvas: HTMLCanvasElement,
   videoRect: DOMRect,
