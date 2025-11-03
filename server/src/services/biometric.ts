@@ -8,6 +8,7 @@ import {
 import { HttpError } from "../errors.ts";
 import jwt from "jsonwebtoken";
 import { jwtSecret } from "../tools/trpc.ts";
+import bcrypt from "bcryptjs";
 
 type RegistrationInput = {
   userId: string;
@@ -50,13 +51,16 @@ export async function registerBiometricUser(input: RegistrationInput) {
     throw new HttpError(400, "User already exists");
   }
 
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
   addUser.run(
     userId,
     username,
     email,
     "",
     "",
-    password,
+    hashedPassword,
     typeof roleId === "string" ? Number(roleId) : roleId,
     "",
     "",
@@ -104,7 +108,11 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
     throw new HttpError(400, "User not found");
   }
 
-  if (query.password !== password) {
+  const isPasswordValid = await bcrypt.compare(
+    password,
+    query.password as string
+  );
+  if (!isPasswordValid) {
     throw new HttpError(400, "Invalid password");
   }
   const jwt = generateJwt(query?.userId as string);
@@ -177,7 +185,11 @@ export async function confirmBiometricPassword(
     throw new HttpError(400, "User not found");
   }
 
-  if (query.password !== password) {
+  const isPasswordValid = await bcrypt.compare(
+    password,
+    query.password as string
+  );
+  if (!isPasswordValid) {
     throw new HttpError(400, "Invalid password");
   }
 

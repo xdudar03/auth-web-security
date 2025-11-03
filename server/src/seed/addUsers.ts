@@ -1,13 +1,16 @@
 import { addUser } from "../database.ts";
+import bcrypt from "bcryptjs";
 
 const addUsers = () => {
+  const salt = bcrypt.genSaltSync(10);
+
   addUser.run(
     "1", // userId
     "admin", // username
     "admin@example.com", // email
     "admin", // firstName
     "admin", // lastName
-    "admin", // password
+    bcrypt.hashSync("admin", salt), // password
     1 // roleId
   );
   addUser.run(
@@ -16,7 +19,7 @@ const addUsers = () => {
     "user@example.com",
     "user", // firstName
     "user", // lastName
-    "user", // password
+    bcrypt.hashSync("user", salt), // password
     2 // roleId
   );
   addUser.run(
@@ -25,7 +28,7 @@ const addUsers = () => {
     "shop owner1@example.com",
     "shop owner 1", // firstName
     "shop owner 1", // lastName
-    "shop owner 1", // password
+    bcrypt.hashSync("shop owner 1", salt), // password
     3 // roleId
   );
   addUser.run(
@@ -34,7 +37,7 @@ const addUsers = () => {
     "shop owner2@example.com",
     "shop owner 2", // firstName
     "shop owner 2", // lastName
-    "shop owner 2", // password
+    bcrypt.hashSync("shop owner 2", salt), // password
     3 // roleId
   );
   addUser.run(
@@ -43,7 +46,7 @@ const addUsers = () => {
     "shop owner3@example.com",
     "shop owner 3", // firstName
     "shop owner 3", // lastName
-    "shop owner 3", // password
+    bcrypt.hashSync("shop owner 3", salt), // password
     3 // roleId
   );
 };

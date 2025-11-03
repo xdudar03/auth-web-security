@@ -1,4 +1,5 @@
 import { addUser, addUserPrivacy, addUserToShop } from "../database.ts";
+import bcrypt from "bcryptjs";
 
 type UserRecord = {
   userId: string;
@@ -76,6 +77,7 @@ function setPrivacy(
 }
 
 function seedUsersWithPrivacy() {
+  const salt = bcrypt.genSaltSync(10);
   // 1) All hidden
   insertUser({
     userId: "u101",
@@ -83,7 +85,7 @@ function seedUsersWithPrivacy() {
     email: "hidden_all@example.com",
     firstName: "Hidden",
     lastName: "All",
-    password: "password1",
+    password: bcrypt.hashSync("password1", salt),
     roleId: 2,
 
     phoneNumber: "+1-202-555-0101",
@@ -110,7 +112,7 @@ function seedUsersWithPrivacy() {
     email: "anon_all@example.com",
     firstName: "Anon",
     lastName: "All",
-    password: "password2",
+    password: bcrypt.hashSync("password2", salt),
     roleId: 2,
     phoneNumber: "+1-202-555-0102",
     dateOfBirth: "1988-02-02",
@@ -136,7 +138,7 @@ function seedUsersWithPrivacy() {
     email: "visible_all@example.com",
     firstName: "Visible",
     lastName: "All",
-    password: "password3",
+    password: bcrypt.hashSync("password3", salt),
     roleId: 2,
     phoneNumber: "+1-202-555-0103",
     dateOfBirth: "1995-03-03",
@@ -166,7 +168,7 @@ function seedUsersWithPrivacy() {
     email: "mixed_a@example.com",
     firstName: "Mixed",
     lastName: "Alpha",
-    password: "password4",
+    password: bcrypt.hashSync("password4", salt),
     roleId: 2,
     phoneNumber: "+1-202-555-0104",
     dateOfBirth: "1992-04-04",
@@ -205,7 +207,7 @@ function seedUsersWithPrivacy() {
     email: "mixed_b@example.com",
     firstName: "Mixed",
     lastName: "Beta",
-    password: "password5",
+    password: bcrypt.hashSync("password5", salt),
     roleId: 2,
     phoneNumber: "+1-202-555-0105",
     dateOfBirth: "1998-05-05",
