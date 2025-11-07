@@ -21,6 +21,9 @@ export default function TestAccountsDialog({
     { label: 'Provider 1', username: 'shop owner 1', password: 'shop owner 1' },
     { label: 'Provider 2', username: 'shop owner 2', password: 'shop owner 2' },
     { label: 'Provider 3', username: 'shop owner 3', password: 'shop owner 3' },
+    { label: 'Hidden All', username: 'hidden_all', password: 'password1' },
+    { label: 'Anonymized All', username: 'anon_all', password: 'password2' },
+    { label: 'Visible All', username: 'visible_all', password: 'password3' },
   ] as const;
 
   return (

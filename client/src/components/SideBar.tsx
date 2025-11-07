@@ -1,5 +1,12 @@
 'use client';
-import { LayoutDashboard, LogOut, Settings, User, Users } from 'lucide-react';
+import {
+  LayoutDashboard,
+  LogOut,
+  Settings,
+  ShoppingCart,
+  User,
+  Users,
+} from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { usePathname, useRouter } from 'next/navigation';
@@ -78,6 +85,18 @@ export default function SideBar() {
                 </Link>
               </Button>
             ) : null}
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className={`icon-btn-zoom ${
+                isActive === 'shopping-history' ? 'active' : ''
+              }`}
+            >
+              <Link href="/shopping-history" aria-label="Shopping History">
+                <ShoppingCart className="w-6 h-6" />
+              </Link>
+            </Button>
             <Button
               asChild
               variant="ghost"
