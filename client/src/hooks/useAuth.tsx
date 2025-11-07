@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useTRPC } from './TrpcContext';
 import { Shop, type Role, type User } from './useUserContext';
 import { useCallback } from 'react';
-import { FormValues } from '@/components/authentication/FormAuth';
+import { FormValues } from '@/components/authentication/types';
 import { startAuthentication } from '@simplewebauthn/browser';
 
 export type SuccessData = {

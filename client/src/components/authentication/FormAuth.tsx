@@ -1,36 +1,21 @@
 'use client';
 import { Shop, useUser, type User } from '@/hooks/useUserContext';
 import { useRouter } from 'next/navigation';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
-import {
-  Form,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage,
-  FormDescription,
-} from '@/components/ui/form';
+import { Form } from '@/components/ui/form';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import dynamic from 'next/dynamic';
-import type { MultiValue } from 'react-select';
 import useAuth from '@/hooks/useAuth';
 import useJwt from '@/hooks/useJwt';
+import type { FormValues } from './types';
+import UsernameField from './UsernameField';
+import PasswordField from './PasswordField';
+import RegistrationFields from './RegistrationFields';
+import TestAccountsDialog from './TestAccountsDialog';
 
-export type FormValues = {
-  username: string;
-  password: string;
-  email: string;
-  shopIds: number[];
-};
-
-const AsyncSelect = dynamic(() => import('react-select/async'), {
-  ssr: false,
-});
+// Types moved to ./types
 
 export default function FormAuth({
   setTab,
@@ -134,135 +119,39 @@ export default function FormAuth({
     }
     setTab('multi-factor');
   };
+  const loginAs = useCallback(
+    (username: string, password: string) => {
+      form.setValue('username', username, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: false,
+      });
+      form.setValue('password', password, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: false,
+      });
+      handleAuthenticate({ username, password, email: '', shopIds: [] });
+    },
+    [form, handleAuthenticate]
+  );
   return (
     <div className="flex flex-col items-center justify-center p-6 bg-surface rounded gap-6">
       <h2 className="text-xl font-semibold">{title}</h2>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="form">
-          <FormField
-            control={form.control}
-            name="username"
-            rules={{ required: 'Username is required' }}
-            render={({ field }) => (
-              <FormItem className="form-field">
-                <FormLabel>Username</FormLabel>
-                <FormControl>
-                  <Input
-                    type="text"
-                    placeholder="Enter your username"
-                    autoComplete="username"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <UsernameField form={form} />
 
           {title === 'Registration' && (
-            <FormField
-              control={form.control}
-              name="email"
-              rules={{ required: 'Email is required' }}
-              render={({ field }) => (
-                <FormItem className="form-field">
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="Enter your email"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+            <RegistrationFields
+              form={form}
+              allShops={allShops}
+              loadShops={loadShops}
+              isLoadingShops={listShopsQuery.isLoading}
             />
           )}
 
-          <FormField
-            control={form.control}
-            name="password"
-            rules={{ required: 'Password is required' }}
-            render={({ field }) => (
-              <FormItem className="form-field">
-                <FormLabel>Password</FormLabel>
-                <FormControl>
-                  <Input
-                    type="password"
-                    placeholder="Enter your password"
-                    autoComplete={
-                      title === 'Registration'
-                        ? 'new-password'
-                        : 'current-password'
-                    }
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>
-                  Use at least 8 characters, including a number and a symbol.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {title === 'Registration' && (
-            <FormField
-              control={form.control}
-              name="shopIds"
-              rules={{ required: 'Shop is required' }}
-              render={() => (
-                <FormItem className="form-field">
-                  <FormLabel>Shops</FormLabel>
-                  <FormControl>
-                    <AsyncSelect
-                      instanceId="shop-select"
-                      loadOptions={loadShops}
-                      defaultOptions={allShops.map((shop: Shop) => ({
-                        label: shop.shopName,
-                        value: shop.shopId,
-                      }))}
-                      isMulti
-                      isLoading={listShopsQuery.isLoading}
-                      placeholder="Search and select shops..."
-                      loadingMessage={() => 'Loading shops...'}
-                      noOptionsMessage={({
-                        inputValue,
-                      }: {
-                        inputValue: string;
-                      }) =>
-                        inputValue
-                          ? `No shops found for "${inputValue}"`
-                          : 'No shops available'
-                      }
-                      value={form
-                        .watch('shopIds')
-                        ?.map((id: number) => {
-                          const shop = allShops.find(
-                            (s: Shop) => s.shopId === id
-                          );
-                          return shop
-                            ? { label: shop.shopName, value: shop.shopId }
-                            : null;
-                        })
-                        .filter(Boolean)}
-                      onChange={(newValue) => {
-                        const selectedOptions = newValue as MultiValue<{
-                          label: string;
-                          value: number;
-                        }>;
-                        const shopIds = selectedOptions.map(
-                          (option) => option.value
-                        );
-                        form.setValue('shopIds', shopIds);
-                      }}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-          )}
+          <PasswordField form={form} title={title} />
 
           <div className="flex items-center justify-between flex-col">
             {title === 'Login' && (
@@ -283,6 +172,12 @@ export default function FormAuth({
             >
               Use biometric {title.toLowerCase()}
             </Button>
+            {title === 'Login' && (
+              <TestAccountsDialog
+                disabled={isAuthenticating}
+                onSelect={loginAs}
+              />
+            )}
             <Button
               type="submit"
               className="w-full p-0"
