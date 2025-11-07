@@ -296,6 +296,30 @@ const addPseudonym = db.prepare(
 
 const getLastInsertRowId = db.prepare(`SELECT last_insert_rowid() as id`);
 
+const getTransactionsByUserId = db.prepare(
+  `SELECT * FROM transactions INNER JOIN transaction_items ON transactions.transactionId = transaction_items.transactionId INNER JOIN items ON transaction_items.itemId = items.itemId WHERE transactions.pseudoId = ?`
+);
+
+const getTransactionByTransactionId = db.prepare(
+  `SELECT * FROM transactions WHERE transactionId = ?`
+);
+
+const getTransactionItemsByTransactionId = db.prepare(
+  `SELECT * FROM transaction_items WHERE transactionId = ?`
+);
+
+const getUserTransactionsByUserId = db.prepare(
+  `SELECT * FROM user_transactions WHERE userId = ?`
+);
+
+const getUserTransactionsByTransactionId = db.prepare(
+  `SELECT * FROM user_transactions WHERE transactionId = ?`
+);
+
+const getPseudonymByUserId = db.prepare(
+  `SELECT * FROM pseudonyms WHERE userId = ?`
+);
+
 export {
   db,
   addUser,
@@ -330,4 +354,10 @@ export {
   linkUserTransaction,
   addPseudonym,
   getLastInsertRowId,
+  getTransactionsByUserId,
+  getTransactionByTransactionId,
+  getTransactionItemsByTransactionId,
+  getUserTransactionsByUserId,
+  getUserTransactionsByTransactionId,
+  getPseudonymByUserId,
 };

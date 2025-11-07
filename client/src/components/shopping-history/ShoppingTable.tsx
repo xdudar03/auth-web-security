@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Table,
   TableHeader,
@@ -10,70 +10,63 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import ShoppingListMobile from './ShoppingListMobile';
-import { formatCurrency, formatDate } from '@/lib/shopping-history/utils';
+import {
+  formatCurrency,
+  formatDate,
+  formatPaymentMethod,
+} from '@/lib/shopping-history/utils';
+import { useTRPC } from '@/hooks/TrpcContext';
+import { useUser } from '@/hooks/useUserContext';
+import { useQuery } from '@tanstack/react-query';
+import { AssociationChoice, HistoryEntry, TransactionsData } from './types';
 
-// Placeholder data until backend wiring
-const history: HistoryEntry[] = [
-  {
-    id: '1',
-    date: '2025-10-21T14:32:00Z',
-    items: [{ name: 'Wireless Headphones', quantity: 1, unitPrice: 129.99 }],
-    shopLocation: 'Downtown Store',
-    paymentMethod: 'Card',
-    isOnline: false,
-  },
-  {
-    id: '2',
-    date: '2025-11-01T09:10:00Z',
-    items: [
-      { name: 'Coffee Beans (1kg)', quantity: 2, unitPrice: 19.25 },
-      { name: 'French Press', quantity: 1, unitPrice: 45.0 },
-    ],
-    shopLocation: 'Online',
-    paymentMethod: 'PayPal',
-    isOnline: true,
-  },
-  {
-    id: '3',
-    date: '2025-11-05T17:45:00Z',
-    items: [
-      { name: 'Notebook Pack', quantity: 3, unitPrice: 5.25 },
-      { name: 'Gel Pens (4-pack)', quantity: 2, unitPrice: 3.5 },
-    ],
-    shopLocation: 'Uptown Market',
-    paymentMethod: 'Cash',
-    isOnline: false,
-  },
-];
-
-export type AssociationChoice = 'detached' | 'linked' | 'anonymized';
-
-export type HistoryEntry = {
-  id: string;
-  date: string; // ISO string
-  items: Array<{
-    name: string;
-    quantity: number;
-    unitPrice: number; // in major units
-  }>;
-  shopLocation: string;
-  paymentMethod: 'Card' | 'Cash' | 'Apple Pay' | 'Google Pay' | 'PayPal';
-  isOnline: boolean;
-};
 export default function ShoppingTable() {
   // Association state per order (default: 'detached')
-  const initialAssociationById = useMemo(() => {
-    const entries = history.map((e) => [e.id, 'detached' as AssociationChoice]);
-    return Object.fromEntries(entries) as Record<string, AssociationChoice>;
-  }, []);
   const [associationById, setAssociationById] = useState<
     Record<string, AssociationChoice>
-  >(initialAssociationById);
+  >({});
   const [bulkChoice, setBulkChoice] = useState<AssociationChoice>('detached');
+  const { user } = useUser();
+  const trpc = useTRPC();
+  console.log('user: ', user);
+  const transactionsQuery = useQuery(
+    trpc.transactions.getTransactionsById.queryOptions({
+      userId: user?.userId as string,
+    })
+  );
+  const transactions = transactionsQuery.data as TransactionsData;
+  console.log('transactions: ', transactions);
+
+  const historyEntries: HistoryEntry[] = useMemo(() => {
+    if (!transactions) return [];
+    return transactions.map((t) => ({
+      id: String(t.transactionId),
+      date: t.date ?? new Date().toISOString(),
+      items: t.items.map((i) => ({
+        name: i.name,
+        quantity: i.quantity,
+        unitPrice: i.price,
+      })),
+      shopLocation: t.location ?? '',
+      paymentMethod: formatPaymentMethod(t.paymentMethod ?? ''),
+      isOnline: t.purchaseType === 'online',
+    }));
+  }, [transactions]);
+
+  useEffect(() => {
+    if (historyEntries.length === 0) return;
+    setAssociationById((prev) => {
+      const next = { ...prev } as Record<string, AssociationChoice>;
+      for (const entry of historyEntries) {
+        if (!next[entry.id]) next[entry.id] = 'detached';
+      }
+      return next;
+    });
+  }, [historyEntries]);
 
   const applyBulkChoice = () => {
     const updated: Record<string, AssociationChoice> = {};
-    for (const entry of history) {
+    for (const entry of historyEntries) {
       updated[entry.id] = bulkChoice;
     }
     setAssociationById(updated);
@@ -104,7 +97,7 @@ export default function ShoppingTable() {
       </div>
       {/* Mobile list view */}
       <ShoppingListMobile
-        history={history}
+        history={historyEntries}
         associationById={associationById}
         setRowChoice={setRowChoice}
       />
@@ -131,7 +124,7 @@ export default function ShoppingTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {history.map((entry) => (
+            {historyEntries.map((entry) => (
               <TableRow key={entry.id}>
                 <TableCell className="text-left">
                   <div className="flex flex-col gap-1">

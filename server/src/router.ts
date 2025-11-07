@@ -37,6 +37,7 @@ import {
 import getUserInfo from "./services/info.ts";
 import type { JwtPayload } from "jsonwebtoken";
 import toggleUserPrivacy from "./services/privacy.ts";
+import { getTransactionsById } from "./services/transactions.ts";
 
 function mapHttpStatusToTrpcCode(status: number): TRPCError["code"] {
   if (status >= 500) return "INTERNAL_SERVER_ERROR";
@@ -261,6 +262,11 @@ export const appRouter = router({
           )
         )
       ),
+  }),
+  transactions: router({
+    getTransactionsById: publicProcedure
+      .input(z.object({ userId: z.string() }))
+      .query(({ input }) => execute(() => getTransactionsById(input.userId))),
   }),
 });
 

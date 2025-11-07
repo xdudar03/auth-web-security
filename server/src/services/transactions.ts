@@ -1,0 +1,59 @@
+import {
+  db,
+  getTransactionsByUserId,
+  getPseudonymByUserId,
+} from "../database.ts";
+import { HttpError } from "../errors.ts";
+
+export const getTransactionsById = async (userId: string) => {
+  console.log("userId: ", userId);
+  const pseudoId = getPseudonymByUserId.get(userId)?.pseudoId;
+  console.log("pseudoId: ", pseudoId);
+  if (!pseudoId) {
+    throw new HttpError(404, "Pseudo ID not found");
+  }
+  const transactions = getTransactionsByUserId.all(pseudoId);
+  // Group rows by transactionId and aggregate items
+  const transactionsMap = new Map<number, any>();
+
+  for (const row of transactions as any[]) {
+    const id = row.transactionId as number;
+    if (!transactionsMap.has(id)) {
+      transactionsMap.set(id, {
+        transactionId: id,
+        shopId: row.shopId as number,
+        pseudoId: row.pseudoId as string | null,
+        totalPrice: row.totalPrice as number,
+        date: row.date as string,
+        location: (row.location as string) ?? null,
+        paymentMethod: row.paymentMethod as string,
+        purchaseType: row.purchaseType as string,
+        items: [] as Array<{
+          name: string;
+          id: number;
+          quantity: number;
+          price: number;
+        }>,
+      });
+    }
+
+    const tx = transactionsMap.get(id)!;
+    tx.items.push({
+      name: row.itemName as string,
+      id: row.itemId as number,
+      quantity: row.quantity as number,
+      price: row.itemPrice as number,
+    });
+  }
+  console.log("transactionsMap: ", transactionsMap);
+
+  return Array.from(transactionsMap.values());
+};
+
+export const getTransactionByTransactionId = async (transactionId: string) => {
+  const transaction = db
+    .prepare(`SELECT * FROM transactions WHERE transactionId = ?`)
+    .get(transactionId);
+  console.log("transaction: ", transaction);
+  return transaction;
+};
