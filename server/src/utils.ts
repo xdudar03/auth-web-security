@@ -39,6 +39,15 @@ export function mapResponseQuery(query: any) {
           shopOwnerId: s.shopOwnerId,
         }))
       : [],
+    privacy: query.privacy || {
+      firstName: "hidden",
+      lastName: "hidden",
+      email: "hidden",
+      phoneNumber: "hidden",
+      dateOfBirth: "hidden",
+      gender: "hidden",
+      address: "hidden",
+    },
   };
   return response;
 }

@@ -22,7 +22,15 @@ export default function ProviderDashboard() {
     trpc.shops.getAllUsersFromShop.queryOptions({ shopId: shopId ?? 0 })
   );
   const users = allUsersQuery.data?.users ?? [];
+  console.log('users: ', users);
   const isLoading = allUsersQuery.isLoading;
+  // Add privacy to active user if it exists
+  if (activeUser) {
+    activeUser.privacy = users.find(
+      (user: any) => user.user.userId === activeUser.userId
+    )?.privacy;
+  }
+  console.log('activeUser: ', activeUser);
   return (
     <div className="grid w-full gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr">
       <SettingsCard />

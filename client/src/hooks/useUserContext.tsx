@@ -37,6 +37,7 @@ export type User = {
   country?: string | null;
   spendings?: string | null;
   shoppingHistory?: string | null;
+  privacy?: PrivacySettings;
 };
 
 export type Shop = {
@@ -64,10 +65,7 @@ export type Role = {
 
 export type Visibility = 'hidden' | 'anonymized' | 'visible';
 
-export type PrivacySettings = {
-  field: string;
-  visibility: Visibility;
-};
+export type PrivacySettings = Record<string, Visibility>;
 
 export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const trpc = useTRPC();

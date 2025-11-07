@@ -1,14 +1,28 @@
-import { db, getUserShops, updateUser } from "../database.ts";
+import {
+  db,
+  getUserPrivacyByUserId,
+  getUserShops,
+  updateUser,
+} from "../database.ts";
 import { HttpError } from "../errors.ts";
 import { mapResponseQuery } from "../utils.ts";
 
 export function sanitizeUserSummary(row: any) {
   const shops = getUserShops.all(row?.userId as string);
+  const privacy = getUserPrivacyByUserId
+    .all(row?.userId as string)
+    .reduce((acc: Record<string, string>, p: any) => {
+      acc[p.field] = p.visibility;
+      return acc;
+    }, {});
+  console.log(`privacy: ${row?.userId}`, privacy);
+
   const result = mapResponseQuery({
     ...row,
     shops,
+    privacy,
   });
-  const { user, role, shops: mappedShops } = result;
+  const { user, role, shops: mappedShops, privacy: mappedPrivacy } = result;
 
   const { embedding, credentials, password, ...safeUser } = user;
   const {
@@ -29,6 +43,7 @@ export function sanitizeUserSummary(row: any) {
     user: safeUser,
     role: safeRole,
     shops: mappedShops,
+    privacy: mappedPrivacy,
   };
 }
 
