@@ -209,7 +209,7 @@ body {
   }
 
   .sidebar-padding-left {
-    @apply pl-20 lg:pl-22 xl:pl-28;
+    @apply md:pl-20 lg:pl-22 xl:pl-28;
   }
 
   .dashboard-grid {

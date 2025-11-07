@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 
 const db = new DatabaseSync("./users.db");
-
+// TODO: change shoppingHistory and spendings
 const initTable = () => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -82,6 +82,59 @@ const initTable = () => {
       visibility TEXT NOT NULL,        -- 'hidden' | 'anonymized' | 'visible'
       FOREIGN KEY (userId) REFERENCES users(userId),
       UNIQUE (userId, field)
+    )
+    `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pseudonyms (
+      pseudoId TEXT PRIMARY KEY,          -- random unique token (UUID)
+      userId TEXT NOT NULL,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      expiresAt TEXT,                     -- optional for rotating pseudonyms
+      FOREIGN KEY (userId) REFERENCES users(userId)
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS items (
+      itemId INTEGER PRIMARY KEY AUTOINCREMENT,
+      itemName TEXT NOT NULL,
+      itemPrice REAL NOT NULL,
+      shopId INTEGER NOT NULL,
+      FOREIGN KEY (shopId) REFERENCES shops(shopId),
+      UNIQUE (itemName, shopId)
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS transactions (
+      transactionId INTEGER PRIMARY KEY AUTOINCREMENT,
+      shopId INTEGER NOT NULL,
+      pseudoId TEXT,                      -- nullable: transaction may be anonymous
+      totalPrice REAL NOT NULL,
+      date TEXT DEFAULT CURRENT_TIMESTAMP,
+      location TEXT,
+      paymentMethod TEXT NOT NULL CHECK (paymentMethod IN ('cash','card','apple_pay','google_pay','bank_transfer','other')),
+      purchaseType TEXT NOT NULL CHECK (purchaseType IN ('in_store','online')),
+      FOREIGN KEY (pseudoId) REFERENCES pseudonyms(pseudoId),
+      FOREIGN KEY (shopId) REFERENCES shops(shopId)
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS transaction_items (
+      transactionId INTEGER NOT NULL,
+      itemId INTEGER NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      FOREIGN KEY (transactionId) REFERENCES transactions(transactionId),
+      FOREIGN KEY (itemId) REFERENCES items(itemId),
+      PRIMARY KEY (transactionId, itemId)
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_transactions (
+      userId TEXT NOT NULL,
+      transactionId INTEGER NOT NULL,
+      linkedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(userId),
+      FOREIGN KEY (transactionId) REFERENCES transactions(transactionId),
+      UNIQUE (userId, transactionId)
     )
     `);
 };
@@ -216,6 +269,33 @@ const deleteUser = db.prepare(`DELETE FROM users WHERE userId = ?`);
 
 const deleteRole = db.prepare(`DELETE FROM roles WHERE roleId = ?`);
 
+// Items, transactions, and pseudonyms helpers
+const addItem = db.prepare(
+  `INSERT INTO items (itemName, itemPrice, shopId) VALUES (?, ?, ?)`
+);
+
+const getItemByNameAndShop = db.prepare(
+  `SELECT * FROM items WHERE itemName = ? AND shopId = ?`
+);
+
+const addTransaction = db.prepare(
+  `INSERT INTO transactions (shopId, pseudoId, totalPrice, location, paymentMethod, purchaseType) VALUES (?, ?, ?, ?, ?, ?)`
+);
+
+const addTransactionItem = db.prepare(
+  `INSERT INTO transaction_items (transactionId, itemId, quantity) VALUES (?, ?, ?)`
+);
+
+const linkUserTransaction = db.prepare(
+  `INSERT INTO user_transactions (userId, transactionId) VALUES (?, ?)`
+);
+
+const addPseudonym = db.prepare(
+  `INSERT INTO pseudonyms (pseudoId, userId, expiresAt) VALUES (?, ?, ?)`
+);
+
+const getLastInsertRowId = db.prepare(`SELECT last_insert_rowid() as id`);
+
 export {
   db,
   addUser,
@@ -243,4 +323,11 @@ export {
   addUserPrivacy,
   getUserPrivacyByUserId,
   updateUserPrivacy,
+  addItem,
+  getItemByNameAndShop,
+  addTransaction,
+  addTransactionItem,
+  linkUserTransaction,
+  addPseudonym,
+  getLastInsertRowId,
 };

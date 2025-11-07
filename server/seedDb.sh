@@ -1,5 +1,13 @@
-node src/seed/addRoles.ts
-node src/seed/addUsers.ts
-node src/seed/addShops.ts
-node src/seed/addTestUsersWithPrivacy.ts
+#!/usr/bin/env bash
+set -euo pipefail
+
+rm -f users.db
+
+npx tsx src/seed/addRoles.ts
+npx tsx src/seed/addUsers.ts
+npx tsx src/seed/addShops.ts
+npx tsx src/seed/addTestUsersWithPrivacy.ts
+npx tsx src/seed/addItems.ts
+npx tsx src/seed/addTransactions.ts
+
 npm run dev
