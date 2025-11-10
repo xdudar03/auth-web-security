@@ -1,4 +1,9 @@
-import { addUser, addUserPrivacy, addUserToShop } from "../database.ts";
+import {
+  addPseudonym,
+  addUser,
+  addUserPrivacy,
+  addUserToShop,
+} from "../database.ts";
 import bcrypt from "bcryptjs";
 
 type UserRecord = {
@@ -18,7 +23,6 @@ type UserRecord = {
   zip: string;
   country: string;
   spendings: string;
-  shoppingHistory: string;
   // embedding: excluded per request
   // credentials: excluded per request
 };
@@ -60,7 +64,6 @@ function insertUser(u: UserRecord) {
     u.zip,
     u.country,
     u.spendings,
-    u.shoppingHistory,
     null, // embedding excluded
     null // credentials excluded
   );
@@ -97,13 +100,13 @@ function seedUsersWithPrivacy() {
     zip: "00000",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 0 }),
-    shoppingHistory: JSON.stringify([]),
   });
   setPrivacy(
     "u101",
     Object.fromEntries(FIELDS.map((f) => [f, "hidden"])) as any
   );
   addUserToShop.run("u101", 3);
+  addPseudonym.run("p101", "u101", null);
 
   // 2) All anonymized
   insertUser({
@@ -123,13 +126,13 @@ function seedUsersWithPrivacy() {
     zip: "11111",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 1500 }),
-    shoppingHistory: JSON.stringify([{ item: "Shoes", amount: 120 }]),
   });
   setPrivacy(
     "u102",
     Object.fromEntries(FIELDS.map((f) => [f, "anonymized"])) as any
   );
   addUserToShop.run("u102", 1);
+  addPseudonym.run("p102", "u102", null);
 
   // 3) All visible
   insertUser({
@@ -149,10 +152,6 @@ function seedUsersWithPrivacy() {
     zip: "90210",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 3200 }),
-    shoppingHistory: JSON.stringify([
-      { item: "Laptop", amount: 1200 },
-      { item: "Backpack", amount: 80 },
-    ]),
   });
   setPrivacy(
     "u103",
@@ -179,7 +178,6 @@ function seedUsersWithPrivacy() {
     zip: "10001",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 640 }),
-    shoppingHistory: JSON.stringify([{ item: "Books", amount: 60 }]),
   });
   setPrivacy("u104", {
     firstName: "visible",
@@ -218,10 +216,6 @@ function seedUsersWithPrivacy() {
     zip: "73301",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 9800 }),
-    shoppingHistory: JSON.stringify([
-      { item: "Phone", amount: 900 },
-      { item: "Headphones", amount: 200 },
-    ]),
   });
   setPrivacy("u105", {
     firstName: "hidden",

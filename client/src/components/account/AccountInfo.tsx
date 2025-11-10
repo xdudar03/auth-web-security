@@ -196,8 +196,9 @@ export default function AccountInfo() {
                   value={field.value ?? ''}
                   disabled={disabled}
                 />
-                {privacy?.find((p: PrivacySettings) => p.field === name)
-                  ?.visibility === 'visible' ? (
+                {privacy?.find(
+                  (p: PrivacySettings) => p.field === (name as string)
+                )?.visibility === 'visible' ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button

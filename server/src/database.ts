@@ -22,7 +22,6 @@ const initTable = () => {
       zip TEXT,
       country TEXT,
       spendings TEXT,
-      shoppingHistory TEXT,
       embedding TEXT,
       credentials TEXT,
       FOREIGN KEY (roleId) REFERENCES roles(roleId)
@@ -142,7 +141,7 @@ const initTable = () => {
 initTable();
 
 const addUser = db.prepare(
-  `INSERT INTO users (userId, username, email, firstName, lastName, password, roleId, phoneNumber, dateOfBirth, gender, address, city, state, zip, country, spendings, shoppingHistory, embedding, credentials) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` // credentials is a base64 string
+  `INSERT INTO users (userId, username, email, firstName, lastName, password, roleId, phoneNumber, dateOfBirth, gender, address, city, state, zip, country, spendings,  embedding, credentials) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` // credentials is a base64 string
 );
 // 1 is admin, 2 is user, 3 is shop owner
 const addRole = db.prepare(
@@ -179,8 +178,16 @@ const getUserPrivacyByUserId = db.prepare(
   `SELECT field, visibility FROM privacy_settings WHERE userId = ?`
 );
 
+const getUserPrivacyByUserIdAndField = db.prepare(
+  `SELECT field, visibility FROM privacy_settings WHERE userId = ? AND field = ?`
+);
+
 const updateUserPrivacy = db.prepare(
   `UPDATE privacy_settings SET visibility = ? WHERE userId = ? AND field = ?`
+);
+
+const insertUserPrivacy = db.prepare(
+  `INSERT INTO privacy_settings (userId, field, visibility) VALUES (?, ?, ?)`
 );
 
 const addUserToShop = db.prepare(
@@ -226,7 +233,7 @@ function updateUser(userId: string, updates: Record<string, any>) {
     "phoneNumber",
     "dateOfBirth",
     "embedding",
-    "credentials", // credentials is a base64 string
+    "credentials",
     "roleId",
     "gender",
     "address",
@@ -235,7 +242,6 @@ function updateUser(userId: string, updates: Record<string, any>) {
     "zip",
     "country",
     "spendings",
-    "shoppingHistory",
   ];
 
   const setClauses = [];
@@ -347,6 +353,8 @@ export {
   addUserPrivacy,
   getUserPrivacyByUserId,
   updateUserPrivacy,
+  insertUserPrivacy,
+  getUserPrivacyByUserIdAndField,
   addItem,
   getItemByNameAndShop,
   addTransaction,

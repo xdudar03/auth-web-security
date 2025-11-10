@@ -1,4 +1,4 @@
-import { addUser } from "../database.ts";
+import { addPseudonym, addUser } from "../database.ts";
 import bcrypt from "bcryptjs";
 
 const addUsers = () => {
@@ -13,6 +13,7 @@ const addUsers = () => {
     bcrypt.hashSync("admin", salt), // password
     1 // roleId
   );
+  addPseudonym.run("padmin", "1", null);
   addUser.run(
     "2",
     "user",
@@ -22,6 +23,7 @@ const addUsers = () => {
     bcrypt.hashSync("user", salt), // password
     2 // roleId
   );
+  addPseudonym.run("puser", "2", null);
   addUser.run(
     "3",
     "shop owner 1",
@@ -31,6 +33,7 @@ const addUsers = () => {
     bcrypt.hashSync("shop owner 1", salt), // password
     3 // roleId
   );
+  addPseudonym.run("pshop1", "3", null);
   addUser.run(
     "4",
     "shop owner 2",
@@ -40,6 +43,7 @@ const addUsers = () => {
     bcrypt.hashSync("shop owner 2", salt), // password
     3 // roleId
   );
+  addPseudonym.run("pshop2", "4", null);
   addUser.run(
     "5",
     "shop owner 3",
@@ -49,6 +53,7 @@ const addUsers = () => {
     bcrypt.hashSync("shop owner 3", salt), // password
     3 // roleId
   );
+  addPseudonym.run("pshop3", "5", null);
 };
 
 addUsers();

@@ -1,4 +1,4 @@
-export type AssociationChoice = 'detached' | 'linked' | 'anonymized';
+export type AssociationChoice = 'hidden' | 'anonymized' | 'visible';
 
 export type HistoryEntry = {
   id: string;

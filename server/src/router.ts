@@ -36,7 +36,10 @@ import {
 } from "./services/email.ts";
 import getUserInfo from "./services/info.ts";
 import type { JwtPayload } from "jsonwebtoken";
-import toggleUserPrivacy from "./services/privacy.ts";
+import toggleUserPrivacy, {
+  insertUserPrivacyService,
+  toggleUserPrivacyService,
+} from "./services/privacy.ts";
 import { getTransactionsById } from "./services/transactions.ts";
 
 function mapHttpStatusToTrpcCode(status: number): TRPCError["code"] {
@@ -256,6 +259,38 @@ export const appRouter = router({
       .mutation(({ input, ctx }) =>
         execute(() =>
           toggleUserPrivacy(
+            ctx.user?.userId as string,
+            input.field,
+            input.visibility
+          )
+        )
+      ),
+    insertUserPrivacy: publicProcedure
+      .input(
+        z.object({
+          field: z.string(),
+          visibility: z.enum(["hidden", "anonymized", "visible"]),
+        })
+      )
+      .mutation(({ input, ctx }) =>
+        execute(() =>
+          insertUserPrivacyService(
+            ctx.user?.userId as string,
+            input.field,
+            input.visibility
+          )
+        )
+      ),
+    toggleUserPrivacyService: publicProcedure
+      .input(
+        z.object({
+          field: z.string(),
+          visibility: z.enum(["hidden", "anonymized", "visible"]),
+        })
+      )
+      .mutation(({ input, ctx }) =>
+        execute(() =>
+          toggleUserPrivacyService(
             ctx.user?.userId as string,
             input.field,
             input.visibility

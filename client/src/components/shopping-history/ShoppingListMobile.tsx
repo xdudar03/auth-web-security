@@ -5,11 +5,11 @@ import { AssociationChoice, HistoryEntry } from './types';
 export default function ShoppingListMobile({
   history,
   associationById,
-  setRowChoice,
+  handleAssociationChange,
 }: {
   history: HistoryEntry[];
   associationById: Record<string, AssociationChoice>;
-  setRowChoice: (id: string, value: AssociationChoice) => void;
+  handleAssociationChange: (id: string, value: AssociationChoice) => void;
 }) {
   return (
     <div className="md:hidden">
@@ -69,11 +69,14 @@ export default function ShoppingListMobile({
                 className="h-9 px-3 rounded-md border border-border bg-surface text-sm w-full"
                 value={associationById[entry.id]}
                 onChange={(e) =>
-                  setRowChoice(entry.id, e.target.value as AssociationChoice)
+                  handleAssociationChange(
+                    entry.id,
+                    e.target.value as AssociationChoice
+                  )
                 }
               >
-                <option value="detached">Detached</option>
-                <option value="linked">Linked</option>
+                <option value="hidden">Detached</option>
+                <option value="visible">Linked</option>
                 <option value="anonymized">Anonymized</option>
               </select>
             </div>
