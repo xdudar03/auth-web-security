@@ -39,6 +39,7 @@ import type { JwtPayload } from "jsonwebtoken";
 import toggleUserPrivacy, {
   insertUserPrivacyService,
   toggleUserPrivacyService,
+  getUsersPrivacy,
 } from "./services/privacy.ts";
 import {
   getTransactionsById,
@@ -300,6 +301,15 @@ export const appRouter = router({
           )
         )
       ),
+    getUsersPrivacy: publicProcedure
+      .input(
+        z.object({
+          userFields: z.array(
+            z.object({ pseudoId: z.string(), field: z.string() })
+          ),
+        })
+      )
+      .query(({ input }) => execute(() => getUsersPrivacy(input.userFields))),
   }),
   transactions: router({
     getTransactionsById: publicProcedure

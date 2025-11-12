@@ -48,7 +48,7 @@ export default function AccountInfo() {
     })
   );
   const toggleUserPrivacyMutation = useMutation(
-    trpc.privacy.toggleUserPrivacy.mutationOptions({
+    trpc.privacy.toggleUserPrivacyService.mutationOptions({
       onSuccess: (data) => {
         console.log(`this fiels ${data.field} is now ${data.visibility}`);
         queryClient.invalidateQueries({

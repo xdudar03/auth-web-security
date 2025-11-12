@@ -3,6 +3,8 @@ import {
   updateUserPrivacy,
   insertUserPrivacy,
   getUserPrivacyByUserIdAndField,
+  getUserIdByPseudoId,
+  getUserPrivacyFieldByUserId,
 } from "../database.ts";
 
 export default function toggleUserPrivacy(
@@ -53,4 +55,29 @@ export function toggleUserPrivacyService(
     }
     return { field: field, visibility: visibility };
   }
+}
+
+export function getUsersPrivacy(
+  userFields: { pseudoId: string; field: string }[]
+) {
+  const results: { pseudoId: string; field: string; visibility: string }[] = [];
+  console.log("userFields: ", userFields);
+  for (const { pseudoId, field } of userFields) {
+    const userId = getUserIdByPseudoId.get(pseudoId)?.userId;
+    console.log("userId: ", userId);
+    if (!userId) {
+      throw new HttpError(404, "User not found for pseudoId: " + pseudoId);
+    }
+    const result = getUserPrivacyFieldByUserId.get(userId, field);
+    console.log("result: ", result);
+    if (result) {
+      results.push({
+        pseudoId: pseudoId,
+        field: field,
+        visibility: result.visibility as string,
+      });
+    }
+  }
+  console.log("results: ", results);
+  return results;
 }

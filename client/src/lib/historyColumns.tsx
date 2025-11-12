@@ -166,13 +166,27 @@ export const associationColumn = (
   };
 };
 
-export const customerColumn = (): ColumnDef<HistoryEntryProvider, unknown> => {
+export const customerColumn = ({
+  userPrivacy,
+}: {
+  userPrivacy: { pseudoId: string; visibility: string; field: string }[];
+}): ColumnDef<HistoryEntryProvider, unknown> => {
   return {
     id: 'customer',
     header: 'Customer',
     meta: { headerClassName: 'text-left', cellClassName: 'text-left' },
     cell: ({ row }: CellContext<HistoryEntryProvider, unknown>) => {
-      return row.original.customer;
+      if (
+        userPrivacy.find(
+          (p: { pseudoId: string; visibility: string; field: string }) =>
+            p.field === `shoppingHistory_transaction_${row.original.id}` &&
+            p.visibility !== 'hidden'
+        )
+      ) {
+        return row.original.customer;
+      } else {
+        return 'Hidden';
+      }
     },
   };
 };

@@ -330,6 +330,14 @@ const getPseudonymByUserId = db.prepare(
   `SELECT * FROM pseudonyms WHERE userId = ?`
 );
 
+const getUserIdByPseudoId = db.prepare(
+  `SELECT userId FROM pseudonyms WHERE pseudoId = ?`
+);
+
+const getUserPrivacyFieldByUserId = db.prepare(
+  `SELECT visibility FROM privacy_settings WHERE userId = ? AND field = ?`
+);
+
 export {
   db,
   addUser,
@@ -373,4 +381,6 @@ export {
   getUserTransactionsByUserId,
   getUserTransactionsByTransactionId,
   getPseudonymByUserId,
+  getUserIdByPseudoId,
+  getUserPrivacyFieldByUserId,
 };

@@ -28,6 +28,7 @@ import {
   customerColumn,
 } from '@/lib/historyColumns';
 import { HistoryEntryWithCustomer } from '@/lib/historyColumns';
+import useUserPrivacy from '@/hooks/useUserPrivacy';
 
 type ColumnMeta = {
   headerClassName?: string;
@@ -46,8 +47,16 @@ export default function ShopOrdersTable({ shopId }: { shopId: number }) {
     })
   );
   const transactions = transactionsQuery.data;
-  console.log('transactions: ', transactions);
+  const transactionsReady = transactionsQuery.isSuccess;
+  const userFields: { pseudoId: string; field: string }[] = transactionsReady
+    ? transactions?.map((t: BackendTransaction) => ({
+        pseudoId: t.pseudoId ?? '',
+        field: `shoppingHistory_transaction_${t.transactionId}`,
+      })) ?? []
+    : [];
 
+  const { userPrivacy } = useUserPrivacy(userFields);
+  console.log('userPrivacy: ', userPrivacy);
   const historyEntries: HistoryEntryProvider[] = useMemo(() => {
     if (!transactions) return [];
     return transactions.map((t: BackendTransaction) => ({
@@ -65,8 +74,6 @@ export default function ShopOrdersTable({ shopId }: { shopId: number }) {
     }));
   }, [transactions]);
 
-  const handleUserAssociation = () => {};
-
   const columns = useMemo<ColumnDef<HistoryEntryWithCustomer, unknown>[]>(
     () => [
       itemsColumn(),
@@ -76,9 +83,12 @@ export default function ShopOrdersTable({ shopId }: { shopId: number }) {
       paymentMethodColumn(),
       onlineColumn(),
       dateColumn(),
-      customerColumn() as ColumnDef<HistoryEntryWithCustomer, unknown>,
+      customerColumn({ userPrivacy: userPrivacy ?? [] }) as ColumnDef<
+        HistoryEntryWithCustomer,
+        unknown
+      >,
     ],
-    []
+    [userPrivacy]
   );
   const table = useReactTable({
     data: historyEntries,
