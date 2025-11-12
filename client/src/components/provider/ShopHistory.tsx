@@ -1,46 +1,11 @@
 'use client';
 import { useUser } from '@/hooks/useUserContext';
-import { useMemo } from 'react';
+import ShopOrdersTable from './ShopOrdersTable';
 export default function ShopHistory() {
   const { shops } = useUser();
   const shopName = shops?.[0]?.shopName;
-  const columns = useMemo(
-    () => [
-      {
-        header: 'Items',
-        accessorKey: 'items',
-      },
-      {
-        header: 'Quantity',
-        accessorKey: 'quantity',
-      },
-      {
-        header: 'Total',
-        accessorKey: 'total',
-      },
-      {
-        header: 'Shop location',
-        accessorKey: 'shopLocation',
-      },
-      {
-        header: 'Payment method',
-        accessorKey: 'paymentMethod',
-      },
-      {
-        header: 'Online',
-        accessorKey: 'isOnline',
-      },
-      {
-        header: 'Date',
-        accessorKey: 'date',
-      },
-      {
-        header: 'Customer',
-        accessorKey: 'customer',
-      },
-    ],
-    []
-  );
+  const shopId = shops?.[0]?.shopId;
+
   return (
     <div className="flex flex-col gap-4 w-full bg-surface rounded-lg p-4">
       <div className="flex flex-col gap-1">
@@ -49,6 +14,9 @@ export default function ShopHistory() {
           View order history for your shop{' '}
           <span className="font-bold">{shopName}</span>.
         </p>
+      </div>
+      <div className="flex flex-col gap-2 border-t border-border pt-4">
+        <ShopOrdersTable shopId={shopId as number} />
       </div>
     </div>
   );

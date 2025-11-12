@@ -2,20 +2,11 @@ import {
   db,
   getTransactionsByUserId,
   getPseudonymByUserId,
+  getTransactionsByShopId,
 } from "../database.ts";
 import { HttpError } from "../errors.ts";
 
-export const getTransactionsById = async (userId: string) => {
-  console.log("userId: ", userId);
-  const pseudoId = getPseudonymByUserId.get(userId)?.pseudoId;
-  console.log("pseudoId: ", pseudoId);
-  if (!pseudoId) {
-    throw new HttpError(404, "Pseudo ID not found");
-  }
-  const transactions = getTransactionsByUserId.all(pseudoId);
-  if (!transactions) {
-    throw new HttpError(404, "Transactions not found");
-  }
+function mapTransactions(transactions: any[]) {
   // Group rows by transactionId and aggregate items
   const transactionsMap = new Map<number, any>();
 
@@ -48,9 +39,24 @@ export const getTransactionsById = async (userId: string) => {
       price: row.itemPrice as number,
     });
   }
-  console.log("transactionsMap: ", transactionsMap);
-
   return Array.from(transactionsMap.values());
+}
+
+export const getTransactionsById = async (userId: string) => {
+  console.log("userId: ", userId);
+  const pseudoId = getPseudonymByUserId.get(userId)?.pseudoId;
+  console.log("pseudoId: ", pseudoId);
+  if (!pseudoId) {
+    throw new HttpError(404, "Pseudo ID not found");
+  }
+  const transactions = getTransactionsByUserId.all(pseudoId);
+  if (!transactions) {
+    throw new HttpError(404, "Transactions not found");
+  }
+
+  const mappedTransactions = mapTransactions(transactions);
+  console.log("mappedTransactions: ", mappedTransactions);
+  return mappedTransactions;
 };
 
 export const getTransactionByTransactionId = async (transactionId: string) => {
@@ -59,4 +65,15 @@ export const getTransactionByTransactionId = async (transactionId: string) => {
     .get(transactionId);
   console.log("transaction: ", transaction);
   return transaction;
+};
+
+export const getTransactionsByShopIdService = async (shopId: number) => {
+  const transactions = getTransactionsByShopId.all(shopId);
+  console.log("transactions: ", transactions);
+  if (!transactions) {
+    throw new HttpError(404, "Transactions not found");
+  }
+  const mappedTransactions = mapTransactions(transactions);
+  console.log("mappedTransactions: ", mappedTransactions);
+  return mappedTransactions;
 };

@@ -6,13 +6,16 @@ import { Badge } from '@/components/ui/badge';
 import { PrivacySettings } from '@/hooks/useUserContext';
 import { formatCurrency, formatDate } from '@/lib/shopping-history/utils';
 import { CellContext, ColumnDef } from '@tanstack/react-table';
+import { HistoryEntryProvider } from '@/components/provider/ShopOrdersTable';
 
-export const itemsColumn = (): ColumnDef<HistoryEntry, unknown> => {
+export type HistoryEntryWithCustomer = HistoryEntry | HistoryEntryProvider;
+
+export const itemsColumn = (): ColumnDef<HistoryEntryWithCustomer, unknown> => {
   return {
     id: 'items',
     header: 'Items',
     meta: { headerClassName: 'text-left' },
-    cell: ({ row }: CellContext<HistoryEntry, unknown>) => {
+    cell: ({ row }: CellContext<HistoryEntryWithCustomer, unknown>) => {
       return (
         <div className="flex flex-col gap-1">
           {row.original.items.map(
@@ -29,7 +32,10 @@ export const itemsColumn = (): ColumnDef<HistoryEntry, unknown> => {
   };
 };
 
-export const quantityColumn = (): ColumnDef<HistoryEntry, unknown> => {
+export const quantityColumn = (): ColumnDef<
+  HistoryEntryWithCustomer,
+  unknown
+> => {
   return {
     id: 'quantity',
     header: 'Quantity',
@@ -37,17 +43,17 @@ export const quantityColumn = (): ColumnDef<HistoryEntry, unknown> => {
       headerClassName: 'hidden lg:table-cell',
       cellClassName: 'hidden lg:table-cell',
     },
-    cell: ({ row }: CellContext<HistoryEntry, unknown>) => {
+    cell: ({ row }: CellContext<HistoryEntryWithCustomer, unknown>) => {
       return row.original.items.reduce((sum, it) => sum + it.quantity, 0);
     },
   };
 };
 
-export const totalColumn = (): ColumnDef<HistoryEntry, unknown> => {
+export const totalColumn = (): ColumnDef<HistoryEntryWithCustomer, unknown> => {
   return {
     id: 'total',
     header: 'Total',
-    cell: ({ row }: CellContext<HistoryEntry, unknown>) => {
+    cell: ({ row }: CellContext<HistoryEntryWithCustomer, unknown>) => {
       return formatCurrency(
         row.original.items.reduce(
           (sum, it) => sum + it.quantity * it.unitPrice,
@@ -58,7 +64,10 @@ export const totalColumn = (): ColumnDef<HistoryEntry, unknown> => {
   };
 };
 
-export const shopLocationColumn = (): ColumnDef<HistoryEntry, unknown> => {
+export const shopLocationColumn = (): ColumnDef<
+  HistoryEntryWithCustomer,
+  unknown
+> => {
   return {
     id: 'shopLocation',
     header: 'Shop location',
@@ -66,13 +75,16 @@ export const shopLocationColumn = (): ColumnDef<HistoryEntry, unknown> => {
       headerClassName: 'text-left hidden lg:table-cell',
       cellClassName: 'text-left hidden lg:table-cell truncate max-w-[200px]',
     },
-    cell: ({ row }: CellContext<HistoryEntry, unknown>) => {
+    cell: ({ row }: CellContext<HistoryEntryWithCustomer, unknown>) => {
       return row.original.shopLocation;
     },
   };
 };
 
-export const paymentMethodColumn = (): ColumnDef<HistoryEntry, unknown> => {
+export const paymentMethodColumn = (): ColumnDef<
+  HistoryEntryWithCustomer,
+  unknown
+> => {
   return {
     id: 'paymentMethod',
     header: 'Payment method',
@@ -80,13 +92,16 @@ export const paymentMethodColumn = (): ColumnDef<HistoryEntry, unknown> => {
       headerClassName: 'hidden xl:table-cell',
       cellClassName: 'hidden xl:table-cell truncate max-w-[180px]',
     },
-    cell: ({ row }: CellContext<HistoryEntry, unknown>) => {
+    cell: ({ row }: CellContext<HistoryEntryWithCustomer, unknown>) => {
       return row.original.paymentMethod;
     },
   };
 };
 
-export const onlineColumn = (): ColumnDef<HistoryEntry, unknown> => {
+export const onlineColumn = (): ColumnDef<
+  HistoryEntryWithCustomer,
+  unknown
+> => {
   return {
     id: 'online',
     header: 'Online',
@@ -94,7 +109,7 @@ export const onlineColumn = (): ColumnDef<HistoryEntry, unknown> => {
       headerClassName: 'hidden lg:table-cell',
       cellClassName: 'hidden lg:table-cell',
     },
-    cell: ({ row }: CellContext<HistoryEntry, unknown>) => {
+    cell: ({ row }: CellContext<HistoryEntryWithCustomer, unknown>) => {
       return row.original.isOnline ? (
         <Badge variant="success">Online</Badge>
       ) : (
@@ -104,12 +119,12 @@ export const onlineColumn = (): ColumnDef<HistoryEntry, unknown> => {
   };
 };
 
-export const dateColumn = (): ColumnDef<HistoryEntry, unknown> => {
+export const dateColumn = (): ColumnDef<HistoryEntryWithCustomer, unknown> => {
   return {
     id: 'date',
     header: 'Date',
     meta: { headerClassName: 'text-left whitespace-nowrap' },
-    cell: ({ row }: CellContext<HistoryEntry, unknown>) => {
+    cell: ({ row }: CellContext<HistoryEntryWithCustomer, unknown>) => {
       return formatDate(row.original.date);
     },
   };
@@ -147,6 +162,17 @@ export const associationColumn = (
           <option value="anonymized">Anonymized</option>
         </select>
       );
+    },
+  };
+};
+
+export const customerColumn = (): ColumnDef<HistoryEntryProvider, unknown> => {
+  return {
+    id: 'customer',
+    header: 'Customer',
+    meta: { headerClassName: 'text-left', cellClassName: 'text-left' },
+    cell: ({ row }: CellContext<HistoryEntryProvider, unknown>) => {
+      return row.original.customer;
     },
   };
 };

@@ -40,7 +40,10 @@ import toggleUserPrivacy, {
   insertUserPrivacyService,
   toggleUserPrivacyService,
 } from "./services/privacy.ts";
-import { getTransactionsById } from "./services/transactions.ts";
+import {
+  getTransactionsById,
+  getTransactionsByShopIdService,
+} from "./services/transactions.ts";
 
 function mapHttpStatusToTrpcCode(status: number): TRPCError["code"] {
   if (status >= 500) return "INTERNAL_SERVER_ERROR";
@@ -302,6 +305,11 @@ export const appRouter = router({
     getTransactionsById: publicProcedure
       .input(z.object({ userId: z.string() }))
       .query(({ input }) => execute(() => getTransactionsById(input.userId))),
+    getTransactionsByShopId: publicProcedure
+      .input(z.object({ shopId: z.number() }))
+      .query(({ input }) =>
+        execute(() => getTransactionsByShopIdService(input.shopId))
+      ),
   }),
 });
 

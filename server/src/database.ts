@@ -306,6 +306,10 @@ const getTransactionsByUserId = db.prepare(
   `SELECT * FROM transactions INNER JOIN transaction_items ON transactions.transactionId = transaction_items.transactionId INNER JOIN items ON transaction_items.itemId = items.itemId WHERE transactions.pseudoId = ?`
 );
 
+const getTransactionsByShopId = db.prepare(
+  `SELECT * FROM transactions INNER JOIN transaction_items ON transactions.transactionId = transaction_items.transactionId INNER JOIN items ON transaction_items.itemId = items.itemId WHERE transactions.shopId = ?`
+);
+
 const getTransactionByTransactionId = db.prepare(
   `SELECT * FROM transactions WHERE transactionId = ?`
 );
@@ -363,6 +367,7 @@ export {
   addPseudonym,
   getLastInsertRowId,
   getTransactionsByUserId,
+  getTransactionsByShopId,
   getTransactionByTransactionId,
   getTransactionItemsByTransactionId,
   getUserTransactionsByUserId,
