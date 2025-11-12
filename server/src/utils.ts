@@ -1,6 +1,3 @@
-import fs from "fs";
-import { USERS_FILE_TEMP } from "./config.ts";
-
 export function mapResponseQuery(query: any) {
   const response = {
     user: {
@@ -50,19 +47,4 @@ export function mapResponseQuery(query: any) {
     },
   };
   return response;
-}
-
-export function loadUsers() {
-  try {
-    if (!fs.existsSync(USERS_FILE_TEMP)) return [];
-    const users = JSON.parse(fs.readFileSync(USERS_FILE_TEMP, "utf8"));
-    return users;
-  } catch (err) {
-    console.warn("Failed to load users from file:", err);
-    return [];
-  }
-}
-
-export function saveUsers(users: any) {
-  fs.writeFileSync(USERS_FILE_TEMP, JSON.stringify(users, null, 2));
 }

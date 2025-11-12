@@ -90,10 +90,19 @@ export default function SideBar() {
               variant="ghost"
               size="icon"
               className={`icon-btn-zoom ${
-                isActive === 'shopping-history' ? 'active' : ''
+                isActive === 'shopping-history' || isActive === 'shop-history'
+                  ? 'active'
+                  : ''
               }`}
             >
-              <Link href="/shopping-history" aria-label="Shopping History">
+              <Link
+                href={
+                  role?.canAccessProviderPanel
+                    ? '/shop-history'
+                    : '/shopping-history'
+                }
+                aria-label="Shopping History"
+              >
                 <ShoppingCart className="w-6 h-6" />
               </Link>
             </Button>

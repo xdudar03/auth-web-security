@@ -15,8 +15,6 @@ import PasswordField from './PasswordField';
 import RegistrationFields from './RegistrationFields';
 import TestAccountsDialog from './TestAccountsDialog';
 
-// Types moved to ./types
-
 export default function FormAuth({
   setTab,
   title,

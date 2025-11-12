@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Table,
   TableHeader,
@@ -7,18 +7,29 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import ShoppingListMobile from './ShoppingListMobile';
-import {
-  formatCurrency,
-  formatDate,
-  formatPaymentMethod,
-} from '@/lib/shopping-history/utils';
+import { formatPaymentMethod } from '@/lib/shopping-history/utils';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { PrivacySettings, useUser } from '@/hooks/useUserContext';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AssociationChoice, HistoryEntry, TransactionsData } from './types';
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from '@tanstack/react-table';
+import {
+  associationColumn,
+  totalColumn,
+  shopLocationColumn,
+  paymentMethodColumn,
+  onlineColumn,
+  dateColumn,
+  quantityColumn,
+  itemsColumn,
+} from '@/lib/historyColumns';
 
 export default function ShoppingTable() {
   // Association state per order (default: 'detached')
@@ -64,6 +75,46 @@ export default function ShoppingTable() {
     }));
   }, [transactions]);
 
+  type ColumnMeta = {
+    headerClassName?: string;
+    cellClassName?: string;
+  };
+
+  const handleAssociationChange = useCallback(
+    async (id: string, value: AssociationChoice) => {
+      setAssociationById((prev) => ({ ...prev, [id]: value }));
+      console.log(`setting association for ${id} to ${value}`);
+      await toggleUserPrivacyMutation.mutateAsync({
+        field: `shoppingHistory_transaction_${id}`,
+        visibility: value,
+      });
+    },
+    [toggleUserPrivacyMutation]
+  );
+
+  const columns = useMemo<ColumnDef<HistoryEntry, unknown>[]>(
+    () => [
+      itemsColumn(),
+      quantityColumn(),
+      totalColumn(),
+      shopLocationColumn(),
+      paymentMethodColumn(),
+      onlineColumn(),
+      dateColumn(),
+      associationColumn(
+        privacy ?? ([] as PrivacySettings[]),
+        handleAssociationChange
+      ),
+    ],
+    [privacy, handleAssociationChange]
+  );
+
+  const table = useReactTable({
+    data: historyEntries,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
   useEffect(() => {
     if (historyEntries.length === 0) return;
     setAssociationById((prev) => {
@@ -93,17 +144,6 @@ export default function ShoppingTable() {
     }
   };
 
-  const handleAssociationChange = async (
-    id: string,
-    value: AssociationChoice
-  ) => {
-    setAssociationById((prev) => ({ ...prev, [id]: value }));
-    console.log(`setting association for ${id} to ${value}`);
-    await toggleUserPrivacyMutation.mutateAsync({
-      field: `shoppingHistory_transaction_${id}`,
-      visibility: value,
-    });
-  };
   return (
     <div className="border border-border rounded-md overflow-hidden">
       <div className="flex items-center gap-2 p-3 border-b border-border bg-surface/60">
@@ -135,95 +175,61 @@ export default function ShoppingTable() {
       <div className="hidden md:block overflow-x-auto">
         <Table className="min-w-[900px] w-full">
           <TableHeader>
-            <TableRow>
-              <TableHead className="text-left">Items</TableHead>
-              <TableHead className="hidden lg:table-cell">Quantity</TableHead>
-              <TableHead>Total</TableHead>
-              <TableHead className="text-left hidden lg:table-cell">
-                Shop location
-              </TableHead>
-              <TableHead className="hidden xl:table-cell">
-                Payment method
-              </TableHead>
-              <TableHead className="hidden lg:table-cell">Online</TableHead>
-              <TableHead className="text-left whitespace-nowrap">
-                Date
-              </TableHead>
-              <TableHead className="text-left">Association</TableHead>
-            </TableRow>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  const meta = (
+                    header.column.columnDef as {
+                      meta?: ColumnMeta;
+                    }
+                  ).meta;
+                  return (
+                    <TableHead
+                      key={header.id}
+                      className={meta?.headerClassName ?? undefined}
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  );
+                })}
+              </TableRow>
+            ))}
           </TableHeader>
           <TableBody>
-            {transactions && transactions.length > 0 ? (
-              historyEntries.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell className="text-left">
-                    <div className="flex flex-col gap-1">
-                      {entry.items.map((it, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between"
-                        >
-                          <span className="font-medium">{it.name}</span>
-                          <span className="text-muted">× {it.quantity}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    {entry.items.reduce((sum, it) => sum + it.quantity, 0)}
-                  </TableCell>
-                  <TableCell>
-                    {formatCurrency(
-                      entry.items.reduce(
-                        (sum, it) => sum + it.quantity * it.unitPrice,
-                        0
-                      )
-                    )}
-                  </TableCell>
-                  <TableCell className="text-left hidden lg:table-cell truncate max-w-[200px]">
-                    {entry.shopLocation}
-                  </TableCell>
-                  <TableCell className="hidden xl:table-cell truncate max-w-[180px]">
-                    {entry.paymentMethod}
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    {entry.isOnline ? (
-                      <Badge variant="success">Online</Badge>
-                    ) : (
-                      <Badge variant="default">In-store</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-left whitespace-nowrap">
-                    {formatDate(entry.date)}
-                  </TableCell>
-                  <TableCell className="text-left">
-                    <select
-                      className="h-9 px-3 rounded-md border border-border bg-surface text-sm"
-                      value={
-                        privacy?.find(
-                          (p: PrivacySettings) =>
-                            p.field ===
-                            `shoppingHistory_transaction_${entry.id}`
-                        )?.visibility ?? 'hidden'
+            {table.getRowModel().rows.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => {
+                    const meta = (
+                      cell.column.columnDef as {
+                        meta?: ColumnMeta;
                       }
-                      onChange={(e) =>
-                        handleAssociationChange(
-                          entry.id,
-                          e.target.value as AssociationChoice
-                        )
-                      }
-                      aria-label={`Association for order ${entry.id}`}
-                    >
-                      <option value="hidden">Detached</option>
-                      <option value="visible">Linked</option>
-                      <option value="anonymized">Anonymized</option>
-                    </select>
-                  </TableCell>
+                    ).meta;
+                    return (
+                      <TableCell
+                        key={cell.id}
+                        className={meta?.cellClassName ?? undefined}
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={10} className="text-center">
+                <TableCell
+                  colSpan={table.getAllColumns().length}
+                  className="text-center"
+                >
                   No transactions found for user {user?.username}
                 </TableCell>
               </TableRow>

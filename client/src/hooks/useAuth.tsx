@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { useTRPC } from './TrpcContext';
-import { Shop, type Role, type User } from './useUserContext';
+import { Shop, type User } from './useUserContext';
 import { useCallback } from 'react';
 import { FormValues } from '@/components/authentication/types';
 import { startAuthentication } from '@simplewebauthn/browser';
@@ -36,17 +36,15 @@ export default function useAuth({
   );
   const registerMutation = useMutation(
     trpc.biometric.register.mutationOptions({
-      onSuccess: (data: SuccessData) => {
-        console.log('data', data);
+      onSuccess: () => {
         setMessage({
           message: 'Please check your email for confirmation',
           type: 'success',
         });
       },
       onError: (error) => {
-        console.error('error', error);
         setMessage({
-          message: 'Failed to register user',
+          message: `Failed to register user: ${error.message}`,
           type: 'error',
         });
       },
