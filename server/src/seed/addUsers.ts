@@ -4,56 +4,81 @@ import bcrypt from "bcryptjs";
 const addUsers = () => {
   const salt = bcrypt.genSaltSync(10);
 
-  addUser.run(
-    "1", // userId
-    "admin", // username
-    "admin@example.com", // email
-    "admin", // firstName
-    "admin", // lastName
-    bcrypt.hashSync("admin", salt), // password
-    1 // roleId
-  );
-  addPseudonym.run("padmin", "1", null);
-  addUser.run(
-    "2",
-    "user",
-    "user@example.com",
-    "user", // firstName
-    "user", // lastName
-    bcrypt.hashSync("user", salt), // password
-    2 // roleId
-  );
-  addPseudonym.run("puser", "2", null);
-  addUser.run(
-    "3",
-    "shop owner 1",
-    "shop owner1@example.com",
-    "shop owner 1", // firstName
-    "shop owner 1", // lastName
-    bcrypt.hashSync("shop owner 1", salt), // password
-    3 // roleId
-  );
-  addPseudonym.run("pshop1", "3", null);
-  addUser.run(
-    "4",
-    "shop owner 2",
-    "shop owner2@example.com",
-    "shop owner 2", // firstName
-    "shop owner 2", // lastName
-    bcrypt.hashSync("shop owner 2", salt), // password
-    3 // roleId
-  );
-  addPseudonym.run("pshop2", "4", null);
-  addUser.run(
-    "5",
-    "shop owner 3",
-    "shop owner3@example.com",
-    "shop owner 3", // firstName
-    "shop owner 3", // lastName
-    bcrypt.hashSync("shop owner 3", salt), // password
-    3 // roleId
-  );
-  addPseudonym.run("pshop3", "5", null);
+  addUser({
+    userId: "1", // userId
+    username: "admin", // username
+    email: "admin@example.com", // email
+    firstName: "admin", // firstName
+    lastName: "admin", // lastName
+    password: bcrypt.hashSync("admin", salt), // password
+    roleId: 1, // roleId
+  });
+  addPseudonym({
+    pseudoId: "padmin",
+    userId: "1",
+    createdAt: new Date().toISOString(),
+    expiresAt: null,
+  });
+  addUser({
+    userId: "2",
+    username: "user",
+    email: "user@example.com",
+    firstName: "user", // firstName
+    lastName: "user", // lastName
+    password: bcrypt.hashSync("user", salt), // password
+    roleId: 2, // roleId
+  });
+  addPseudonym({
+    pseudoId: "puser",
+    userId: "2",
+    createdAt: new Date().toISOString(),
+    expiresAt: null,
+  });
+  addUser({
+    userId: "3",
+    username: "shop owner 1",
+    email: "shop owner1@example.com",
+    firstName: "shop owner 1", // firstName
+    lastName: "shop owner 1", // lastName
+    password: bcrypt.hashSync("shop owner 1", salt), // password
+    roleId: 3, // roleId
+  });
+  addPseudonym({
+    pseudoId: "pshop1",
+    userId: "3",
+    createdAt: new Date().toISOString(),
+    expiresAt: null,
+  });
+  addUser({
+    userId: "4",
+    username: "shop owner 2",
+    email: "shop owner2@example.com",
+    firstName: "shop owner 2", // firstName
+    lastName: "shop owner 2", // lastName
+    password: bcrypt.hashSync("shop owner 2", salt), // password
+    roleId: 3, // roleId
+  });
+  addPseudonym({
+    pseudoId: "pshop2",
+    userId: "4",
+    createdAt: new Date().toISOString(),
+    expiresAt: null,
+  });
+  addUser({
+    userId: "5",
+    username: "shop owner 3",
+    email: "shop owner3@example.com",
+    firstName: "shop owner 3", // firstName
+    lastName: "shop owner 3", // lastName
+    password: bcrypt.hashSync("shop owner 3", salt), // password
+    roleId: 3, // roleId
+  });
+  addPseudonym({
+    pseudoId: "pshop3",
+    userId: "5",
+    createdAt: new Date().toISOString(),
+    expiresAt: null,
+  });
 };
 
 addUsers();

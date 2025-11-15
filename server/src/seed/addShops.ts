@@ -1,16 +1,32 @@
 import { addShop, addUserToShop } from "../database.ts";
 
 const addHardcodedShops = () => {
-  addShop.run("Shop 1", "Shop 1 description", "Shop 1 address", "3");
-  addShop.run("Shop 2", "Shop 2 description", "Shop 2 address", "4");
-  addShop.run("Shop 3", "Shop 3 description", "Shop 3 address", "5");
-  addUserToShop.run("1", 1); // [userId, shopId]
-  addUserToShop.run("1", 2);
-  addUserToShop.run("1", 3);
-  addUserToShop.run("2", 1);
-  addUserToShop.run("3", 1);
-  addUserToShop.run("4", 2);
-  addUserToShop.run("5", 3);
+  addShop({
+    shopName: "Shop 1",
+    shopDescription: "Shop 1 description",
+    shopAddress: "Shop 1 address",
+    shopOwnerId: "3",
+  });
+  addShop({
+    shopName: "Shop 2",
+    shopDescription: "Shop 2 description",
+    shopAddress: "Shop 2 address",
+    shopOwnerId: "4",
+  });
+  addShop({
+    shopName: "Shop 3",
+    shopDescription: "Shop 3 description",
+    shopAddress: "Shop 3 address",
+    shopOwnerId: "5",
+  });
+
+  addUserToShop("1", 1); // [userId, shopId]
+  addUserToShop("1", 2);
+  addUserToShop("1", 3);
+  addUserToShop("2", 1);
+  addUserToShop("3", 1);
+  addUserToShop("4", 2);
+  addUserToShop("5", 3);
 };
 
 addHardcodedShops();

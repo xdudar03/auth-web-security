@@ -47,26 +47,7 @@ const FIELDS = [
 type Visibility = "hidden" | "anonymized" | "visible";
 
 function insertUser(u: UserRecord) {
-  addUser.run(
-    u.userId,
-    u.username,
-    u.email,
-    u.firstName,
-    u.lastName,
-    u.password,
-    u.roleId,
-    u.phoneNumber,
-    u.dateOfBirth,
-    u.gender,
-    u.address,
-    u.city,
-    u.state,
-    u.zip,
-    u.country,
-    u.spendings,
-    null, // embedding excluded
-    null // credentials excluded
-  );
+  addUser(u);
 }
 
 function setPrivacy(
@@ -75,7 +56,7 @@ function setPrivacy(
 ) {
   for (const field of FIELDS) {
     const visibility = map[field] ?? "visible";
-    addUserPrivacy.run(userId, field, visibility);
+    addUserPrivacy({ userId, field, visibility });
   }
 }
 
@@ -105,8 +86,13 @@ function seedUsersWithPrivacy() {
     "u101",
     Object.fromEntries(FIELDS.map((f) => [f, "hidden"])) as any
   );
-  addUserToShop.run("u101", 3);
-  addPseudonym.run("p101", "u101", null);
+  addUserToShop("u101", 3);
+  addPseudonym({
+    pseudoId: "p101",
+    userId: "u101",
+    createdAt: new Date().toISOString(),
+    expiresAt: null,
+  });
 
   // 2) All anonymized
   insertUser({
@@ -131,8 +117,13 @@ function seedUsersWithPrivacy() {
     "u102",
     Object.fromEntries(FIELDS.map((f) => [f, "anonymized"])) as any
   );
-  addUserToShop.run("u102", 1);
-  addPseudonym.run("p102", "u102", null);
+  addUserToShop("u102", 1);
+  addPseudonym({
+    pseudoId: "p102",
+    userId: "u102",
+    createdAt: new Date().toISOString(),
+    expiresAt: null,
+  });
 
   // 3) All visible
   insertUser({
@@ -157,8 +148,8 @@ function seedUsersWithPrivacy() {
     "u103",
     Object.fromEntries(FIELDS.map((f) => [f, "visible"])) as any
   );
-  addUserToShop.run("u103", 2);
-  addUserToShop.run("u103", 3);
+  addUserToShop("u103", 2);
+  addUserToShop("u103", 3);
 
   // 4) Mixed A: contact visible, demographics anonymized, finances hidden
   insertUser({
@@ -195,8 +186,8 @@ function seedUsersWithPrivacy() {
     shoppingHistory: "hidden",
     shops: "hidden",
   });
-  addUserToShop.run("u104", 1);
-  addUserToShop.run("u104", 2);
+  addUserToShop("u104", 1);
+  addUserToShop("u104", 2);
 
   // 5) Mixed B: profile hidden, location visible, purchase anonymized
   insertUser({
@@ -233,9 +224,9 @@ function seedUsersWithPrivacy() {
     shoppingHistory: "anonymized",
     shops: "anonymized",
   });
-  addUserToShop.run("u105", 1);
-  addUserToShop.run("u105", 2);
-  addUserToShop.run("u105", 3);
+  addUserToShop("u105", 1);
+  addUserToShop("u105", 2);
+  addUserToShop("u105", 3);
 }
 
 seedUsersWithPrivacy();

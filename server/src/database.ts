@@ -165,12 +165,25 @@ type X = ReplaceUndefinedWithNull<{ x?: number }>;
 function mapUndefinedToNull<T extends Record<string, any>>(
   value: T
 ): ReplaceUndefinedWithNull<T> {
-  return Object.fromEntries(
+  const normalized = Object.fromEntries(
     Object.entries(value).map(([key, val]) => [
       key,
       val === undefined ? null : val,
     ])
-  ) as ReplaceUndefinedWithNull<T>;
+  );
+
+  // This is a proxy to ensure that undefined values are converted to null
+  const proxy = new Proxy(normalized, {
+    get(target, prop: string) {
+      if (prop in target) {
+        const v = (target as any)[prop];
+        return v === undefined ? null : v;
+      }
+      return null;
+    },
+  });
+
+  return proxy as ReplaceUndefinedWithNull<T>;
 }
 
 const addUserQuery = db.prepare(
@@ -452,7 +465,7 @@ const getUserForAuthentication = (
 };
 
 // Role queries
-const addRole = (role: Role) => {
+const addRole = (role: Omit<Role, "roleId">) => {
   addRoleQuery.run(
     role.roleName,
     role.canChangeUsersCredentials ? 1 : 0,
@@ -712,7 +725,7 @@ const getUserIdByPseudoId = (pseudoId: string) => {
 // Utility queries
 const getLastInsertRowId = () => {
   const result = getLastInsertRowIdQuery.get();
-  return result ? result.id : null;
+  return result ? (result.id as number) : null;
 };
 
 export {
