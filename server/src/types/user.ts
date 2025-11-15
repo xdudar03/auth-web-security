@@ -25,7 +25,3 @@ export const User = z.object({
 });
 
 export type User = z.infer<typeof User>;
-
-export const Visibility = z.enum(["hidden", "anonymized", "visible"]);
-
-export type Visibility = z.infer<typeof Visibility>;

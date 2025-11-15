@@ -5,6 +5,7 @@ import {
   addUserToShop,
 } from "../database.ts";
 import bcrypt from "bcryptjs";
+import type { Visibility } from "../types/privacySetting.ts";
 
 type UserRecord = {
   userId: string;
@@ -44,12 +45,6 @@ const FIELDS = [
   "shops",
 ] as const;
 
-type Visibility = "hidden" | "anonymized" | "visible";
-
-function insertUser(u: UserRecord) {
-  addUser(u);
-}
-
 function setPrivacy(
   userId: string,
   map: Record<(typeof FIELDS)[number], Visibility>
@@ -63,7 +58,7 @@ function setPrivacy(
 function seedUsersWithPrivacy() {
   const salt = bcrypt.genSaltSync(10);
   // 1) All hidden
-  insertUser({
+  addUser({
     userId: "u101",
     username: "hidden_all",
     email: "hidden_all@example.com",
@@ -95,7 +90,7 @@ function seedUsersWithPrivacy() {
   });
 
   // 2) All anonymized
-  insertUser({
+  addUser({
     userId: "u102",
     username: "anon_all",
     email: "anon_all@example.com",
@@ -126,7 +121,7 @@ function seedUsersWithPrivacy() {
   });
 
   // 3) All visible
-  insertUser({
+  addUser({
     userId: "u103",
     username: "visible_all",
     email: "visible_all@example.com",
@@ -152,7 +147,7 @@ function seedUsersWithPrivacy() {
   addUserToShop("u103", 3);
 
   // 4) Mixed A: contact visible, demographics anonymized, finances hidden
-  insertUser({
+  addUser({
     userId: "u104",
     username: "mixed_a",
     email: "mixed_a@example.com",
@@ -190,7 +185,7 @@ function seedUsersWithPrivacy() {
   addUserToShop("u104", 2);
 
   // 5) Mixed B: profile hidden, location visible, purchase anonymized
-  insertUser({
+  addUser({
     userId: "u105",
     username: "mixed_b",
     email: "mixed_b@example.com",

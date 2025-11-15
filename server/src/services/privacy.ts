@@ -6,16 +6,17 @@ import {
   getUserIdByPseudoId,
   getUserPrivacyFieldByUserId,
 } from "../database.ts";
+import type { Visibility } from "../types/privacySetting.ts";
 
 export default function toggleUserPrivacy(
   userId: string,
   field: string,
-  visibility: "hidden" | "anonymized" | "visible"
+  visibility: Visibility
 ) {
   const result = updateUserPrivacy(visibility, userId, field);
   console.log("result: ", result);
   if (result.changes === 0) {
-    throw new HttpError(404, "User privacy not updated");
+    throw new HttpError(404, "User privacy had no changes");
   }
   return { field: field, visibility: visibility };
 }
@@ -23,7 +24,7 @@ export default function toggleUserPrivacy(
 export function insertUserPrivacyService(
   userId: string,
   field: string,
-  visibility: "hidden" | "anonymized" | "visible"
+  visibility: Visibility
 ) {
   const result = insertUserPrivacy({ userId, field, visibility });
   console.log("result: ", result);
@@ -36,22 +37,22 @@ export function insertUserPrivacyService(
 export function toggleUserPrivacyService(
   userId: string,
   field: string,
-  visibility: "hidden" | "anonymized" | "visible"
+  visibility: Visibility
 ) {
   const result = getUserPrivacyByUserIdAndField(userId, field);
   console.log("result: ", result);
   if (!result) {
-    const insertResult = insertUserPrivacy({ userId, field, visibility });
-    console.log("insertResult: ", insertResult);
-    if (insertResult.changes === 0) {
-      throw new HttpError(404, "User privacy not inserted");
+    const statementChanges = insertUserPrivacy({ userId, field, visibility });
+    console.log("insertResult: ", statementChanges);
+    if (statementChanges.changes === 0) {
+      throw new HttpError(404, "User privacy had no changes");
     }
     return { field: field, visibility: visibility };
   } else {
     const updateResult = updateUserPrivacy(visibility, userId, field);
     console.log("updateResult: ", updateResult);
     if (updateResult.changes === 0) {
-      throw new HttpError(404, "User privacy not updated");
+      throw new HttpError(404, "User privacy had no changes");
     }
     return { field: field, visibility: visibility };
   }
