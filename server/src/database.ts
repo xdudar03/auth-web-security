@@ -236,8 +236,12 @@ const getTokenQuery = db.prepare(
 );
 const getToken = (tokenString: string, purpose: string) => {
   const tokenData = getTokenQuery.get(tokenString, purpose);
-  const token = Token.parse(tokenData);
-  return token;
+  const result = Token.safeParse(tokenData);
+  if (!result.success) {
+    console.error("Parse error in getToken:", result.error);
+    return null;
+  }
+  return result.data;
 };
 
 const deleteTokenQuery = db.prepare(
@@ -425,12 +429,22 @@ const getUserWithRoleQuery = db.prepare(
 // User queries
 const getUserByUsername = (username: string) => {
   const userData = getUserByUsernameQuery.get(username);
-  return User.parse(userData);
+  const result = User.safeParse(userData);
+  if (!result.success) {
+    console.error("Parse error in getUserByUsername:", result.error);
+    return null;
+  }
+  return result.data;
 };
 
 const getUserById = (userId: string) => {
   const userData = getUserByIdQuery.get(userId);
-  return User.parse(userData);
+  const result = User.safeParse(userData);
+  if (!result.success) {
+    console.error("Parse error in getUserById:", result.error);
+    return null;
+  }
+  return result.data;
 };
 
 const deleteUser = (userId: string) => {
@@ -444,7 +458,16 @@ const updateUser = (userId: string, updates: Partial<User>) => {
 const getAllUsersQuery = db.prepare(`SELECT * FROM users`);
 const getAllUsers = () => {
   const usersData = getAllUsersQuery.all();
-  return usersData.map((user) => User.parse(user));
+  return usersData
+    .map((user) => {
+      const result = User.safeParse(user);
+      if (!result.success) {
+        console.error("Parse error in getAllUsers:", result.error);
+        return null;
+      }
+      return result.data;
+    })
+    .filter((user) => user !== null);
 };
 
 const getUserForAuthenticationQuery = db.prepare(
@@ -461,7 +484,12 @@ const getUserForAuthentication = (
     email,
     phoneNumber
   );
-  return User.parse(userData);
+  const result = User.safeParse(userData);
+  if (!result.success) {
+    console.error("Parse error in getUserForAuthentication:", result.error);
+    return null;
+  }
+  return result.data;
 };
 
 // Role queries
@@ -483,22 +511,46 @@ const addRole = (role: Omit<Role, "roleId">) => {
 
 const getRoleById = (roleId: number) => {
   const roleData = getRoleByIdQuery.get(roleId);
-  return Role.parse(roleData);
+  const result = Role.safeParse(roleData);
+  if (!result.success) {
+    console.error("Parse error in getRoleById:", result.error);
+    return null;
+  }
+  return result.data;
 };
 
 const getRoleByUserId = (userId: string) => {
   const roleData = getRoleByUserIdQuery.get(userId);
-  return Role.parse(roleData);
+  const result = Role.safeParse(roleData);
+  if (!result.success) {
+    console.error("Parse error in getRoleByUserId:", result.error);
+    return null;
+  }
+  return result.data;
 };
 
 const getRoleByName = (roleName: string) => {
   const roleData = getRoleByNameQuery.get(roleName);
-  return Role.parse(roleData);
+  const result = Role.safeParse(roleData);
+  if (!result.success) {
+    console.error("Parse error in getRoleByName:", result.error);
+    return null;
+  }
+  return result.data;
 };
 
 const getRoles = () => {
   const rolesData = getRolesQuery.all();
-  return rolesData.map((role) => Role.parse(role));
+  return rolesData
+    .map((role) => {
+      const result = Role.safeParse(role);
+      if (!result.success) {
+        console.error("Parse error in getRoles:", result.error);
+        return null;
+      }
+      return result.data;
+    })
+    .filter((role) => role !== null);
 };
 
 const updateRole = (roleId: number, role: Role) => {
@@ -535,17 +587,36 @@ const addShop = (shop: Omit<Shop, "shopId">) => {
 
 const getShopById = (shopId: number) => {
   const shopData = getShopByIdQuery.get(shopId);
-  return Shop.parse(shopData);
+  const result = Shop.safeParse(shopData);
+  if (!result.success) {
+    console.error("Parse error in getShopById:", result.error);
+    return null;
+  }
+  return result.data;
 };
 
 const getAllShops = () => {
   const shopsData = getAllShopsQuery.all();
-  return shopsData.map((shop) => Shop.parse(shop));
+  return shopsData
+    .map((shop) => {
+      const result = Shop.safeParse(shop);
+      if (!result.success) {
+        console.error("Parse error in getAllShops:", result.error);
+        return null;
+      }
+      return result.data;
+    })
+    .filter((shop) => shop !== null);
 };
 
 const getShopByOwnerId = (ownerId: string) => {
   const shopData = getShopByOwnerIdQuery.get(ownerId);
-  return Shop.parse(shopData);
+  const result = Shop.safeParse(shopData);
+  if (!result.success) {
+    console.error("Parse error in getShopByOwnerId:", result.error);
+    return null;
+  }
+  return result.data;
 };
 
 const addShopOwnerToShop = (shopId: number, ownerId: string) => {
@@ -559,12 +630,30 @@ const addUserToShop = (userId: string, shopId: number) => {
 
 const getUserShops = (userId: string) => {
   const shopsData = getUserShopsQuery.all(userId);
-  return shopsData.map((shop) => Shop.parse(shop));
+  return shopsData
+    .map((shop) => {
+      const result = Shop.safeParse(shop);
+      if (!result.success) {
+        console.error("Parse error in getUserShops:", result.error);
+        return null;
+      }
+      return result.data;
+    })
+    .filter((shop) => shop !== null);
 };
 
 const getShopUsers = (shopId: number) => {
   const usersData = getShopUsersQuery.all(shopId);
-  return usersData.map((user) => User.parse(user));
+  return usersData
+    .map((user) => {
+      const result = User.safeParse(user);
+      if (!result.success) {
+        console.error("Parse error in getShopUsers:", result.error);
+        return null;
+      }
+      return result.data;
+    })
+    .filter((user) => user !== null);
 };
 
 // Token queries
@@ -596,12 +685,29 @@ const addUserPrivacy = (
 
 const getUserPrivacyByUserId = (userId: string) => {
   const privacyData = getUserPrivacyByUserIdQuery.all(userId);
-  return privacyData.map((privacy) => PrivacySettings.parse(privacy));
+  return privacyData
+    .map((privacy) => {
+      const result = PrivacySettings.safeParse(privacy);
+      if (!result.success) {
+        console.error("Parse error in getUserPrivacyByUserId:", result.error);
+        return null;
+      }
+      return result.data;
+    })
+    .filter((privacy) => privacy !== null);
 };
 
 const getUserPrivacyByUserIdAndField = (userId: string, field: string) => {
   const privacyData = getUserPrivacyByUserIdAndFieldQuery.get(userId, field);
-  return PrivacySettings.parse(privacyData);
+  const result = PrivacySettings.safeParse(privacyData);
+  if (!result.success) {
+    console.error(
+      "Parse error in getUserPrivacyByUserIdAndField:",
+      result.error
+    );
+    return null;
+  }
+  return result.data;
 };
 
 const updateUserPrivacy = (
@@ -640,7 +746,12 @@ const addItem = (item: Omit<Item, "itemId">) => {
 
 const getItemByNameAndShop = (itemName: string, shopId: number) => {
   const itemData = getItemByNameAndShopQuery.get(itemName, shopId);
-  return Item.parse(itemData);
+  const result = Item.safeParse(itemData);
+  if (!result.success) {
+    console.error("Parse error in getItemByNameAndShop:", result.error);
+    return null;
+  }
+  return result.data;
 };
 
 // Transaction queries
@@ -658,17 +769,43 @@ const addTransaction = (transaction: Omit<Transaction, "transactionId">) => {
 
 const getTransactionByTransactionId = (transactionId: number) => {
   const transactionData = getTransactionByTransactionIdQuery.get(transactionId);
-  return Transaction.parse(transactionData);
+  const result = Transaction.safeParse(transactionData);
+  if (!result.success) {
+    console.error(
+      "Parse error in getTransactionByTransactionId:",
+      result.error
+    );
+    return null;
+  }
+  return result.data;
 };
 
 const getTransactionsByUserId = (pseudoId: string) => {
   const transactionsData = getTransactionsByUserIdQuery.all(pseudoId);
-  return transactionsData.map((transaction) => Transaction.parse(transaction));
+  return transactionsData
+    .map((transaction) => {
+      const result = Transaction.safeParse(transaction);
+      if (!result.success) {
+        console.error("Parse error in getTransactionsByUserId:", result.error);
+        return null;
+      }
+      return result.data;
+    })
+    .filter((transaction) => transaction !== null);
 };
 
 const getTransactionsByShopId = (shopId: number) => {
   const transactionsData = getTransactionsByShopIdQuery.all(shopId);
-  return transactionsData.map((transaction) => Transaction.parse(transaction));
+  return transactionsData
+    .map((transaction) => {
+      const result = Transaction.safeParse(transaction);
+      if (!result.success) {
+        console.error("Parse error in getTransactionsByShopId:", result.error);
+        return null;
+      }
+      return result.data;
+    })
+    .filter((transaction) => transaction !== null);
 };
 
 // Transaction Item queries
@@ -683,7 +820,19 @@ const addTransactionItem = (transactionItem: TransactionItem) => {
 
 const getTransactionItemsByTransactionId = (transactionId: number) => {
   const itemsData = getTransactionItemsByTransactionIdQuery.all(transactionId);
-  return itemsData.map((item) => TransactionItem.parse(item));
+  return itemsData
+    .map((item) => {
+      const result = TransactionItem.safeParse(item);
+      if (!result.success) {
+        console.error(
+          "Parse error in getTransactionItemsByTransactionId:",
+          result.error
+        );
+        return null;
+      }
+      return result.data;
+    })
+    .filter((item) => item !== null);
 };
 
 // User Transaction queries
@@ -693,13 +842,37 @@ const linkUserTransaction = (userId: string, transactionId: number) => {
 
 const getUserTransactionsByUserId = (userId: string) => {
   const userTransactionsData = getUserTransactionsByUserIdQuery.all(userId);
-  return userTransactionsData.map((ut) => UserTransaction.parse(ut));
+  return userTransactionsData
+    .map((ut) => {
+      const result = UserTransaction.safeParse(ut);
+      if (!result.success) {
+        console.error(
+          "Parse error in getUserTransactionsByUserId:",
+          result.error
+        );
+        return null;
+      }
+      return result.data;
+    })
+    .filter((ut) => ut !== null);
 };
 
 const getUserTransactionsByTransactionId = (transactionId: number) => {
   const userTransactionsData =
     getUserTransactionsByTransactionIdQuery.all(transactionId);
-  return userTransactionsData.map((ut) => UserTransaction.parse(ut));
+  return userTransactionsData
+    .map((ut) => {
+      const result = UserTransaction.safeParse(ut);
+      if (!result.success) {
+        console.error(
+          "Parse error in getUserTransactionsByTransactionId:",
+          result.error
+        );
+        return null;
+      }
+      return result.data;
+    })
+    .filter((ut) => ut !== null);
 };
 
 // Pseudonym queries
@@ -714,7 +887,12 @@ const addPseudonym = (pseudonym: Pseudonym) => {
 
 const getPseudonymByUserId = (userId: string) => {
   const pseudonymData = getPseudonymByUserIdQuery.get(userId);
-  return Pseudonym.parse(pseudonymData);
+  const result = Pseudonym.safeParse(pseudonymData);
+  if (!result.success) {
+    console.error("Parse error in getPseudonymByUserId:", result.error);
+    return null;
+  }
+  return result.data;
 };
 
 const getUserIdByPseudoId = (pseudoId: string) => {

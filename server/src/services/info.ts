@@ -23,7 +23,13 @@ export default function getUserInfo(user: JwtPayload | null): {
   }
   // get user info, roles and user shops from database
   const userInfo = getUserById(user.userId);
+  if (!userInfo) {
+    throw new HttpError(404, `User with userId ${user.userId} not found`);
+  }
   const role = getRoleByUserId(user.userId);
+  if (!role) {
+    throw new HttpError(404, `Role with userId ${user.userId} not found`);
+  }
   const userShops = getUserShops(user.userId);
   const userPrivacy = getUserPrivacyByUserId(user.userId);
   return {
