@@ -18,7 +18,7 @@ export default function ConfirmEmailModal({ token }: { token: string | null }) {
     trpc.email.verifyToken.mutationOptions({
       onSuccess: (data) => {
         console.log('token verified: ', data);
-        if (data?.jwt) {
+        if ('jwt' in data && data.jwt) {
           setJwt(data.jwt);
         }
         setMessage({

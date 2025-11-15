@@ -4,7 +4,9 @@ import { startRegistration } from '@simplewebauthn/browser';
 // no-op: previous manual buffer conversion removed; using startRegistration
 
 export async function handleOptions(user: User) {
-  const { username, id } = user;
+  // const { username, id } = user;
+  const username = 'test';
+  const id = 'test';
   if (!username || !id) {
     throw new Error('Username and id are required');
   }

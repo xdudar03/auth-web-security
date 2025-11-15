@@ -41,7 +41,7 @@ export default function FormAuth({
     isAuthenticating,
   } = useAuth({
     handleSuccess: handleSuccess,
-    allShops: allShops,
+    allShops: allShops as Shop[],
     user: user as User,
     title: title,
     setMessage: setMessage,

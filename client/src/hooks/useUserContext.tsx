@@ -3,6 +3,12 @@ import { createContext, useContext } from 'react';
 import { useTRPC } from './TrpcContext';
 import { useQuery } from '@tanstack/react-query';
 import useJwt from './useJwt';
+import type { User } from '../../../server/src/types/user.ts';
+import type { Role } from '../../../server/src/types/role.ts';
+import type { PrivacySettings } from '../../../server/src/types/privacySetting.ts';
+import type { Shop } from '../../../server/src/types/shop.ts';
+
+export type { PrivacySettings, Role, User, Shop };
 
 export const UserContext = createContext<
   | {
@@ -17,56 +23,6 @@ export const UserContext = createContext<
   | undefined
 >(undefined);
 
-export type User = {
-  userId: string;
-  username: string;
-  password: string;
-  embedding?: number[] | null;
-  roleId?: number | null;
-  credentials?: unknown | null;
-  email: string;
-  firstName?: string | null;
-  lastName?: string | null;
-  phoneNumber?: string | null;
-  dateOfBirth?: string | null;
-  gender?: string | null;
-  address?: string | null;
-  city?: string | null;
-  state?: string | null;
-  zip?: string | null;
-  country?: string | null;
-  spendings?: string | null;
-  shoppingHistory?: string | null;
-  privacy?: PrivacySettings;
-};
-
-export type Shop = {
-  shopId: number;
-  shopName: string;
-  shopAddress: string;
-  shopDescription: string;
-  shopOwnerId?: number;
-};
-
-export type Role = {
-  roleId: number;
-  roleName: string;
-  canChangeUsersCredentials: boolean;
-  canChangeUsersRoles: boolean;
-  canReadUsers: boolean;
-  canReadUsersCredentials: boolean;
-  canReadUsersSettings: boolean;
-  canReadUsersRoles: boolean;
-  canAccessAdminPanel: boolean;
-  canAccessUserPanel: boolean;
-  canAccessProviderPanel: boolean;
-  hasGlobalAccessToAllShops: boolean;
-};
-
-export type Visibility = 'hidden' | 'anonymized' | 'visible';
-
-export type PrivacySettings = Record<string, Visibility>;
-
 export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const trpc = useTRPC();
   const { jwt } = useJwt();
@@ -80,6 +36,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   console.log('getUserInfoQuery', getUserInfoQuery);
 
   const user = getUserInfoQuery.data?.user ?? null;
+  console.log('user in context', user);
   const role = getUserInfoQuery.data?.role ?? null;
   const shops = getUserInfoQuery.data?.shops ?? null;
   const privacy = getUserInfoQuery.data?.privacy ?? null;

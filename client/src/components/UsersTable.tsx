@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-table';
 import { Eye, Pencil, Trash } from 'lucide-react';
 import { useMemo, useState, useCallback } from 'react';
-import { Role, Shop, User, useUser } from '@/hooks/useUserContext';
+import { useUser } from '@/hooks/useUserContext';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table as UITable,
@@ -19,12 +19,7 @@ import {
   TableCell,
 } from '@/components/ui/table';
 import { Button } from './ui/button';
-
-export type AdminUserRow = {
-  user: User;
-  role: Role;
-  shops: Shop[];
-};
+import type { AdminUserRow } from './admin/AdminDashboard';
 
 export default function UsersTable({
   setShowUserInfoModal,
@@ -34,14 +29,14 @@ export default function UsersTable({
 }: {
   setShowUserInfoModal: (show: boolean) => void;
   users: AdminUserRow[];
-  setActiveUser: (user: User) => void;
+  setActiveUser: (user: AdminUserRow['user']) => void;
   setMode: (mode: 'view' | 'edit') => void;
 }) {
   const { role } = useUser();
   // const [userId, setUserId] = useState<string>('');
 
   const handleView = useCallback(
-    (user: User) => {
+    (user: AdminUserRow['user']) => {
       // todo super hack
       // id = id.toString();
       // console.log('id', id);
@@ -58,7 +53,7 @@ export default function UsersTable({
   );
 
   const handleEdit = useCallback(
-    async (user: User) => {
+    async (user: AdminUserRow['user']) => {
       if (role?.canChangeUsersCredentials) {
         // setUserId(id);
         // const userInfo = getUserQuery.data?.user;
@@ -78,7 +73,7 @@ export default function UsersTable({
     ]
   );
 
-  const handleDelete = useCallback((user: User) => {
+  const handleDelete = useCallback((user: AdminUserRow['user']) => {
     console.log('deleting user', user);
   }, []);
 

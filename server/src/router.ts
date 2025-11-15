@@ -87,9 +87,6 @@ async function execute<T>(fn: () => Promise<T> | T): Promise<T> {
 }
 
 export const appRouter = router({
-  ping: publicProcedure
-    .input(z.number())
-    .query(({ input }) => `pong ${input * 2}`),
   health: router({
     root: publicProcedure.query(() => pingHealth()),
     status: publicProcedure.query(() => checkHealth()),
@@ -150,10 +147,17 @@ export const appRouter = router({
       .input(z.object({ username: z.string(), password: z.string() }))
       .mutation(({ input }) => execute(() => authenticateBiometricUser(input))),
     changeEmbedding: publicProcedure
-      .input(z.object({ embedding: z.string() }))
+      .input(
+        z.object({
+          embedding: z.string(), // json serialized array of numbers
+        })
+      )
       .mutation(({ input, ctx }) =>
         execute(() =>
-          changeBiometricEmbedding({ embedding: input.embedding }, ctx.user)
+          changeBiometricEmbedding(
+            { embedding: JSON.parse(input.embedding) },
+            ctx.user
+          )
         )
       ),
     changePassword: publicProcedure

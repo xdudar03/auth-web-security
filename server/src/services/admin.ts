@@ -1,20 +1,23 @@
 import {
   db,
+  getUserById,
   getUserPrivacyByUserId,
   getUserShops,
+  getUserWithRoleQuery,
   updateUser,
 } from "../database.ts";
 import { HttpError } from "../errors.ts";
 import { mapResponseQuery } from "../utils.ts";
 
 export function sanitizeUserSummary(row: any) {
-  const shops = getUserShops.all(row?.userId as string);
-  const privacy = getUserPrivacyByUserId
-    .all(row?.userId as string)
-    .reduce((acc: Record<string, string>, p: any) => {
+  const shops = getUserShops(row?.userId as string);
+  const privacy = getUserPrivacyByUserId(row?.userId as string).reduce(
+    (acc: Record<string, string>, p: any) => {
       acc[p.field] = p.visibility;
       return acc;
-    }, {});
+    },
+    {}
+  );
   console.log(`privacy: ${row?.userId}`, privacy);
 
   const result = mapResponseQuery({
@@ -60,16 +63,12 @@ export function listUsers() {
 }
 
 export function getUserWithRoleById(id: string) {
-  const row = db
-    .prepare(
-      "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE users.userId = ?"
-    )
-    .get(id);
+  const row = getUserWithRoleQuery.get(id);
 
   if (!row) {
     throw new HttpError(404, "User not found");
   }
-  const shops = getUserShops.all(row?.userId as string);
+  const shops = getUserShops(row?.userId as string);
   const response = mapResponseQuery({
     ...row,
     shops,
@@ -92,9 +91,7 @@ type UpdateUserInput = {
 };
 
 export function updateUserById(userId: string, updates: UpdateUserInput) {
-  const existing = db
-    .prepare("SELECT * FROM users WHERE userId = ?")
-    .get(userId);
+  const existing = getUserById(userId);
 
   console.log("existing: ", existing);
 
@@ -102,7 +99,7 @@ export function updateUserById(userId: string, updates: UpdateUserInput) {
     throw new HttpError(404, "User not found");
   }
 
-  const preparedUpdates = { ...updates } as Record<string, any>;
+  const preparedUpdates = { ...updates };
 
   console.log("preparedUpdates: ", preparedUpdates);
 
@@ -113,7 +110,7 @@ export function updateUserById(userId: string, updates: UpdateUserInput) {
   const updatesToSave = Object.fromEntries(
     Object.entries(preparedUpdates).filter(([key, value]) => {
       if (value === undefined) return false;
-      return existing[key] !== value;
+      return existing[key as keyof typeof existing] !== value;
     })
   );
 
@@ -124,17 +121,13 @@ export function updateUserById(userId: string, updates: UpdateUserInput) {
   }
 
   updateUser(existing.userId as string, updatesToSave);
-  const updatedRow = db
-    .prepare(
-      "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE users.userId = ?"
-    )
-    .get(userId);
+  const updatedRow = getUserWithRoleQuery.get(userId);
 
   if (!updatedRow) {
     throw new HttpError(500, "Failed to load updated user");
   }
 
-  const shops = getUserShops.all(updatedRow?.userId as string);
+  const shops = getUserShops(updatedRow?.userId as string);
 
   const response = mapResponseQuery({
     ...updatedRow,

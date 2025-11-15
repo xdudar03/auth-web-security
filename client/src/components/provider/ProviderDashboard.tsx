@@ -10,6 +10,7 @@ import UsersTable from '../UsersTable';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useQuery } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUserContext';
+import { AdminUserRow } from '../admin/AdminDashboard';
 
 export default function ProviderDashboard() {
   const trpc = useTRPC();
@@ -17,7 +18,9 @@ export default function ProviderDashboard() {
   console.log('shops: ', shops);
   const shopId = shops?.[0]?.shopId;
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
-  const [activeUser, setActiveUser] = useState<User | null>(null);
+  const [activeUser, setActiveUser] = useState<AdminUserRow['user'] | null>(
+    null
+  );
   const allUsersQuery = useQuery(
     trpc.shops.getAllUsersFromShop.queryOptions({ shopId: shopId ?? 0 })
   );
@@ -27,7 +30,7 @@ export default function ProviderDashboard() {
   // Add privacy to active user if it exists
   if (activeUser) {
     activeUser.privacy = users.find(
-      (user: any) => user.user.userId === activeUser.userId
+      (user) => user.user.userId === activeUser.userId
     )?.privacy;
   }
   console.log('activeUser: ', activeUser);

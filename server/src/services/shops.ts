@@ -3,11 +3,12 @@ import {
   getShopById,
   getShopUsers,
   getUserPrivacyByUserId,
+  getAllShops as getAllShopsDatabase,
 } from "../database.ts";
 import { sanitizeUserSummary } from "./admin.ts";
 
 export function getAllShops() {
-  const shops = db.prepare("SELECT * FROM shops").all();
+  const shops = getAllShopsDatabase();
   console.log("shops: ", shops);
   return {
     shops: shops,
@@ -16,11 +17,11 @@ export function getAllShops() {
 
 export function getAllUsersFromShop(shopId: number) {
   console.log("shopId: ", shopId);
-  const users = getShopUsers.all(shopId);
+  const users = getShopUsers(shopId);
 
   users.forEach((user: any) => {
-    const shop = getShopById.get(shopId);
-    const privacy = getUserPrivacyByUserId.get(user.userId);
+    const shop = getShopById(shopId);
+    const privacy = getUserPrivacyByUserId(user.userId);
     console.log("privacy: ", privacy);
     user.shop = shop;
     user.privacy = privacy;

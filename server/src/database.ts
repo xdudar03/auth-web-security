@@ -1,4 +1,18 @@
 import { DatabaseSync } from "node:sqlite";
+import { User } from "./types/user.ts";
+import { Token } from "./types/token.ts";
+import { Role } from "./types/role.ts";
+import { Shop } from "./types/shop.ts";
+import { UserShop } from "./types/userShop.ts";
+import {
+  PrivacySettings,
+  PrivacySettingRecord,
+} from "./types/privacySetting.ts";
+import { Item } from "./types/item.ts";
+import { Transaction } from "./types/transaction.ts";
+import { TransactionItem } from "./types/transactionItem.ts";
+import { UserTransaction } from "./types/userTransaction.ts";
+import { Pseudonym } from "./types/pseudonym.ts";
 
 const db = new DatabaseSync("./users.db");
 // TODO: change shoppingHistory and spendings
@@ -140,69 +154,120 @@ const initTable = () => {
 
 initTable();
 
-const addUser = db.prepare(
+type ReplaceUndefinedWithNull<T> = {
+  [K in keyof Required<T>]:
+    | Exclude<T[K], undefined>
+    | (undefined extends T[K] ? null : never);
+};
+
+type X = ReplaceUndefinedWithNull<{ x?: number }>;
+
+function mapUndefinedToNull<T extends Record<string, any>>(
+  value: T
+): ReplaceUndefinedWithNull<T> {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, val]) => [
+      key,
+      val === undefined ? null : val,
+    ])
+  ) as ReplaceUndefinedWithNull<T>;
+}
+
+const addUserQuery = db.prepare(
   `INSERT INTO users (userId, username, email, firstName, lastName, password, roleId, phoneNumber, dateOfBirth, gender, address, city, state, zip, country, spendings,  embedding, credentials) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` // credentials is a base64 string
 );
+
+const addUser = (user: User) => {
+  const userWithoutUndefined = mapUndefinedToNull(user);
+  addUserQuery.run(
+    userWithoutUndefined.userId,
+    userWithoutUndefined.username,
+    userWithoutUndefined.email,
+    userWithoutUndefined.firstName,
+    userWithoutUndefined.lastName,
+    userWithoutUndefined.password,
+    userWithoutUndefined.roleId,
+    userWithoutUndefined.phoneNumber,
+    userWithoutUndefined.dateOfBirth,
+    userWithoutUndefined.gender,
+    userWithoutUndefined.address
+    // userWithoutUndefined.city,
+    // userWithoutUndefined.state,
+    // userWithoutUndefined.zip,
+    // userWithoutUndefined.country,
+    // userWithoutUndefined.spendings,
+    // userWithoutUndefined.embedding,
+    // userWithoutUndefined.credentials
+  );
+};
+
 // 1 is admin, 2 is user, 3 is shop owner
-const addRole = db.prepare(
+const addRoleQuery = db.prepare(
   `INSERT INTO roles (roleName, canChangeUsersCredentials, canChangeUsersRoles, canReadUsers, canReadUsersCredentials, canReadUsersSettings, canReadUsersRoles, canAccessAdminPanel, canAccessUserPanel, canAccessProviderPanel, hasGlobalAccessToAllShops) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 );
 
-const addUserPrivacy = db.prepare(
+const addUserPrivacyQuery = db.prepare(
   `INSERT INTO privacy_settings (userId, field, visibility) VALUES (?, ?, ?)`
 );
 
-const addShop = db.prepare(
+const addShopQuery = db.prepare(
   `INSERT INTO shops (shopName, shopDescription, shopAddress, shopOwnerId) VALUES (?, ?, ?, ?)`
 );
 
-const addToken = db.prepare(
+const addTokenQuery = db.prepare(
   `INSERT INTO tokens (token, expiresAt, purpose, userId) VALUES (?, ?, ?, ?)`
 );
 
-const getToken = db.prepare(
+const getTokenQuery = db.prepare(
   `SELECT * FROM tokens WHERE token = ? AND purpose = ?`
 );
+const getToken = (tokenString: string, purpose: string) => {
+  const tokenData = getTokenQuery.get(tokenString, purpose);
+  const token = Token.parse(tokenData);
+  return token;
+};
 
-const deleteToken = db.prepare(
+const deleteTokenQuery = db.prepare(
   `DELETE FROM tokens WHERE token = ? AND purpose = ?`
 );
 
-const getShopById = db.prepare(`SELECT * FROM shops WHERE shopId = ?`);
+const getShopByIdQuery = db.prepare(`SELECT * FROM shops WHERE shopId = ?`);
 
-const getShopByOwnerId = db.prepare(
+const getShopByOwnerIdQuery = db.prepare(
   `SELECT * FROM shops WHERE shopOwnerId = ?`
 );
 
-const getUserPrivacyByUserId = db.prepare(
+const getAllShopsQuery = db.prepare(`SELECT * FROM shops`);
+
+const getUserPrivacyByUserIdQuery = db.prepare(
   `SELECT field, visibility FROM privacy_settings WHERE userId = ?`
 );
 
-const getUserPrivacyByUserIdAndField = db.prepare(
+const getUserPrivacyByUserIdAndFieldQuery = db.prepare(
   `SELECT field, visibility FROM privacy_settings WHERE userId = ? AND field = ?`
 );
 
-const updateUserPrivacy = db.prepare(
+const updateUserPrivacyQuery = db.prepare(
   `UPDATE privacy_settings SET visibility = ? WHERE userId = ? AND field = ?`
 );
 
-const insertUserPrivacy = db.prepare(
+const insertUserPrivacyQuery = db.prepare(
   `INSERT INTO privacy_settings (userId, field, visibility) VALUES (?, ?, ?)`
 );
 
-const addUserToShop = db.prepare(
+const addUserToShopQuery = db.prepare(
   `INSERT INTO user_shops (userId, shopId) VALUES (?, ?)`
 );
 
-const addShopOwnerToShop = db.prepare(
+const addShopOwnerToShopQuery = db.prepare(
   `UPDATE shops SET shopOwnerId = ? WHERE shopId = ?`
 );
 
-const getUserShops = db.prepare(
+const getUserShopsQuery = db.prepare(
   `SELECT shops.* FROM shops JOIN user_shops ON shops.shopId = user_shops.shopId WHERE user_shops.userId = ?`
 );
 
-const getShopUsers = db.prepare(
+const getShopUsersQuery = db.prepare(
   `SELECT users.*, roles.roleName 
   FROM users 
   INNER JOIN user_shops ON users.userId = user_shops.userId 
@@ -211,19 +276,21 @@ const getShopUsers = db.prepare(
   WHERE user_shops.shopId = ?`
 );
 
-const getRoleById = db.prepare(`SELECT * FROM roles WHERE roleId = ?`);
+const getRoleByIdQuery = db.prepare(`SELECT * FROM roles WHERE roleId = ?`);
 
-const getRoleByUserId = db.prepare(
+const getRoleByUserIdQuery = db.prepare(
   `SELECT * FROM roles WHERE roleId = (SELECT roleId FROM users WHERE userId = ?)`
 );
 
-const getRoleByName = db.prepare(`SELECT * FROM roles WHERE roleName = ?`);
+const getRoleByNameQuery = db.prepare(`SELECT * FROM roles WHERE roleName = ?`);
 
-const getUserByUsername = db.prepare(`SELECT * FROM users WHERE username = ?`);
+const getUserByUsernameQuery = db.prepare(
+  `SELECT * FROM users WHERE username = ?`
+);
 
-const getUserById = db.prepare(`SELECT * FROM users WHERE userId = ?`);
+const getUserByIdQuery = db.prepare(`SELECT * FROM users WHERE userId = ?`);
 
-function updateUser(userId: string, updates: Record<string, any>) {
+function updateUserQuery(userId: string, updates: Record<string, any>) {
   const allowedFields = [
     "username",
     "email",
@@ -265,82 +332,393 @@ function updateUser(userId: string, updates: Record<string, any>) {
   return stmt.run(...values);
 }
 
-const updateRole = db.prepare(
+const updateRoleQuery = db.prepare(
   `UPDATE roles SET roleName = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ?, canAccessAdminPanel = ?, canAccessUserPanel = ?, canAccessProviderPanel = ?, hasGlobalAccessToAllShops = ? WHERE roleId = ?`
 );
 
-const getRoles = db.prepare(`SELECT * FROM roles`);
+const getRolesQuery = db.prepare(`SELECT * FROM roles`);
 
-const deleteUser = db.prepare(`DELETE FROM users WHERE userId = ?`);
+const deleteUserQuery = db.prepare(`DELETE FROM users WHERE userId = ?`);
 
-const deleteRole = db.prepare(`DELETE FROM roles WHERE roleId = ?`);
+const deleteRoleQuery = db.prepare(`DELETE FROM roles WHERE roleId = ?`);
 
 // Items, transactions, and pseudonyms helpers
-const addItem = db.prepare(
+const addItemQuery = db.prepare(
   `INSERT INTO items (itemName, itemPrice, shopId) VALUES (?, ?, ?)`
 );
 
-const getItemByNameAndShop = db.prepare(
+const getItemByNameAndShopQuery = db.prepare(
   `SELECT * FROM items WHERE itemName = ? AND shopId = ?`
 );
 
-const addTransaction = db.prepare(
+const addTransactionQuery = db.prepare(
   `INSERT INTO transactions (shopId, pseudoId, totalPrice, location, paymentMethod, purchaseType) VALUES (?, ?, ?, ?, ?, ?)`
 );
 
-const addTransactionItem = db.prepare(
+const addTransactionItemQuery = db.prepare(
   `INSERT INTO transaction_items (transactionId, itemId, quantity) VALUES (?, ?, ?)`
 );
 
-const linkUserTransaction = db.prepare(
+const linkUserTransactionQuery = db.prepare(
   `INSERT INTO user_transactions (userId, transactionId) VALUES (?, ?)`
 );
 
-const addPseudonym = db.prepare(
+const addPseudonymQuery = db.prepare(
   `INSERT INTO pseudonyms (pseudoId, userId, expiresAt) VALUES (?, ?, ?)`
 );
 
-const getLastInsertRowId = db.prepare(`SELECT last_insert_rowid() as id`);
+const getLastInsertRowIdQuery = db.prepare(`SELECT last_insert_rowid() as id`);
 
-const getTransactionsByUserId = db.prepare(
+const getTransactionsByUserIdQuery = db.prepare(
   `SELECT * FROM transactions INNER JOIN transaction_items ON transactions.transactionId = transaction_items.transactionId INNER JOIN items ON transaction_items.itemId = items.itemId WHERE transactions.pseudoId = ?`
 );
 
-const getTransactionsByShopId = db.prepare(
+const getTransactionsByShopIdQuery = db.prepare(
   `SELECT * FROM transactions INNER JOIN transaction_items ON transactions.transactionId = transaction_items.transactionId INNER JOIN items ON transaction_items.itemId = items.itemId WHERE transactions.shopId = ?`
 );
 
-const getTransactionByTransactionId = db.prepare(
+const getTransactionByTransactionIdQuery = db.prepare(
   `SELECT * FROM transactions WHERE transactionId = ?`
 );
 
-const getTransactionItemsByTransactionId = db.prepare(
+const getTransactionItemsByTransactionIdQuery = db.prepare(
   `SELECT * FROM transaction_items WHERE transactionId = ?`
 );
 
-const getUserTransactionsByUserId = db.prepare(
+const getUserTransactionsByUserIdQuery = db.prepare(
   `SELECT * FROM user_transactions WHERE userId = ?`
 );
 
-const getUserTransactionsByTransactionId = db.prepare(
+const getUserTransactionsByTransactionIdQuery = db.prepare(
   `SELECT * FROM user_transactions WHERE transactionId = ?`
 );
 
-const getPseudonymByUserId = db.prepare(
+const getPseudonymByUserIdQuery = db.prepare(
   `SELECT * FROM pseudonyms WHERE userId = ?`
 );
 
-const getUserIdByPseudoId = db.prepare(
+const getUserIdByPseudoIdQuery = db.prepare(
   `SELECT userId FROM pseudonyms WHERE pseudoId = ?`
 );
 
-const getUserPrivacyFieldByUserId = db.prepare(
+const getUserPrivacyFieldByUserIdQuery = db.prepare(
   `SELECT visibility FROM privacy_settings WHERE userId = ? AND field = ?`
 );
+
+const getUserWithRoleQuery = db.prepare(
+  `SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE users.userId = ?`
+);
+
+// User queries
+const getUserByUsername = (username: string) => {
+  const userData = getUserByUsernameQuery.get(username);
+  return User.parse(userData);
+};
+
+const getUserById = (userId: string) => {
+  const userData = getUserByIdQuery.get(userId);
+  return User.parse(userData);
+};
+
+const deleteUser = (userId: string) => {
+  deleteUserQuery.run(userId);
+};
+
+const updateUser = (userId: string, updates: Partial<User>) => {
+  updateUserQuery(userId, updates);
+};
+
+const getAllUsersQuery = db.prepare(`SELECT * FROM users`);
+const getAllUsers = () => {
+  const usersData = getAllUsersQuery.all();
+  return usersData.map((user) => User.parse(user));
+};
+
+const getUserForAuthenticationQuery = db.prepare(
+  `SELECT * FROM users WHERE username = ? OR email = ? OR phoneNumber = ?`
+);
+
+const getUserForAuthentication = (
+  username: string,
+  email: string,
+  phoneNumber: string
+) => {
+  const userData = getUserForAuthenticationQuery.get(
+    username,
+    email,
+    phoneNumber
+  );
+  return User.parse(userData);
+};
+
+// Role queries
+const addRole = (role: Role) => {
+  addRoleQuery.run(
+    role.roleName,
+    role.canChangeUsersCredentials ? 1 : 0,
+    role.canChangeUsersRoles ? 1 : 0,
+    role.canReadUsers ? 1 : 0,
+    role.canReadUsersCredentials ? 1 : 0,
+    role.canReadUsersSettings ? 1 : 0,
+    role.canReadUsersRoles ? 1 : 0,
+    role.canAccessAdminPanel ? 1 : 0,
+    role.canAccessUserPanel ? 1 : 0,
+    role.canAccessProviderPanel ? 1 : 0,
+    role.hasGlobalAccessToAllShops ? 1 : 0
+  );
+};
+
+const getRoleById = (roleId: number) => {
+  const roleData = getRoleByIdQuery.get(roleId);
+  return Role.parse(roleData);
+};
+
+const getRoleByUserId = (userId: string) => {
+  const roleData = getRoleByUserIdQuery.get(userId);
+  return Role.parse(roleData);
+};
+
+const getRoleByName = (roleName: string) => {
+  const roleData = getRoleByNameQuery.get(roleName);
+  return Role.parse(roleData);
+};
+
+const getRoles = () => {
+  const rolesData = getRolesQuery.all();
+  return rolesData.map((role) => Role.parse(role));
+};
+
+const updateRole = (roleId: number, role: Role) => {
+  updateRoleQuery.run(
+    role.roleName,
+    role.canChangeUsersCredentials ? 1 : 0,
+    role.canChangeUsersRoles ? 1 : 0,
+    role.canReadUsers ? 1 : 0,
+    role.canReadUsersCredentials ? 1 : 0,
+    role.canReadUsersSettings ? 1 : 0,
+    role.canReadUsersRoles ? 1 : 0,
+    role.canAccessAdminPanel ? 1 : 0,
+    role.canAccessUserPanel ? 1 : 0,
+    role.canAccessProviderPanel ? 1 : 0,
+    role.hasGlobalAccessToAllShops ? 1 : 0,
+    roleId
+  );
+};
+
+const deleteRole = (roleId: number) => {
+  deleteRoleQuery.run(roleId);
+};
+
+// Shop queries
+const addShop = (shop: Omit<Shop, "shopId">) => {
+  const shopWithoutId = mapUndefinedToNull(shop);
+  addShopQuery.run(
+    shopWithoutId.shopName,
+    shopWithoutId.shopDescription,
+    shopWithoutId.shopAddress,
+    shopWithoutId.shopOwnerId
+  );
+};
+
+const getShopById = (shopId: number) => {
+  const shopData = getShopByIdQuery.get(shopId);
+  return Shop.parse(shopData);
+};
+
+const getAllShops = () => {
+  const shopsData = getAllShopsQuery.all();
+  return shopsData.map((shop) => Shop.parse(shop));
+};
+
+const getShopByOwnerId = (ownerId: string) => {
+  const shopData = getShopByOwnerIdQuery.get(ownerId);
+  return Shop.parse(shopData);
+};
+
+const addShopOwnerToShop = (shopId: number, ownerId: string) => {
+  addShopOwnerToShopQuery.run(ownerId, shopId);
+};
+
+// User Shop queries
+const addUserToShop = (userId: string, shopId: number) => {
+  return addUserToShopQuery.run(userId, shopId);
+};
+
+const getUserShops = (userId: string) => {
+  const shopsData = getUserShopsQuery.all(userId);
+  return shopsData.map((shop) => Shop.parse(shop));
+};
+
+const getShopUsers = (shopId: number) => {
+  const usersData = getShopUsersQuery.all(shopId);
+  return usersData.map((user) => User.parse(user));
+};
+
+// Token queries
+const addToken = (token: Token) => {
+  const tokenWithoutId = mapUndefinedToNull(token);
+  return addTokenQuery.run(
+    tokenWithoutId.token,
+    tokenWithoutId.expiresAt,
+    tokenWithoutId.purpose,
+    tokenWithoutId.userId
+  );
+};
+
+const deleteToken = (token: string, purpose: string) => {
+  deleteTokenQuery.run(token, purpose);
+};
+
+// Privacy Settings queries
+const addUserPrivacy = (
+  privacySetting: Omit<PrivacySettingRecord, "privacyId">
+) => {
+  const settingWithoutId = mapUndefinedToNull(privacySetting);
+  addUserPrivacyQuery.run(
+    settingWithoutId.userId,
+    settingWithoutId.field,
+    settingWithoutId.visibility
+  );
+};
+
+const getUserPrivacyByUserId = (userId: string) => {
+  const privacyData = getUserPrivacyByUserIdQuery.all(userId);
+  return privacyData.map((privacy) => PrivacySettings.parse(privacy));
+};
+
+const getUserPrivacyByUserIdAndField = (userId: string, field: string) => {
+  const privacyData = getUserPrivacyByUserIdAndFieldQuery.get(userId, field);
+  return PrivacySettings.parse(privacyData);
+};
+
+const updateUserPrivacy = (
+  userId: string,
+  field: string,
+  visibility: string
+) => {
+  return updateUserPrivacyQuery.run(visibility, userId, field);
+};
+
+const insertUserPrivacy = (
+  privacySetting: Omit<PrivacySettingRecord, "privacyId">
+) => {
+  const settingWithoutId = mapUndefinedToNull(privacySetting);
+  return insertUserPrivacyQuery.run(
+    settingWithoutId.userId,
+    settingWithoutId.field,
+    settingWithoutId.visibility
+  );
+};
+
+const getUserPrivacyFieldByUserId = (userId: string, field: string) => {
+  const privacyData = getUserPrivacyFieldByUserIdQuery.get(userId, field);
+  return privacyData;
+};
+
+// Item queries
+const addItem = (item: Omit<Item, "itemId">) => {
+  const itemWithoutId = mapUndefinedToNull(item);
+  addItemQuery.run(
+    itemWithoutId.itemName,
+    itemWithoutId.itemPrice,
+    itemWithoutId.shopId
+  );
+};
+
+const getItemByNameAndShop = (itemName: string, shopId: number) => {
+  const itemData = getItemByNameAndShopQuery.get(itemName, shopId);
+  return Item.parse(itemData);
+};
+
+// Transaction queries
+const addTransaction = (transaction: Omit<Transaction, "transactionId">) => {
+  const transactionWithoutId = mapUndefinedToNull(transaction);
+  addTransactionQuery.run(
+    transactionWithoutId.shopId,
+    transactionWithoutId.pseudoId,
+    transactionWithoutId.totalPrice,
+    transactionWithoutId.location,
+    transactionWithoutId.paymentMethod,
+    transactionWithoutId.purchaseType
+  );
+};
+
+const getTransactionByTransactionId = (transactionId: number) => {
+  const transactionData = getTransactionByTransactionIdQuery.get(transactionId);
+  return Transaction.parse(transactionData);
+};
+
+const getTransactionsByUserId = (pseudoId: string) => {
+  const transactionsData = getTransactionsByUserIdQuery.all(pseudoId);
+  return transactionsData.map((transaction) => Transaction.parse(transaction));
+};
+
+const getTransactionsByShopId = (shopId: number) => {
+  const transactionsData = getTransactionsByShopIdQuery.all(shopId);
+  return transactionsData.map((transaction) => Transaction.parse(transaction));
+};
+
+// Transaction Item queries
+const addTransactionItem = (transactionItem: TransactionItem) => {
+  const itemWithoutAutoId = mapUndefinedToNull(transactionItem);
+  addTransactionItemQuery.run(
+    itemWithoutAutoId.transactionId,
+    itemWithoutAutoId.itemId,
+    itemWithoutAutoId.quantity
+  );
+};
+
+const getTransactionItemsByTransactionId = (transactionId: number) => {
+  const itemsData = getTransactionItemsByTransactionIdQuery.all(transactionId);
+  return itemsData.map((item) => TransactionItem.parse(item));
+};
+
+// User Transaction queries
+const linkUserTransaction = (userId: string, transactionId: number) => {
+  linkUserTransactionQuery.run(userId, transactionId);
+};
+
+const getUserTransactionsByUserId = (userId: string) => {
+  const userTransactionsData = getUserTransactionsByUserIdQuery.all(userId);
+  return userTransactionsData.map((ut) => UserTransaction.parse(ut));
+};
+
+const getUserTransactionsByTransactionId = (transactionId: number) => {
+  const userTransactionsData =
+    getUserTransactionsByTransactionIdQuery.all(transactionId);
+  return userTransactionsData.map((ut) => UserTransaction.parse(ut));
+};
+
+// Pseudonym queries
+const addPseudonym = (pseudonym: Pseudonym) => {
+  const pseudonymData = mapUndefinedToNull(pseudonym);
+  addPseudonymQuery.run(
+    pseudonymData.pseudoId,
+    pseudonymData.userId,
+    pseudonymData.expiresAt
+  );
+};
+
+const getPseudonymByUserId = (userId: string) => {
+  const pseudonymData = getPseudonymByUserIdQuery.get(userId);
+  return Pseudonym.parse(pseudonymData);
+};
+
+const getUserIdByPseudoId = (pseudoId: string) => {
+  const data = getUserIdByPseudoIdQuery.get(pseudoId);
+  return data?.userId as string | undefined;
+};
+
+// Utility queries
+const getLastInsertRowId = () => {
+  const result = getLastInsertRowIdQuery.get();
+  return result ? result.id : null;
+};
 
 export {
   db,
   addUser,
+  getAllUsers,
   getUserByUsername,
   getUserById,
   getRoleByUserId,
@@ -364,6 +742,9 @@ export {
   deleteToken,
   addUserPrivacy,
   getUserPrivacyByUserId,
+  getUserWithRoleQuery,
+  getAllShops,
+  getUserForAuthentication,
   updateUserPrivacy,
   insertUserPrivacy,
   getUserPrivacyByUserIdAndField,

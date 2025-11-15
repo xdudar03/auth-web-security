@@ -7,8 +7,9 @@ import {
 import { isoUint8Array } from "@simplewebauthn/server/helpers";
 import type { Session } from "express-session";
 import { HttpError } from "../errors.ts";
-import { db, updateUser } from "../database.ts";
+import { db, getAllUsers, getUserByUsername, updateUser } from "../database.ts";
 import { generateJwt } from "./biometric.ts";
+import type { User } from "../types/user.ts";
 
 export type ChallengeSession = Session & {
   challenge?: string;
@@ -44,8 +45,8 @@ export async function getRegistrationOptions(
     throw new HttpError(400, "username is required");
   }
 
-  const users = db.prepare("SELECT * FROM users").all();
-  const user = users.find((u: any) => u.username === username);
+  const users = getAllUsers();
+  const user = users.find((u: User) => u.username === username);
   if (!user) {
     throw new HttpError(404, "User not found");
   }
@@ -112,9 +113,7 @@ export async function verifyRegistration(
     const { verified, registrationInfo } = verification as any;
 
     if (verified && registrationInfo) {
-      const userRecord = db
-        .prepare("SELECT * FROM users WHERE username = ?")
-        .get(username);
+      const userRecord = getUserByUsername(username);
       if (!userRecord) {
         throw new HttpError(404, "User not found");
       }
@@ -162,9 +161,7 @@ export async function getAuthenticationOptions(
 ) {
   assertSession(session);
 
-  const user = db
-    .prepare("SELECT * FROM users WHERE username = ?")
-    .get(username);
+  const user = getUserByUsername(username);
 
   if (!user) {
     throw new HttpError(400, "User not found");
@@ -219,9 +216,7 @@ export async function verifyAuthentication(
   }
 
   try {
-    const query = db
-      .prepare("SELECT * FROM users WHERE username = ?")
-      .get(username);
+    const query = getUserByUsername(username);
 
     if (!query) {
       throw new HttpError(404, "User not found");

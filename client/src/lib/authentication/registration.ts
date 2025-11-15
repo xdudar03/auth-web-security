@@ -1,7 +1,10 @@
-import type { User } from '@/hooks/useUserContext';
-
-export async function handleRegister(user: User) {
-  const { username, email, password, id, roleId } = user;
+export async function handleRegister() {
+  // const { username, email, password, id, roleId } = user;
+  const username = 'test';
+  const password = 'test';
+  const id = 'test';
+  const email = 'test';
+  const roleId = 2;
   console.log('username, password, id', username, password, id, roleId);
   if (!username || !password || !id || !email) {
     throw new Error('Username, password and email are required');

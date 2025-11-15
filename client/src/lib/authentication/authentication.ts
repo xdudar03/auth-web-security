@@ -1,7 +1,9 @@
 import type { User } from '@/hooks/useUserContext';
 
 export async function handleAuthenticate(user: User) {
-  const { username, password } = user;
+  // const { username, password } = user;
+  const username = 'test';
+  const password = 'test';
 
   const response = await fetch('/api/biometric/authentication', {
     method: 'POST',

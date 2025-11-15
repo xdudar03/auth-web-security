@@ -13,12 +13,13 @@ export async function sendEmailWithToken(
 ) {
   const token = crypto.randomBytes(32).toString("hex");
   console.log("token for ", purpose, token);
-  const result = addToken.run(
+  const result = addToken({
     token,
-    new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(),
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(),
     purpose,
-    userId
-  ); // 1 day
+    userId,
+  });
+
   console.log("result of adding token for ", purpose, result);
   if (!result) {
     throw new Error(`Failed to add token for ${purpose}`);
@@ -47,7 +48,7 @@ export async function sendEmailWithToken(
 }
 
 export async function verifyToken(token: string, purpose: string) {
-  const result = getToken.get(token, purpose);
+  const result = getToken(token, purpose);
   console.log("result of verifying token for ", purpose, result);
   if (!result) {
     throw new HttpError(400, "Invalid token");
@@ -59,7 +60,7 @@ export async function verifyToken(token: string, purpose: string) {
   if (purpose === "confirmation") {
     const jwt = generateJwt(String(result.userId));
     console.log("jwt in verifyToken: ", jwt);
-    deleteToken.run(token, purpose);
+    deleteToken(token, purpose);
     return { userId: result.userId, jwt: jwt };
   }
   return { userId: result.userId };
@@ -71,6 +72,6 @@ export function resetPassword(
   userId: string
 ) {
   updateUser(userId, { password: newPassword });
-  deleteToken.run(token, "reset_password");
+  deleteToken(token, "reset_password");
   return { message: "Password reset successfully" };
 }

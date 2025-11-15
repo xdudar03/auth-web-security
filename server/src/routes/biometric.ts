@@ -30,7 +30,7 @@ router.post("/authentication", async (req, res) => {
 
 router.post("/change", async (req, res) => {
   try {
-    const result = await changeBiometricEmbedding(req.body);
+    const result = await changeBiometricEmbedding(req.body, null);
     res.status(200).json(result);
   } catch (error) {
     handleError(res, error);
@@ -39,7 +39,7 @@ router.post("/change", async (req, res) => {
 
 router.post("/change-password", async (req, res) => {
   try {
-    const result = await changeBiometricPassword(req.body);
+    const result = await changeBiometricPassword(req.body, null);
     res.status(200).json(result);
   } catch (error) {
     handleError(res, error);
@@ -48,7 +48,7 @@ router.post("/change-password", async (req, res) => {
 
 router.post("/confirm-password", async (req, res) => {
   try {
-    const result = await confirmBiometricPassword(req.body);
+    const result = await confirmBiometricPassword(req.body, null);
     res.status(200).json(result);
   } catch (error) {
     handleError(res, error);

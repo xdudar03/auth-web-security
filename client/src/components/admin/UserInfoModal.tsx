@@ -113,7 +113,7 @@ export default function UserInfoModal({
   const getVisibility = (
     field: keyof FormValues
   ): 'hidden' | 'anonymized' | 'visible' => {
-    const v = activeUser.privacy?.[field as string];
+    const v = activeUser.privacy?.[field];
     if (v === 'hidden' || v === 'anonymized' || v === 'visible') return v;
     return 'hidden';
   };

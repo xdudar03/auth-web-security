@@ -2,13 +2,17 @@ import {
   addUser,
   addUserToShop,
   db,
+  getAllUsers,
   updateUser,
   getUserById,
+  getUserWithRoleQuery,
+  getUserForAuthentication,
 } from "../database.ts";
 import { HttpError } from "../errors.ts";
 import jwt from "jsonwebtoken";
 import { jwtSecret } from "../tools/trpc.ts";
 import bcrypt from "bcryptjs";
+import type { User } from "../types/user.ts";
 
 type RegistrationInput = {
   userId: string;
@@ -25,7 +29,7 @@ type AuthenticationInput = {
 };
 
 type ChangeEmbeddingInput = {
-  embedding: unknown;
+  embedding: number[];
 };
 
 type ChangePasswordInput = {
@@ -45,45 +49,27 @@ export async function registerBiometricUser(input: RegistrationInput) {
   console.log("registerBiometricUser input: ", input);
   const { userId, username, email, password, roleId, shopIds } = input;
   console.log("shopIds: ", shopIds.length);
-  const usersFromDB = db.prepare("SELECT * FROM users").all();
+  const usersFromDB = getAllUsers();
 
-  if (usersFromDB.find((query: any) => query.username === username)) {
+  if (usersFromDB.find((user: User) => user.username === username)) {
     throw new HttpError(400, "User already exists");
   }
 
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
 
-  addUser.run(
+  addUser({
     userId,
     username,
     email,
-    "",
-    "",
-    hashedPassword,
-    typeof roleId === "string" ? Number(roleId) : roleId,
-    "",
-    "",
-    "",
-    ""
-  );
+    password: hashedPassword,
+    roleId: typeof roleId === "string" ? Number(roleId) : roleId,
+  });
 
-  const query = db
-    .prepare(
-      "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE userId = ?"
-    )
-    .get(userId);
-  console.log("query: ", query);
+  // const user = getUserWithRoleQuery.get(userId);
   if (shopIds.length > 0) {
     for (const shopId of shopIds) {
-      console.log("shopId: ", shopId);
-      console.log("query?.userId: ", query?.userId);
-      const result = addUserToShop.run(query?.userId as string, shopId);
-
-      console.log("result: ", result);
-      if (!result) {
-        throw new HttpError(400, "Failed to add user to shop");
-      }
+      addUserToShop(userId, shopId);
     }
   } else {
     throw new HttpError(400, "No shops provided");
@@ -98,24 +84,20 @@ export async function registerBiometricUser(input: RegistrationInput) {
 export async function authenticateBiometricUser(input: AuthenticationInput) {
   const { username, password } = input;
 
-  const query = db
-    .prepare(
-      "SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE username = ? OR email = ? OR phoneNumber = ?"
-    )
-    .get(username, username, username);
+  const user = getUserForAuthentication(username, username, username);
 
-  if (!query) {
+  if (!user) {
     throw new HttpError(400, "User not found");
   }
 
   const isPasswordValid = await bcrypt.compare(
     password,
-    query.password as string
+    user.password as string
   );
   if (!isPasswordValid) {
     throw new HttpError(400, "Invalid password");
   }
-  const jwt = generateJwt(query?.userId as string);
+  const jwt = generateJwt(user.userId as string);
   console.log("jwt in authenticateBiometricUser: ", jwt);
   return { jwt };
 }
@@ -131,12 +113,12 @@ export async function changeBiometricEmbedding(
     throw new HttpError(401, "Unauthorized");
   }
 
-  const query = getUserById.get(user.userId as string);
-  if (!query) {
+  const existingUser = getUserById(user.userId as string);
+  if (!existingUser) {
     throw new HttpError(400, "User not found");
   }
 
-  updateUser(query.userId as string, { embedding: embedding });
+  updateUser(existingUser.userId as string, { embedding: embedding });
 
   return {
     message: "Biometric changed successfully",
@@ -154,17 +136,17 @@ export async function changeBiometricPassword(
     throw new HttpError(401, "Unauthorized");
   }
 
-  const query = getUserById.get(user.userId as string);
+  const existingUser = getUserById(user.userId as string);
 
-  if (!query) {
+  if (!existingUser) {
     throw new HttpError(400, "User not found");
   }
 
-  if (query.password !== oldPassword) {
+  if (existingUser.password !== oldPassword) {
     throw new HttpError(400, "Invalid password");
   }
 
-  updateUser(query.userId as string, { password: newPassword });
+  updateUser(existingUser.userId as string, { password: newPassword });
 
   return { message: "Password changed successfully" };
 }
@@ -179,15 +161,15 @@ export async function confirmBiometricPassword(
     throw new HttpError(401, "Unauthorized");
   }
 
-  const query = getUserById.get(user.userId as string);
+  const existingUser = getUserById(user.userId as string);
 
-  if (!query) {
+  if (!existingUser) {
     throw new HttpError(400, "User not found");
   }
 
   const isPasswordValid = await bcrypt.compare(
     password,
-    query.password as string
+    existingUser.password as string
   );
   if (!isPasswordValid) {
     throw new HttpError(400, "Invalid password");

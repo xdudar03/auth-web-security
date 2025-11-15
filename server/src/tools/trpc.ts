@@ -27,7 +27,7 @@ async function createContext({
         "userId" in decoded
       ) {
         userId = decoded.userId;
-        user = getUserById.get(userId as string);
+        user = getUserById(userId);
       }
       console.log("user: ", user);
     } catch (error) {

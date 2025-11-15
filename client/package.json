@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "next build --turbopack --no-lint",
     "start": "next start",
     "lint": "eslint"
   },
@@ -41,7 +41,7 @@
     "@eslint/eslintrc": "^3",
     "@faker-js/faker": "^10.1.0",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24.5.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

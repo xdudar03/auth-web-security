@@ -5,10 +5,16 @@ import SettingsCard from '../dashboard/SettingsCard';
 import StatCard from './StatCard';
 import UsersTable from '../UsersTable';
 import { useState } from 'react';
-import { User } from '@/hooks/useUserContext';
+import { Role, Shop, User } from '@/hooks/useUserContext';
 import UserInfoModal from './UserInfoModal';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useQuery } from '@tanstack/react-query';
+
+export type AdminUserRow = {
+  user: Omit<User, 'embedding' | 'credentials' | 'password'>;
+  role: Pick<Role, 'roleName' | 'roleId'>;
+  shops: Shop[];
+};
 
 export default function AdminDashboard() {
   const trpc = useTRPC();
@@ -17,7 +23,9 @@ export default function AdminDashboard() {
   console.log('users in admin dashboard: ', users);
   const isLoading = listUsersQuery.isLoading;
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
-  const [activeUser, setActiveUser] = useState<User | null>(null);
+  const [activeUser, setActiveUser] = useState<AdminUserRow['user'] | null>(
+    null
+  );
   const [mode, setMode] = useState<'view' | 'edit'>('view');
 
   return (

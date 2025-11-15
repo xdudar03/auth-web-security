@@ -12,7 +12,7 @@ export default function toggleUserPrivacy(
   field: string,
   visibility: "hidden" | "anonymized" | "visible"
 ) {
-  const result = updateUserPrivacy.run(visibility, userId, field);
+  const result = updateUserPrivacy(visibility, userId, field);
   console.log("result: ", result);
   if (result.changes === 0) {
     throw new HttpError(404, "User privacy not updated");
@@ -25,7 +25,7 @@ export function insertUserPrivacyService(
   field: string,
   visibility: "hidden" | "anonymized" | "visible"
 ) {
-  const result = insertUserPrivacy.run(userId, field, visibility);
+  const result = insertUserPrivacy({ userId, field, visibility });
   console.log("result: ", result);
   if (result.changes === 0) {
     throw new HttpError(404, "User privacy not inserted");
@@ -38,17 +38,17 @@ export function toggleUserPrivacyService(
   field: string,
   visibility: "hidden" | "anonymized" | "visible"
 ) {
-  const result = getUserPrivacyByUserIdAndField.get(userId, field);
+  const result = getUserPrivacyByUserIdAndField(userId, field);
   console.log("result: ", result);
   if (!result) {
-    const insertResult = insertUserPrivacy.run(userId, field, visibility);
+    const insertResult = insertUserPrivacy({ userId, field, visibility });
     console.log("insertResult: ", insertResult);
     if (insertResult.changes === 0) {
       throw new HttpError(404, "User privacy not inserted");
     }
     return { field: field, visibility: visibility };
   } else {
-    const updateResult = updateUserPrivacy.run(visibility, userId, field);
+    const updateResult = updateUserPrivacy(visibility, userId, field);
     console.log("updateResult: ", updateResult);
     if (updateResult.changes === 0) {
       throw new HttpError(404, "User privacy not updated");
@@ -63,12 +63,12 @@ export function getUsersPrivacy(
   const results: { pseudoId: string; field: string; visibility: string }[] = [];
   console.log("userFields: ", userFields);
   for (const { pseudoId, field } of userFields) {
-    const userId = getUserIdByPseudoId.get(pseudoId)?.userId;
+    const userId = getUserIdByPseudoId(pseudoId);
     console.log("userId: ", userId);
     if (!userId) {
       throw new HttpError(404, "User not found for pseudoId: " + pseudoId);
     }
-    const result = getUserPrivacyFieldByUserId.get(userId, field);
+    const result = getUserPrivacyFieldByUserId(userId, field);
     console.log("result: ", result);
     if (result) {
       results.push({

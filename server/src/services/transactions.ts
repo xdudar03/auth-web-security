@@ -3,8 +3,10 @@ import {
   getTransactionsByUserId,
   getPseudonymByUserId,
   getTransactionsByShopId,
+  getTransactionByTransactionId as getTransactionByTransactionIdDatabase,
 } from "../database.ts";
 import { HttpError } from "../errors.ts";
+import type { Transaction } from "../types/transaction.ts";
 
 function mapTransactions(transactions: any[]) {
   // Group rows by transactionId and aggregate items
@@ -44,12 +46,12 @@ function mapTransactions(transactions: any[]) {
 
 export const getTransactionsById = async (userId: string) => {
   console.log("userId: ", userId);
-  const pseudoId = getPseudonymByUserId.get(userId)?.pseudoId;
+  const pseudoId = getPseudonymByUserId(userId)?.pseudoId;
   console.log("pseudoId: ", pseudoId);
   if (!pseudoId) {
     throw new HttpError(404, "Pseudo ID not found");
   }
-  const transactions = getTransactionsByUserId.all(pseudoId);
+  const transactions = getTransactionsByUserId(pseudoId);
   if (!transactions) {
     throw new HttpError(404, "Transactions not found");
   }
@@ -59,16 +61,16 @@ export const getTransactionsById = async (userId: string) => {
   return mappedTransactions;
 };
 
-export const getTransactionByTransactionId = async (transactionId: string) => {
-  const transaction = db
-    .prepare(`SELECT * FROM transactions WHERE transactionId = ?`)
-    .get(transactionId);
+export const getTransactionByTransactionId = async (
+  transactionId: Transaction["transactionId"]
+) => {
+  const transaction = getTransactionByTransactionIdDatabase(transactionId);
   console.log("transaction: ", transaction);
   return transaction;
 };
 
 export const getTransactionsByShopIdService = async (shopId: number) => {
-  const transactions = getTransactionsByShopId.all(shopId);
+  const transactions = getTransactionsByShopId(shopId);
   console.log("transactions: ", transactions);
   if (!transactions) {
     throw new HttpError(404, "Transactions not found");
