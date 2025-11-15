@@ -6,21 +6,24 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 
 export default function ChangePasswordForm({
   mode,
   setShowChangePasswordModal,
-  token,
 }: {
   mode: 'reset' | 'change';
   setShowChangePasswordModal: (show: boolean) => void;
-  token?: string | null;
 }) {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState({ message: '', type: '' });
   const trpc = useTRPC();
+
+  const searchParams = useSearchParams();
+  const token = searchParams.get('token');
+  console.log('token: ', token);
 
   const verifyResetPasswordTokenMutation = useMutation(
     trpc.email.verifyToken.mutationOptions({

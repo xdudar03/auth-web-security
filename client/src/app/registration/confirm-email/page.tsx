@@ -1,11 +1,12 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
 import ConfirmEmailModal from '@/components/authentication/ConfirmEmailModal';
+import { Suspense } from 'react';
 
 export default function ConfirmEmailPage() {
-  const searchParams = useSearchParams();
-  const token = searchParams.get('token');
-  console.log('token: ', token);
-  return <ConfirmEmailModal token={token} />;
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ConfirmEmailModal />;
+    </Suspense>
+  );
 }

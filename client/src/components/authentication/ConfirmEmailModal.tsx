@@ -4,13 +4,17 @@ import Modal from '../Modal';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '../ui/button';
 import useJwt from '@/hooks/useJwt';
 
-export default function ConfirmEmailModal({ token }: { token: string | null }) {
+export default function ConfirmEmailModal() {
   const [message, setMessage] = useState({ message: '', type: '' });
   const trpc = useTRPC();
+
+  const searchParams = useSearchParams();
+  const token = searchParams.get('token');
+  console.log('token: ', token);
 
   const router = useRouter();
   const { setJwt } = useJwt();
