@@ -334,7 +334,12 @@ function updateUserQuery(userId: string, updates: Record<string, any>) {
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
       setClauses.push(`${key} = ?`);
-      values.push(value);
+      // Convert arrays/objects to JSON strings for SQLite storage
+      if (typeof value === "object" && value !== null) {
+        values.push(JSON.stringify(value));
+      } else {
+        values.push(value);
+      }
     }
   }
 
@@ -346,7 +351,8 @@ function updateUserQuery(userId: string, updates: Record<string, any>) {
   values.push(userId);
 
   const stmt = db.prepare(sql);
-  return stmt.run(...values);
+  const result = stmt.run(...values);
+  return result;
 }
 
 const updateRoleQuery = db.prepare(
@@ -644,16 +650,8 @@ const getUserShops = (userId: string) => {
 
 const getShopUsers = (shopId: number) => {
   const usersData = getShopUsersQuery.all(shopId);
-  return usersData
-    .map((user) => {
-      const result = User.safeParse(user);
-      if (!result.success) {
-        console.error("Parse error in getShopUsers:", result.error);
-        return null;
-      }
-      return result.data;
-    })
-    .filter((user) => user !== null);
+  console.log("usersData: ", usersData);
+  return usersData;
 };
 
 // Token queries
@@ -711,11 +709,15 @@ const getUserPrivacyByUserIdAndField = (userId: string, field: string) => {
 };
 
 const updateUserPrivacy = (
-  userId: string,
-  field: string,
-  visibility: string
+  privacySetting: Omit<PrivacySettingRecord, "privacyId">
 ) => {
-  return updateUserPrivacyQuery.run(visibility, userId, field);
+  const settingWithoutId = mapUndefinedToNull(privacySetting);
+  console.log("settingWithoutId: ", settingWithoutId);
+  return updateUserPrivacyQuery.run(
+    settingWithoutId.visibility,
+    settingWithoutId.userId,
+    settingWithoutId.field
+  );
 };
 
 const insertUserPrivacy = (

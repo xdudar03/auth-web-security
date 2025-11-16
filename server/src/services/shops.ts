@@ -16,18 +16,14 @@ export function getAllShops() {
 }
 
 export function getAllUsersFromShop(shopId: number) {
-  console.log("shopId: ", shopId);
   const users = getShopUsers(shopId);
 
   users.forEach((user: any) => {
     const shop = getShopById(shopId);
     const privacy = getUserPrivacyByUserId(user.userId);
-    console.log("privacy: ", privacy);
     user.shop = shop;
     user.privacy = privacy;
   });
-  console.log("users: ", users);
   const response = users.map((row: any) => sanitizeUserSummary(row));
-  console.log("response: ", response);
   return { users: response };
 }

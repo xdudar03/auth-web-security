@@ -45,9 +45,7 @@ function mapTransactions(transactions: any[]) {
 }
 
 export const getTransactionsById = async (userId: string) => {
-  console.log("userId: ", userId);
   const pseudoId = getPseudonymByUserId(userId)?.pseudoId;
-  console.log("pseudoId: ", pseudoId);
   if (!pseudoId) {
     throw new HttpError(404, "Pseudo ID not found");
   }
@@ -57,7 +55,6 @@ export const getTransactionsById = async (userId: string) => {
   }
 
   const mappedTransactions = mapTransactions(transactions);
-  console.log("mappedTransactions: ", mappedTransactions);
   return mappedTransactions;
 };
 

@@ -29,7 +29,7 @@ type AuthenticationInput = {
 };
 
 type ChangeEmbeddingInput = {
-  embedding: number[];
+  embedding: string;
 };
 
 type ChangePasswordInput = {
@@ -83,6 +83,8 @@ export async function registerBiometricUser(input: RegistrationInput) {
 
 export async function authenticateBiometricUser(input: AuthenticationInput) {
   const { username, password } = input;
+  console.log("username: ", username);
+  console.log("password: ", password);
 
   const user = getUserForAuthentication(username, username, username);
 
@@ -104,21 +106,21 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
 
 export async function changeBiometricEmbedding(
   input: ChangeEmbeddingInput,
-  user: any
+  user: User
 ) {
   const { embedding } = input;
   console.log("embedding: ", embedding);
 
-  if (!user?.userId) {
+  if (!user.userId) {
     throw new HttpError(401, "Unauthorized");
   }
 
-  const existingUser = getUserById(user.userId as string);
+  const existingUser = getUserById(user.userId);
   if (!existingUser) {
     throw new HttpError(400, "User not found");
   }
 
-  updateUser(existingUser.userId as string, { embedding: embedding });
+  updateUser(existingUser.userId, { embedding: embedding });
 
   return {
     message: "Biometric changed successfully",
@@ -127,50 +129,54 @@ export async function changeBiometricEmbedding(
 
 export async function changeBiometricPassword(
   input: ChangePasswordInput,
-  user: any
+  user: User
 ) {
   const { oldPassword, newPassword } = input;
   console.log("user jwt: ", user);
 
-  if (!user?.userId) {
+  if (!user.userId) {
     throw new HttpError(401, "Unauthorized");
   }
 
-  const existingUser = getUserById(user.userId as string);
-
-  if (!existingUser) {
-    throw new HttpError(400, "User not found");
-  }
-
-  if (existingUser.password !== oldPassword) {
-    throw new HttpError(400, "Invalid password");
-  }
-
-  updateUser(existingUser.userId as string, { password: newPassword });
-
-  return { message: "Password changed successfully" };
-}
-
-export async function confirmBiometricPassword(
-  input: ConfirmPasswordInput,
-  user: any
-) {
-  const { password } = input;
-
-  if (!user?.userId) {
-    throw new HttpError(401, "Unauthorized");
-  }
-
-  const existingUser = getUserById(user.userId as string);
+  const existingUser = getUserById(user.userId);
 
   if (!existingUser) {
     throw new HttpError(400, "User not found");
   }
 
   const isPasswordValid = await bcrypt.compare(
-    password,
-    existingUser.password as string
+    oldPassword,
+    existingUser.password
   );
+
+  if (!isPasswordValid) {
+    throw new HttpError(400, "Invalid password");
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(newPassword, salt);
+  updateUser(existingUser.userId, { password: hashedPassword });
+
+  return { message: "Password changed successfully" };
+}
+
+export async function confirmBiometricPassword(
+  input: ConfirmPasswordInput,
+  user: User
+) {
+  const { password } = input;
+
+  if (!user.userId) {
+    throw new HttpError(401, "Unauthorized");
+  }
+
+  const existingUser = getUserById(user.userId);
+
+  if (!existingUser) {
+    throw new HttpError(400, "User not found");
+  }
+
+  const isPasswordValid = await bcrypt.compare(password, existingUser.password);
   if (!isPasswordValid) {
     throw new HttpError(400, "Invalid password");
   }

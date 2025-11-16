@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { addToken, deleteToken, getToken, updateUser } from "../database.ts";
 import { HttpError } from "../errors.ts";
 import { generateJwt } from "./biometric.ts";
+import bcrypt from "bcryptjs";
 
 export async function sendEmailWithToken(
   to: string,
@@ -66,12 +67,14 @@ export async function verifyToken(token: string, purpose: string) {
   return { userId: result.userId };
 }
 
-export function resetPassword(
+export async function resetPassword(
   token: string,
   newPassword: string,
   userId: string
 ) {
-  updateUser(userId, { password: newPassword });
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(newPassword, salt);
+  updateUser(userId, { password: hashedPassword });
   deleteToken(token, "reset_password");
   return { message: "Password reset successfully" };
 }

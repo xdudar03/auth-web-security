@@ -45,6 +45,7 @@ import {
   getTransactionsById,
   getTransactionsByShopIdService,
 } from "./services/transactions.ts";
+import type { User } from "./types/user.ts";
 
 function mapHttpStatusToTrpcCode(status: number): TRPCError["code"] {
   if (status >= 500) return "INTERNAL_SERVER_ERROR";
@@ -156,7 +157,7 @@ export const appRouter = router({
         execute(() =>
           changeBiometricEmbedding(
             { embedding: JSON.parse(input.embedding) },
-            ctx.user
+            ctx.user as User
           )
         )
       ),
@@ -168,12 +169,12 @@ export const appRouter = router({
         })
       )
       .mutation(({ input, ctx }) =>
-        execute(() => changeBiometricPassword(input, ctx.user))
+        execute(() => changeBiometricPassword(input, ctx.user as User))
       ),
     confirmPassword: publicProcedure
       .input(z.object({ password: z.string() }))
       .mutation(({ input, ctx }) =>
-        execute(() => confirmBiometricPassword(input, ctx.user))
+        execute(() => confirmBiometricPassword(input, ctx.user as User))
       ),
   }),
   model: router({

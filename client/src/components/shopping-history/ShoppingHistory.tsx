@@ -5,7 +5,9 @@ import ShoppingTable from './ShoppingTable';
 export default function ShoppingHistory() {
   const { shops, user } = useUser();
 
-  const spendings = JSON.parse(user?.spendings ?? '[]');
+  const spendings = user?.spendings
+    ? JSON.parse(user?.spendings)
+    : { total: 0, currency: 'USD' };
 
   return (
     <div className="flex flex-col gap-4 w-full bg-surface rounded-lg p-4">

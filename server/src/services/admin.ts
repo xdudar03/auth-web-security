@@ -18,7 +18,6 @@ export function sanitizeUserSummary(row: any) {
     },
     {}
   );
-  console.log(`privacy: ${row?.userId}`, privacy);
 
   const result = mapResponseQuery({
     ...row,

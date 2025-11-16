@@ -13,7 +13,7 @@ export default function toggleUserPrivacy(
   field: string,
   visibility: Visibility
 ) {
-  const result = updateUserPrivacy(visibility, userId, field);
+  const result = updateUserPrivacy({ userId, field, visibility });
   console.log("result: ", result);
   if (result.changes === 0) {
     throw new HttpError(404, "User privacy had no changes");
@@ -49,7 +49,7 @@ export function toggleUserPrivacyService(
     }
     return { field: field, visibility: visibility };
   } else {
-    const updateResult = updateUserPrivacy(visibility, userId, field);
+    const updateResult = updateUserPrivacy({ userId, field, visibility });
     console.log("updateResult: ", updateResult);
     if (updateResult.changes === 0) {
       throw new HttpError(404, "User privacy had no changes");

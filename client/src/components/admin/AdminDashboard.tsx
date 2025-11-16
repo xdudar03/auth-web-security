@@ -28,6 +28,13 @@ export default function AdminDashboard() {
   );
   const [mode, setMode] = useState<'view' | 'edit'>('view');
 
+  // Add privacy to active user if it exists
+  if (activeUser) {
+    activeUser.privacy = users.find(
+      (user) => user.user.userId === activeUser.userId
+    )?.privacy;
+  }
+  console.log('activeUser in admin dashboard: ', activeUser);
   return (
     <div className="grid w-full gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr">
       <SettingsCard />

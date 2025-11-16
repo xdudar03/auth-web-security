@@ -199,7 +199,7 @@ export default function BiometricAuth({
 
       const userWithEmbedding = {
         ...user,
-        embedding: projection,
+        embedding: JSON.stringify(projection),
         userId: user?.userId ?? '',
       } as User;
 

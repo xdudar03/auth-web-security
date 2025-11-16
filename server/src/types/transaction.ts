@@ -22,6 +22,10 @@ export const Transaction = z.object({
   location: z.string().nullable().optional(),
   paymentMethod: PaymentMethod,
   purchaseType: PurchaseType,
+  itemId: z.number(),
+  quantity: z.number(),
+  itemName: z.string(),
+  itemPrice: z.number(),
 });
 
 export type Transaction = z.infer<typeof Transaction>;

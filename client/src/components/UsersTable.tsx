@@ -33,31 +33,22 @@ export default function UsersTable({
   setMode: (mode: 'view' | 'edit') => void;
 }) {
   const { role } = useUser();
-  // const [userId, setUserId] = useState<string>('');
+  console.log('role: ', role);
 
   const handleView = useCallback(
     (user: AdminUserRow['user']) => {
-      // todo super hack
-      // id = id.toString();
-      // console.log('id', id);
       console.log('user in handleView: ', user);
-      if (!role?.canReadUsers) {
-        return;
-      }
-      // setUserId(user.id);
+
       setActiveUser(user);
       setShowUserInfoModal(true);
       setMode('view');
     },
-    [role?.canReadUsers, setActiveUser, setMode, setShowUserInfoModal]
+    [setActiveUser, setMode, setShowUserInfoModal]
   );
 
   const handleEdit = useCallback(
     async (user: AdminUserRow['user']) => {
       if (role?.canChangeUsersCredentials) {
-        // setUserId(id);
-        // const userInfo = getUserQuery.data?.user;
-
         setShowUserInfoModal(true);
         setActiveUser(user);
         setMode('edit');
