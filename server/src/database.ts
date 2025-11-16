@@ -1,9 +1,10 @@
+import { mkdirSync } from "node:fs";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { User } from "./types/user.ts";
 import { Token } from "./types/token.ts";
 import { Role } from "./types/role.ts";
 import { Shop } from "./types/shop.ts";
-import { UserShop } from "./types/userShop.ts";
 import {
   PrivacySettings,
   PrivacySettingRecord,
@@ -14,7 +15,14 @@ import { TransactionItem } from "./types/transactionItem.ts";
 import { UserTransaction } from "./types/userTransaction.ts";
 import { Pseudonym } from "./types/pseudonym.ts";
 
-const db = new DatabaseSync("./users.db");
+const rawDbPath = process.env.SQLITE_DB_PATH?.trim() || "./data/users.db";
+const dbPath = isAbsolute(rawDbPath)
+  ? rawDbPath
+  : resolve(process.cwd(), rawDbPath);
+
+mkdirSync(dirname(dbPath), { recursive: true });
+
+const db = new DatabaseSync(dbPath);
 // TODO: change shoppingHistory and spendings
 const initTable = () => {
   db.exec(`

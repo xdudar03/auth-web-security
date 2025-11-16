@@ -3,15 +3,16 @@ services:
     build:
       context: ./server
     env_file:
-      - .env
+      - ./server/.env
     environment:
       - MODEL_BASE_URL=http://model:5000
       - SESSION_SECRET=${SESSION_SECRET}
       - CORS_ORIGIN=${CORS_ORIGIN}
+      - SQLITE_DB_PATH=/app/data/users.db
     ports:
       - "4000:4000"
     volumes:
-      - ./server/users.db:/app/users.db
+      - sqlite_db:/app/data
     # depends_on:
     #   model:
     #     condition: service_healthy
@@ -29,7 +30,8 @@ services:
 
   client:
     build:
-      context: ./client
+      context: .
+      dockerfile: ./client/Dockerfile
     environment:
       - SERVER_BASE_URL=http://server:4000
     ports:
@@ -64,5 +66,5 @@ services:
   #     interval: 10s
   #     timeout: 5s
   #     retries: 5
-# volumes:
-#   model_db:
+volumes:
+  sqlite_db:

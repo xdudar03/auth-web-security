@@ -27,6 +27,7 @@ import {
   suppression,
 } from '@/lib/anonymization/anonimizationData';
 import { faker } from '@faker-js/faker';
+import { Visibility } from '../../../../server/src/types/privacySetting';
 
 export default function AccountInfo() {
   const { user, shops, privacy } = useUser();
@@ -42,14 +43,17 @@ export default function AccountInfo() {
           queryKey: trpc.info.getUserInfo.queryOptions().queryKey,
         });
       },
-      onError: (error) => {
-        console.error('Error updating user', error);
+      onError: (error: unknown) => {
+        console.error(
+          'Error updating user',
+          error instanceof Error ? error.message : 'Unknown error'
+        );
       },
     })
   );
   const toggleUserPrivacyMutation = useMutation(
     trpc.privacy.toggleUserPrivacyService.mutationOptions({
-      onSuccess: (data) => {
+      onSuccess: (data: { field: string; visibility: Visibility }) => {
         console.log(`this fiels ${data.field} is now ${data.visibility}`);
         queryClient.invalidateQueries({
           queryKey: trpc.info.getUserInfo.queryOptions().queryKey,
@@ -73,7 +77,7 @@ export default function AccountInfo() {
           userId: user?.userId ?? '',
           updates: updates,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Error saving account info', error);
       }
     }
@@ -126,7 +130,7 @@ export default function AccountInfo() {
           field: name,
           visibility: visibility,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Error toggling user privacy', error);
       }
       if (visibility === 'anonymized') {

@@ -1,12 +1,13 @@
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
-COPY package*.json ./
-COPY eslint.config.mjs ./
+COPY client/package*.json ./
+COPY client/eslint.config.mjs ./
 RUN npm ci
 
 FROM deps AS builder
 WORKDIR /app
-COPY . .
+COPY client/ .
+COPY server/ ../server/
 ENV NEXT_DISABLE_ESLINT=true \
     SERVER_BASE_URL=http://server:4000
 RUN npm run build -- --no-lint

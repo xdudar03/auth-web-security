@@ -8,9 +8,8 @@ RUN npm ci
 
 # Copy application source
 COPY src ./src
-
-# Seed SQLite database file if present (compose will bind-mount to persist)
-COPY users.db ./users.db
+COPY config ./config
+COPY seedDb.sh ./seedDb.sh
 
 ENV NODE_ENV=production \
     MODEL_BASE_URL=http://model:5000

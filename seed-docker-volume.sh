@@ -1,0 +1,1 @@
+docker run --rm -v auth-web-security_sqlite_db:/app/data -w /app auth-web-security-server:latest bash -c "/app/seedDb.sh"

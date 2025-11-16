@@ -92,4 +92,4 @@ build/
 /model/data/dataset-yalefaces/
 
 /server/src/users.json
-/server/users.db
+/server/data/users.db

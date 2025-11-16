@@ -7,6 +7,7 @@ import {
   registerBiometricUser,
 } from "../services/biometric.ts";
 import { HttpError } from "../errors.ts";
+import type { User } from "../types/user.ts";
 
 const router = Router();
 
@@ -29,8 +30,9 @@ router.post("/authentication", async (req, res) => {
 });
 
 router.post("/change", async (req, res) => {
+  const user = req.body.user as User;
   try {
-    const result = await changeBiometricEmbedding(req.body, null);
+    const result = await changeBiometricEmbedding(req.body, user);
     res.status(200).json(result);
   } catch (error) {
     handleError(res, error);
@@ -38,8 +40,9 @@ router.post("/change", async (req, res) => {
 });
 
 router.post("/change-password", async (req, res) => {
+  const user = req.body.user as User;
   try {
-    const result = await changeBiometricPassword(req.body, null);
+    const result = await changeBiometricPassword(req.body, user);
     res.status(200).json(result);
   } catch (error) {
     handleError(res, error);
@@ -47,8 +50,9 @@ router.post("/change-password", async (req, res) => {
 });
 
 router.post("/confirm-password", async (req, res) => {
+  const user = req.body.user as User;
   try {
-    const result = await confirmBiometricPassword(req.body, null);
+    const result = await confirmBiometricPassword(req.body, user);
     res.status(200).json(result);
   } catch (error) {
     handleError(res, error);
