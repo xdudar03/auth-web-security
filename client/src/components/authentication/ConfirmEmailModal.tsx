@@ -14,14 +14,12 @@ export default function ConfirmEmailModal() {
 
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
-  console.log('token: ', token);
 
   const router = useRouter();
   const { setJwt } = useJwt();
   const verifyTokenMutation = useMutation(
     trpc.email.verifyToken.mutationOptions({
       onSuccess: (data) => {
-        console.log('token verified: ', data);
         if ('jwt' in data && data.jwt) {
           setJwt(data.jwt);
         }
@@ -31,9 +29,8 @@ export default function ConfirmEmailModal() {
         });
       },
       onError: (error) => {
-        console.error('Error verifying token', error);
         setMessage({
-          message: 'Error verifying token',
+          message: `Error verifying token: ${error.message}`,
           type: 'error',
         });
       },
@@ -43,13 +40,11 @@ export default function ConfirmEmailModal() {
   useEffect(() => {
     if (!token) {
       setMessage({
-        message: 'Token is required',
+        message: 'Token is required to confirm your email',
         type: 'error',
       });
       return;
     }
-    console.log('token', token);
-    console.log('purpose', 'confirmation');
     verifyTokenMutation.mutate({
       token: token,
       purpose: 'confirmation',
@@ -75,9 +70,9 @@ export default function ConfirmEmailModal() {
     >
       {message.message && (
         <div
-          className={
-            message.type === 'success' ? 'text-green-500' : 'text-red-500'
-          }
+          className={`alert ${
+            message.type === 'success' ? 'alert-success' : 'alert-error'
+          }`}
         >
           {message.message}
         </div>

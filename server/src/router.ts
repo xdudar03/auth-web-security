@@ -94,11 +94,11 @@ export const appRouter = router({
   }),
   passwordless: router({
     getRegistrationOptions: publicProcedure
-      .input(z.object({ username: z.string() }))
+      .input(z.object({ userId: z.string() }))
       .mutation(({ input, ctx }) =>
         execute(() =>
           getRegistrationOptions(
-            input.username,
+            input.userId,
             ctx.req.session as ChallengeSession
           )
         )

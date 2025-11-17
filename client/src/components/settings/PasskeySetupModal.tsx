@@ -19,14 +19,12 @@ export default function PasskeySetupModal({
   const trpc = useTRPC();
   const confirmPasswordMutation = useMutation(
     trpc.biometric.confirmPassword.mutationOptions({
-      onSuccess: (data) => {
-        console.log('data', data);
+      onSuccess: () => {
         setIsConfirmed(true);
       },
       onError: (error) => {
-        console.error('error', error);
         setMessage({
-          message: 'Password confirmation failed',
+          message: `Password confirmation failed: ${error.message}`,
           type: 'error',
         });
       },
@@ -36,7 +34,10 @@ export default function PasskeySetupModal({
   const getRegistrationOptionsMutation = useMutation(
     trpc.passwordless.getRegistrationOptions.mutationOptions({
       onError: (error) => {
-        console.error('error', error);
+        setMessage({
+          message: `Failed to get registration options: ${error.message}`,
+          type: 'error',
+        });
       },
     })
   );
@@ -53,9 +54,8 @@ export default function PasskeySetupModal({
         }, 2000);
       },
       onError: (error) => {
-        console.error('error', error);
         setMessage({
-          message: 'Passkey registration failed',
+          message: `Passkey registration failed: ${error.message}`,
           type: 'error',
         });
       },
@@ -63,26 +63,25 @@ export default function PasskeySetupModal({
   );
 
   const handleSubmit = async () => {
-    // const isConfirmed = await confirmPasswordMutation.mutateAsync({
     const confirmed = await confirmPasswordMutation.mutateAsync({
       password: confirmPassword,
     });
     if (confirmed) {
       const options = await getRegistrationOptionsMutation.mutateAsync({
-        username: user?.username as string,
+        userId: user!.userId,
       });
-      console.log('options', options);
       const attResp = await startRegistration({ optionsJSON: options });
-      console.log('attResp', attResp);
       await verifyRegistrationMutation.mutateAsync(attResp);
     }
   };
+
   const handleClose = () => {
     setShowPasskeySetupModal(false);
     setIsConfirmed(false);
     setConfirmPassword('');
     setMessage({ message: '', type: '' });
   };
+
   return (
     <Modal
       title="Passkey Registration"
@@ -107,7 +106,9 @@ export default function PasskeySetupModal({
       open={true}
     >
       {isConfirmed ? (
-        <p>{message.message}</p>
+        <div className="alert alert-success">
+          Passkey registered successfully
+        </div>
       ) : (
         <ConfirmPassword
           setConfirmPassword={setConfirmPassword}

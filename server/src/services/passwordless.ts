@@ -7,13 +7,17 @@ import {
 import { isoUint8Array } from "@simplewebauthn/server/helpers";
 import type { Session } from "express-session";
 import { HttpError } from "../errors.ts";
-import { db, getAllUsers, getUserByUsername, updateUser } from "../database.ts";
+import {
+  getAllUsers,
+  getUserById,
+  getUserByUsername,
+  updateUser,
+} from "../database.ts";
 import { generateJwt } from "./biometric.ts";
 import type { User } from "../types/user.ts";
 
 export type ChallengeSession = Session & {
   challenge?: string;
-  username?: string;
   userId?: string;
 };
 
@@ -36,17 +40,17 @@ function assertSession(
 }
 
 export async function getRegistrationOptions(
-  username: string,
+  userId: string,
   session?: ChallengeSession
 ) {
   assertSession(session);
 
-  if (!username) {
-    throw new HttpError(400, "username is required");
+  if (!userId) {
+    throw new HttpError(400, "userId is required");
   }
 
   const users = getAllUsers();
-  const user = users.find((u: User) => u.username === username);
+  const user = users.find((u: User) => u.userId === userId);
   if (!user) {
     throw new HttpError(404, "User not found");
   }
@@ -64,7 +68,7 @@ export async function getRegistrationOptions(
     const options = await generateRegistrationOptions({
       rpName: "Example RP",
       rpID: "localhost",
-      userName: username,
+      userName: user.username!,
       userID: isoUint8Array.fromUTF8String(user.userId as string),
       attestationType: "none",
       authenticatorSelection: {
@@ -78,8 +82,7 @@ export async function getRegistrationOptions(
     });
 
     session.challenge = options.challenge;
-    session.username = username;
-    session.userId = user?.userId as string;
+    session.userId = user.userId as string;
 
     return options;
   } catch (error) {
@@ -95,9 +98,9 @@ export async function verifyRegistration(
   assertSession(session);
 
   const expectedChallenge = session.challenge;
-  const username = session.username;
+  const userId = session.userId;
 
-  if (!expectedChallenge || !username) {
+  if (!expectedChallenge || !userId) {
     throw new HttpError(400, "Registration session is missing data");
   }
 
@@ -113,7 +116,7 @@ export async function verifyRegistration(
     const { verified, registrationInfo } = verification as any;
 
     if (verified && registrationInfo) {
-      const userRecord = getUserByUsername(username);
+      const userRecord = getUserById(userId);
       if (!userRecord) {
         throw new HttpError(404, "User not found");
       }
@@ -192,7 +195,6 @@ export async function getAuthenticationOptions(
 
     session.challenge = options.challenge;
     session.userId = user.userId as string;
-    session.username = user.username as string;
 
     return options;
   } catch (error) {
@@ -209,14 +211,14 @@ export async function verifyAuthentication(
   console.log("responseBody", responseBody);
   console.log("session", session);
   const expectedChallenge = session.challenge;
-  const username = session.username;
+  const userId = session.userId;
 
-  if (!username || !expectedChallenge) {
+  if (!userId || !expectedChallenge) {
     throw new HttpError(400, "Authentication session is missing data");
   }
 
   try {
-    const query = getUserByUsername(username);
+    const query = getUserById(userId);
 
     if (!query) {
       throw new HttpError(404, "User not found");
@@ -278,13 +280,11 @@ export async function verifyAuthentication(
 
 export const passwordlessSessionKeys = {
   challenge: "challenge" as const,
-  username: "username" as const,
   userId: "userId" as const,
 };
 
 export function clearPasswordlessSession(session?: ChallengeSession) {
   if (!session) return;
   delete session.challenge;
-  delete session.username;
   delete session.userId;
 }

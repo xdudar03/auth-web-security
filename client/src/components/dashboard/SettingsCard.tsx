@@ -14,7 +14,7 @@ export default function SettingsCard() {
             href="/settings"
             className="icon-btn-zoom bg-transparent rounded-full w-full h-full flex items-center justify-center"
           >
-            <Settings className=" w-full h-1/2 text-muted" />
+            <Settings className=" w-1/2 h-1/2 text-muted" />
           </Link>
         </CardHeader>
         <CardContent>

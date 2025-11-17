@@ -48,6 +48,10 @@ export default function FormAuth({
   });
 
   function handleSuccess({ jwt }: { jwt: string }) {
+    setMessage({
+      message: 'Login successful, redirecting to dashboard...',
+      type: 'success',
+    });
     // Clear cache before setting new token to avoid stale data from previous session
     queryClient.clear();
     setJwt(jwt);
@@ -96,11 +100,45 @@ export default function FormAuth({
     initializedShopsRef.current = true;
   }, [allShops, form, title]);
 
+  const passwordCheck = (password: string) => {
+    if (password.length < 8) {
+      setMessage({
+        message: 'Password must be at least 8 characters',
+        type: 'error',
+      });
+      return false;
+    }
+    if (!/[0-9]/.test(password)) {
+      setMessage({
+        message: 'Password must contain at least one number',
+        type: 'error',
+      });
+      return false;
+    }
+    return true;
+  };
+
   const onSubmit: SubmitHandler<FormValues> = async (values) => {
+    if (
+      !values.username ||
+      !values.password ||
+      !values.email ||
+      !values.shopIds.length
+    ) {
+      setMessage({
+        message: 'Please fill in all fields',
+        type: 'error',
+      });
+      return;
+    }
+    if (title === 'Registration' && !passwordCheck(values.password)) {
+      return;
+    }
     handleAuthenticate(values);
   };
 
   const onPasswordless = () => {
+    setMessage({ message: '', type: '' });
     const username = form.getValues('username');
     if (!username) {
       setMessage({ message: 'Username is required', type: 'error' });
@@ -110,6 +148,7 @@ export default function FormAuth({
   };
 
   const handleBiometric = () => {
+    setMessage({ message: '', type: '' });
     const username = form.getValues('username');
     if (!username) {
       setMessage({ message: 'Username is required', type: 'error' });
@@ -119,6 +158,7 @@ export default function FormAuth({
   };
   const loginAs = useCallback(
     (username: string, password: string) => {
+      setMessage({ message: '', type: '' });
       form.setValue('username', username, {
         shouldDirty: true,
         shouldTouch: true,
@@ -151,6 +191,16 @@ export default function FormAuth({
 
           <PasswordField form={form} title={title} />
 
+          {message.message && (
+            <div
+              className={`alert ${
+                message.type === 'success' ? 'alert-success' : 'alert-error'
+              }`}
+            >
+              {message.message}
+            </div>
+          )}
+
           <div className="flex items-center justify-between flex-col">
             {title === 'Login' && (
               <Button
@@ -176,6 +226,7 @@ export default function FormAuth({
                 onSelect={loginAs}
               />
             )}
+
             <Button
               type="submit"
               className="w-full p-0"
@@ -186,15 +237,6 @@ export default function FormAuth({
           </div>
         </form>
       </Form>
-      {message.message && (
-        <div
-          className={`${
-            message.type === 'success' ? 'text-green-500' : 'text-red-500'
-          }`}
-        >
-          {message.message}
-        </div>
-      )}
     </div>
   );
 }

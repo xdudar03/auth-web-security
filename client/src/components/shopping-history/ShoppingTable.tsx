@@ -146,23 +146,25 @@ export default function ShoppingTable() {
 
   return (
     <div className="border border-border rounded-md overflow-hidden">
-      <div className="flex items-center gap-2 p-3 border-b border-border bg-surface/60">
+      <div className="flex items-center justify-between gap-2 p-3 border-b border-border bg-surface/60">
         <label htmlFor="bulkAssociation" className="text-sm text-muted">
           Set association for all orders
         </label>
-        <select
-          id="bulkAssociation"
-          className="h-9 px-3 rounded-md border border-border bg-surface text-sm"
-          value={bulkChoice}
-          onChange={(e) => setBulkChoice(e.target.value as AssociationChoice)}
-        >
-          <option value="hidden">Detached (default)</option>
-          <option value="visible">Linked</option>
-          <option value="anonymized">Anonymized</option>
-        </select>
-        <Button size="sm" onClick={applyBulkChoice}>
-          Apply to all
-        </Button>
+        <div className="flex items-center gap-2 flex-col sm:flex-row ">
+          <select
+            id="bulkAssociation"
+            className="h-9 px-3 rounded-md border border-border bg-surface text-sm"
+            value={bulkChoice}
+            onChange={(e) => setBulkChoice(e.target.value as AssociationChoice)}
+          >
+            <option value="hidden">Detached (default)</option>
+            <option value="visible">Linked</option>
+            <option value="anonymized">Anonymized</option>
+          </select>
+          <Button size="sm" onClick={applyBulkChoice}>
+            Apply to all
+          </Button>
+        </div>
       </div>
       {/* Mobile list view */}
       <ShoppingListMobile

@@ -34,10 +34,9 @@ export default function RegistrationFields({
       <FormField
         control={form.control}
         name="email"
-        rules={{ required: 'Email is required' }}
         render={({ field }) => (
           <FormItem className="form-field">
-            <FormLabel>Email</FormLabel>
+            <FormLabel>Email *</FormLabel>
             <FormControl>
               <Input type="email" placeholder="Enter your email" {...field} />
             </FormControl>
@@ -49,10 +48,9 @@ export default function RegistrationFields({
       <FormField
         control={form.control}
         name="shopIds"
-        rules={{ required: 'Shop is required' }}
         render={() => (
           <FormItem className="form-field">
-            <FormLabel>Shops</FormLabel>
+            <FormLabel>Shops * </FormLabel>
             <FormControl>
               <AsyncSelect
                 instanceId="shop-select"

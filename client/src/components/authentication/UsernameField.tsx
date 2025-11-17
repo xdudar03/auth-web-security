@@ -19,10 +19,9 @@ export default function UsernameField({
     <FormField
       control={form.control}
       name="username"
-      rules={{ required: 'Username is required' }}
       render={({ field }) => (
         <FormItem className="form-field">
-          <FormLabel>Username</FormLabel>
+          <FormLabel>Username *</FormLabel>
           <FormControl>
             <Input
               type="text"

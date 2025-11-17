@@ -21,10 +21,9 @@ export default function PasswordField({
     <FormField
       control={form.control}
       name="password"
-      rules={{ required: 'Password is required' }}
       render={({ field }) => (
         <FormItem className="form-field">
-          <FormLabel>Password</FormLabel>
+          <FormLabel>Password *</FormLabel>
           <FormControl>
             <Input
               type="password"

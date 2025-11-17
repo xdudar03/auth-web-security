@@ -27,13 +27,13 @@ export default function ConfirmPassword({
         onChange={handleChange}
       />
       {message.message && (
-        <p
-          className={`${
-            message.type === 'error' ? 'text-error' : 'text-success'
+        <div
+          className={`alert ${
+            message.type === 'success' ? 'alert-success' : 'alert-error'
           }`}
         >
           {message.message}
-        </p>
+        </div>
       )}
     </div>
   );

@@ -287,7 +287,7 @@ export default function AccountInfo() {
               {mode === 'view' ? <Pencil /> : <Check />}
             </Button>
           </div>
-          <div className="grid-section-2 w-full">
+          <div className="grid-section-2 w-full ">
             <h1 className="text-lg font-bold col-span-2">Personal Details</h1>
             {input('First Name', mode === 'view', 'firstName', 'text')}
             {input('Last Name', mode === 'view', 'lastName', 'text')}
