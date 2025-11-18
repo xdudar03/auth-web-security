@@ -45,7 +45,7 @@ export default function BiometricAuthModel({
   return (
     <Modal
       title="Biometric Authentication"
-      description="Change your biometric authentication."
+      description="Register your face for biometric authentication."
       open={true}
       onClose={handleClose}
       footer={

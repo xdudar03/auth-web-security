@@ -122,17 +122,7 @@ export default function BiometricAuth({
   };
 
   const runBiometricAction = async (payload: User) => {
-    if (action === 'registration') {
-      // const result = await register.mutateAsync({
-      //   username: payload.username,
-      //   email: payload.email,
-      //   password: payload.password,
-      //   userId: payload.userId,
-      //   roleId: payload.roleId ?? 2,
-      //   shopIds: payload.shopIds ?? [],
-      // });
-      // setUser(result.user as User);
-    } else if (action === 'login') {
+    if (action === 'login') {
       await authenticate.mutateAsync({
         username: payload.username,
         password: payload.password,

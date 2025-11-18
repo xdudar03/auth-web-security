@@ -120,10 +120,12 @@ export default function FormAuth({
 
   const onSubmit: SubmitHandler<FormValues> = async (values) => {
     if (
-      !values.username ||
-      !values.password ||
-      !values.email ||
-      !values.shopIds.length
+      (title === 'Login' && (!values.username || !values.password)) ||
+      (title === 'Registration' &&
+        (!values.username ||
+          !values.password ||
+          !values.email ||
+          !values.shopIds.length))
     ) {
       setMessage({
         message: 'Please fill in all fields',

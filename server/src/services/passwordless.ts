@@ -49,8 +49,7 @@ export async function getRegistrationOptions(
     throw new HttpError(400, "userId is required");
   }
 
-  const users = getAllUsers();
-  const user = users.find((u: User) => u.userId === userId);
+  const user = getUserById(userId);
   if (!user) {
     throw new HttpError(404, "User not found");
   }
