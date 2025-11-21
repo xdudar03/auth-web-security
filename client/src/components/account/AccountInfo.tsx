@@ -21,17 +21,22 @@ import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import {
-  ageGeneralization,
   masking,
   namePseudonymization,
   suppression,
 } from '@/lib/anonymization/anonimizationData';
 import { faker } from '@faker-js/faker';
 import { Visibility } from '../../../../server/src/types/privacySetting';
+import {
+  anonymizeCity,
+  anonymizeCountry,
+  anonymizeStreet,
+} from '@/lib/anonymization/anonymizationAddress';
 
 export default function AccountInfo() {
   const { user, shops, privacy } = useUser();
   const [mode, setMode] = useState<'view' | 'edit'>('view');
+  const [messages, setMessages] = useState<Record<string, string>>({});
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const updateUserMutation = useMutation(
@@ -136,44 +141,103 @@ export default function AccountInfo() {
       if (visibility === 'anonymized') {
         switch (name) {
           case 'firstName':
-            form.setValue('firstName', namePseudonymization().firstName);
+            const anonFirstName = namePseudonymization().firstName;
+            form.setValue('firstName', anonFirstName);
+            setMessages((prev) => ({
+              ...prev,
+              [name]: 'Anonymized value: ' + anonFirstName,
+            }));
             break;
           case 'lastName':
-            form.setValue('lastName', namePseudonymization().lastName);
+            const anonLastName = namePseudonymization().lastName;
+            form.setValue('lastName', anonLastName);
+            setMessages((prev) => ({
+              ...prev,
+              [name]: 'Anonymized value: ' + anonLastName,
+            }));
             break;
           case 'email':
-            form.setValue('email', masking(form.getValues('email')));
-            break;
-          case 'dateOfBirth':
-            form.setValue(
-              'dateOfBirth',
-              ageGeneralization(form.getValues('dateOfBirth') ?? '')
-            );
+            const anonEmail = masking(form.getValues('email'));
+            form.setValue('email', anonEmail);
+            setMessages((prev) => ({
+              ...prev,
+              [name]: 'Anonymized value: ' + anonEmail,
+            }));
             break;
           case 'phoneNumber':
-            form.setValue(
-              'phoneNumber',
-              masking(form.getValues('phoneNumber') ?? '')
-            );
-            break;
-          case 'zip':
-            form.setValue('zip', masking(form.getValues('zip') ?? ''));
+            const anonPhone = masking(form.getValues('phoneNumber') ?? '');
+            form.setValue('phoneNumber', anonPhone);
+            setMessages((prev) => ({
+              ...prev,
+              [name]: 'Anonymized value: ' + anonPhone,
+            }));
             break;
           case 'dateOfBirth':
-            // form.setValue('dateOfBirth', ageGeneralization(form.getValues('dateOfBirth') ?? ''));
-            form.setValue('dateOfBirth', faker.date.birthdate().toISOString());
+            const anonDOB = faker.date.birthdate().toISOString();
+            form.setValue('dateOfBirth', anonDOB);
+            setMessages((prev) => ({
+              ...prev,
+              [name]: 'Anonymized value: ' + anonDOB,
+            }));
             break;
           case 'gender':
-            form.setValue('gender', suppression());
+            const anonGender = suppression();
+            form.setValue('gender', anonGender);
+            setMessages((prev) => ({
+              ...prev,
+              [name]: 'Anonymized value: ' + anonGender,
+            }));
+            break;
+          case 'zip':
+            const anonZip = masking(form.getValues('zip') ?? '');
+            form.setValue('zip', anonZip);
+            setMessages((prev) => ({
+              ...prev,
+              [name]: 'Anonymized value: ' + anonZip,
+            }));
             break;
           case 'country':
-            form.setValue('country', suppression());
+            const country = form.getValues('country') ?? '';
+            const anonymizedCountry = anonymizeCountry(country);
+            console.log('anonymizedCountry', anonymizedCountry);
+            if (anonymizedCountry) {
+              setMessages((prev) => ({
+                ...prev,
+                [name]: 'Anonymized value: ' + anonymizedCountry,
+              }));
+            } else {
+              setMessages((prev) => ({ ...prev, [name]: 'No country found' }));
+              form.setValue('country', suppression());
+            }
             break;
           case 'city':
-            form.setValue('city', suppression());
+            const city = form.getValues('city') ?? '';
+            const anonymizedCity = await anonymizeCity(city);
+            console.log('anonymizedCity', anonymizedCity);
+            if (anonymizedCity.length > 0) {
+              setMessages((prev) => ({
+                ...prev,
+                [name]: 'Anonymized value: ' + anonymizedCity[0].country,
+              }));
+            } else {
+              setMessages((prev) => ({ ...prev, [name]: 'No city found' }));
+              form.setValue('city', suppression());
+            }
             break;
           case 'address':
-            form.setValue('address', suppression());
+            const street = form.getValues('address') ?? '';
+            const anonymizedStreet = await anonymizeStreet(street);
+            console.log('anonymizedStreet', anonymizedStreet);
+            if (anonymizedStreet.length > 0) {
+              // TODO: better error handling and validation
+              setMessages((prev) => ({
+                ...prev,
+                [name]: 'Anonymized value: ' + anonymizedStreet[0].city,
+              }));
+            } else {
+              setMessages((prev) => ({ ...prev, [name]: 'No street found' }));
+              form.setValue('address', suppression());
+            }
             break;
         }
       }
@@ -192,64 +256,71 @@ export default function AccountInfo() {
         render={({ field }) => (
           <FormItem>
             <FormControl>
-              <div className="flex items-center justify-start flex-row gap-2">
-                <Input
-                  {...field}
-                  type={type}
-                  placeholder={label}
-                  value={field.value ?? ''}
-                  disabled={disabled}
-                />
-                {privacy?.find(
-                  (p: PrivacySettings) => p.field === (name as string)
-                )?.visibility === 'visible' ? (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-start flex-row gap-2">
+                  <Input
+                    {...field}
+                    type={type}
+                    placeholder={label}
+                    value={field.value ?? ''}
+                    disabled={disabled}
+                  />
+                  {privacy?.find(
+                    (p: PrivacySettings) => p.field === (name as string)
+                  )?.visibility === 'visible' ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={handleToggleVisibility(name, 'hidden')}
+                        >
+                          <Eye />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Hide this field</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={handleToggleVisibility(name, 'visible')}
+                        >
+                          <EyeClosed />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Show this field</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        onClick={handleToggleVisibility(name, 'hidden')}
+                        onClick={handleToggleVisibility(name, 'anonymized')}
                       >
-                        <Eye />
+                        <HatGlasses />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Hide this field</p>
+                      <p>Anonymize this field</p>
                     </TooltipContent>
                   </Tooltip>
-                ) : (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={handleToggleVisibility(name, 'visible')}
-                      >
-                        <EyeClosed />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Show this field</p>
-                    </TooltipContent>
-                  </Tooltip>
+                </div>
+                {messages[name as string] && (
+                  <p className="text-sm text-muted-foreground">
+                    {messages[name as string]}
+                  </p>
                 )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleToggleVisibility(name, 'anonymized')}
-                    >
-                      <HatGlasses />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Anonymize this field</p>
-                  </TooltipContent>
-                </Tooltip>
               </div>
             </FormControl>
             <FormMessage />
