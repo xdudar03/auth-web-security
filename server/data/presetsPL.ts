@@ -1,6 +1,13 @@
-export const privacyLevelsPresets = {
-  "Privacy Level 1": {
-    description: "Lowest privacy level. Provider can see all data.",
+import type { Visibility } from "../src/types/privacySetting.ts";
+
+export const privacyLevelsPresets: Record<
+  string,
+  { label: string; description: string; fields: Record<string, Visibility> }
+> = {
+  pl1: {
+    label: "PL1",
+    description:
+      "Lowest privacy level. Provider can see all data. The user's personal information is fully visible to the provider.",
     fields: {
       userId: "visible",
       username: "visible",
@@ -19,7 +26,8 @@ export const privacyLevelsPresets = {
       shops: "visible",
     },
   },
-  "Privacy Level 2": {
+  pl2: {
+    label: "PL2",
     description:
       "Medium privacy level. Provider can see all data, except for the sensitive data.",
     fields: {
@@ -40,7 +48,8 @@ export const privacyLevelsPresets = {
       shops: "anonymized",
     },
   },
-  "Privacy Level 3": {
+  pl3: {
+    label: "PL3",
     description: "Higher privacy level. All data either hidden or anonymized.",
     fields: {
       userId: "anonymized",
@@ -60,7 +69,8 @@ export const privacyLevelsPresets = {
       shops: "hidden",
     },
   },
-  "Privacy Level 4": {
+  pl4: {
+    label: "PL4",
     description: "Highest privacy level. All data hidden.",
     fields: {
       userId: "hidden",

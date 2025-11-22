@@ -7,6 +7,7 @@ import {
   getUserPrivacyFieldByUserId,
 } from "../database.ts";
 import type { Visibility } from "../types/privacySetting.ts";
+import { privacyLevelsPresets } from "../../data/presetsPL.ts";
 
 export function toggleUserPrivacyService(
   userId: string,
@@ -52,4 +53,12 @@ export function getUsersPrivacy(
   }
   console.log("results: ", results);
   return results;
+}
+
+export function getPrivacyPreset(preset: string) {
+  return privacyLevelsPresets[preset]?.fields;
+}
+
+export function getAllPrivacyPresets() {
+  return Object.values(privacyLevelsPresets);
 }

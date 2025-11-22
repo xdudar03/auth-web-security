@@ -223,4 +223,8 @@ body {
   .card-content {
     @apply flex flex-col gap-2 flex-1 box-border p-2;
   }
+
+  .privacy-toggle-button {
+    @apply min-w-[3.25rem] border border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-muted transition-colors hover:bg-muted/20 hover:text-foreground;
+  }
 }
