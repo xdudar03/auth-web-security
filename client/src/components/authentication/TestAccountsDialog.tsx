@@ -24,6 +24,7 @@ export default function TestAccountsDialog({
     { label: 'Hidden All', username: 'hidden_all', password: 'password1' },
     { label: 'Anonymized All', username: 'anon_all', password: 'password2' },
     { label: 'Visible All', username: 'visible_all', password: 'password3' },
+    { label: 'Mixed A', username: 'mixed_a', password: 'password4' },
   ] as const;
 
   return (

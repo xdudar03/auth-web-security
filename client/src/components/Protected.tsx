@@ -18,20 +18,14 @@ export default function Protected({
 }: ProtectedProps) {
   const router = useRouter();
   const { isAuthenticated, user, role, isLoading, isPending } = useUser();
-  console.log('user', user);
-  console.log('role', role);
-  console.log('user?.roleId', user?.roleId);
 
   const isAuthorized = (() => {
-    console.log('requiredPermissions', requiredPermissions);
     if (!requiredPermissions || requiredPermissions.length === 0) return true;
     if (!user?.roleId || !role) return false;
     return requiredPermissions.every(
       (permission) => role[`${permission}` as keyof typeof role]
     );
   })();
-
-  console.log('isAuthorized', isAuthorized);
 
   useEffect(() => {
     if (!isAuthenticated && !isLoading && !isPending) {

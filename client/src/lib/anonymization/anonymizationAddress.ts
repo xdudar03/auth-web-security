@@ -17,8 +17,9 @@ export function anonymizeCountry(input: string): string | undefined {
   return byName.get(input.toLowerCase())?.region;
 }
 
-export async function anonymizeStreet(street: string) {
-  const q = street;
+export async function anonymizeStreet(street: string, city?: string) {
+  const q = city ? `${street}, ${city}` : street;
+  // properties: type: city, town, village, municipality
   const json = await fetchFromPhoton(q);
   return json.features.map(
     (f: {

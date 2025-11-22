@@ -1,13 +1,14 @@
 'use client';
 import { useUser } from '@/hooks/useUserContext';
 import ShoppingTable from './ShoppingTable';
+import { useState } from 'react';
 
 export default function ShoppingHistory() {
-  const { shops, user } = useUser();
-
-  const spendings = user?.spendings
-    ? JSON.parse(user?.spendings)
-    : { total: 0, currency: 'USD' };
+  const { shops } = useUser();
+  const [spendings, setSpendings] = useState<{
+    total: number;
+    currency: string;
+  }>({ total: 0, currency: 'USD' });
 
   return (
     <div className="flex flex-col gap-4 w-full bg-surface rounded-lg p-4">
@@ -30,7 +31,7 @@ export default function ShoppingHistory() {
             {spendings.total} {spendings.currency}
           </span>
         </p>
-        <ShoppingTable />
+        <ShoppingTable setSpendings={setSpendings} />
       </div>
     </div>
   );

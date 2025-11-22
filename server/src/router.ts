@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { number, z } from "zod";
+import { z } from "zod";
 import { publicProcedure, router } from "./tools/trpc.ts";
 import {
   getAuthenticationOptions,
@@ -36,8 +36,7 @@ import {
 } from "./services/email.ts";
 import getUserInfo from "./services/info.ts";
 import type { JwtPayload } from "jsonwebtoken";
-import toggleUserPrivacy, {
-  insertUserPrivacyService,
+import {
   toggleUserPrivacyService,
   getUsersPrivacy,
 } from "./services/privacy.ts";
@@ -258,38 +257,6 @@ export const appRouter = router({
     ),
   }),
   privacy: router({
-    toggleUserPrivacy: publicProcedure
-      .input(
-        z.object({
-          field: z.string(),
-          visibility: z.enum(["hidden", "anonymized", "visible"]),
-        })
-      )
-      .mutation(({ input, ctx }) =>
-        execute(() =>
-          toggleUserPrivacy(
-            ctx.user?.userId as string,
-            input.field,
-            input.visibility
-          )
-        )
-      ),
-    insertUserPrivacy: publicProcedure
-      .input(
-        z.object({
-          field: z.string(),
-          visibility: z.enum(["hidden", "anonymized", "visible"]),
-        })
-      )
-      .mutation(({ input, ctx }) =>
-        execute(() =>
-          insertUserPrivacyService(
-            ctx.user?.userId as string,
-            input.field,
-            input.visibility
-          )
-        )
-      ),
     toggleUserPrivacyService: publicProcedure
       .input(
         z.object({

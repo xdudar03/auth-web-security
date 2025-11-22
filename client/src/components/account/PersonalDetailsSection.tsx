@@ -3,6 +3,7 @@ import { FormInputField } from './FormInputField';
 import { Control } from 'react-hook-form';
 import { PrivacySettings } from '@/hooks/useUserContext';
 import { FormValues } from './anonymizationHandlers';
+import PrivacyLevelsToggle from './PrivacyLevelsToggle';
 
 interface PersonalDetailsSectionProps {
   control: Control<FormValues>;
@@ -24,7 +25,10 @@ export const PersonalDetailsSection = ({
 }: PersonalDetailsSectionProps) => {
   return (
     <div className="grid-section-2 w-full">
-      <h1 className="text-lg font-bold col-span-2">Personal Details</h1>
+      <div className="flex flex-row gap-2 items-center justify-between col-span-2">
+        <h1 className="text-lg font-bold">Personal Details</h1>
+        <PrivacyLevelsToggle />
+      </div>
       <FormInputField
         control={control}
         label="First Name"

@@ -31,7 +31,11 @@ import {
   itemsColumn,
 } from '@/lib/historyColumns';
 
-export default function ShoppingTable() {
+export default function ShoppingTable({
+  setSpendings,
+}: {
+  setSpendings: (spendings: { total: number; currency: string }) => void;
+}) {
   // Association state per order (default: 'detached')
   const [associationById, setAssociationById] = useState<
     Record<string, AssociationChoice>
@@ -39,7 +43,6 @@ export default function ShoppingTable() {
   const [bulkChoice, setBulkChoice] = useState<AssociationChoice>('hidden');
   const { user, privacy } = useUser();
   const trpc = useTRPC();
-  console.log('user: ', user);
   const transactionsQuery = useQuery(
     trpc.transactions.getTransactionsById.queryOptions({
       userId: user?.userId as string,
@@ -48,8 +51,7 @@ export default function ShoppingTable() {
   const queryClient = useQueryClient();
   const toggleUserPrivacyMutation = useMutation(
     trpc.privacy.toggleUserPrivacyService.mutationOptions({
-      onSuccess: (data) => {
-        console.log(`this fiels ${data.field} is now ${data.visibility}`);
+      onSuccess: () => {
         queryClient.invalidateQueries({
           queryKey: trpc.info.getUserInfo.queryOptions().queryKey,
         });
@@ -57,7 +59,16 @@ export default function ShoppingTable() {
     })
   );
   const transactions = transactionsQuery.data as TransactionsData;
-  console.log('transactions: ', transactions);
+
+  useEffect(() => {
+    if (!transactions) return;
+    const total = transactions.reduce(
+      (acc, t) =>
+        acc + t.items.reduce((acc, i) => acc + i.price * i.quantity, 0),
+      0
+    );
+    setSpendings({ total, currency: 'USD' });
+  }, [transactions, setSpendings]);
 
   const historyEntries: HistoryEntry[] = useMemo(() => {
     if (!transactions) return [];
@@ -83,7 +94,6 @@ export default function ShoppingTable() {
   const handleAssociationChange = useCallback(
     async (id: string, value: AssociationChoice) => {
       setAssociationById((prev) => ({ ...prev, [id]: value }));
-      console.log(`setting association for ${id} to ${value}`);
       await toggleUserPrivacyMutation.mutateAsync({
         field: `shoppingHistory_transaction_${id}`,
         visibility: value,
@@ -131,12 +141,8 @@ export default function ShoppingTable() {
     for (const entry of historyEntries) {
       updated[entry.id] = bulkChoice;
     }
-    console.log(`updated: `, updated);
     setAssociationById(updated);
     for (const entry of historyEntries) {
-      console.log(
-        `toggling privacy for transaction ${entry.id} to ${bulkChoice}`
-      );
       await toggleUserPrivacyMutation.mutateAsync({
         field: `shoppingHistory_transaction_${entry.id}`,
         visibility: bulkChoice,

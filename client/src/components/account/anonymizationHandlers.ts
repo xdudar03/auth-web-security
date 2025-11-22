@@ -115,7 +115,8 @@ export async function handleFieldAnonymization(
       break;
     case 'address':
       const street = formGetValues('address') ?? '';
-      const anonymizedStreet = await anonymizeStreet(street);
+      const cityValue = formGetValues('city') ?? '';
+      const anonymizedStreet = await anonymizeStreet(street, cityValue);
       console.log('anonymizedStreet', anonymizedStreet);
       if (anonymizedStreet.length > 0) {
         setMessages((prev) => ({
