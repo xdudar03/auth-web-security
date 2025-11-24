@@ -1,0 +1,12 @@
+{
+  "shops": [
+    {
+      "shopId": 1,
+      "userFields": [1, 2, 3]
+    },
+    {
+      "shopId": 2,
+      "userFields": [4, 5, 6]
+    }
+  ]
+}

@@ -46,7 +46,7 @@ export function TrpcContext({ children }: { children: React.ReactNode }) {
       createTRPCClient<AppRouter>({
         links: [
           httpBatchLink({
-            url: 'http://localhost:4000/trpc',
+            url: '/api/trpc',
             headers() {
               return jwt ? { Authorization: `Bearer ${jwt}` } : {};
             },

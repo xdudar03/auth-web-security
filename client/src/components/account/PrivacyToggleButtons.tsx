@@ -19,6 +19,10 @@ export const PrivacyToggleButtons = ({
     privacy?.find((p: PrivacySettings) => p.field === fieldName)?.visibility ===
     'visible';
 
+  const isAnonymized =
+    privacy?.find((p: PrivacySettings) => p.field === fieldName)?.visibility ===
+    'anonymized';
+
   return (
     <div className="flex gap-1">
       {isVisible ? (
@@ -61,6 +65,7 @@ export const PrivacyToggleButtons = ({
             variant="ghost"
             size="icon"
             onClick={() => void onToggle('anonymized')}
+            className={isAnonymized ? 'bg-gray-200 dark:bg-gray-700' : ''}
           >
             <HatGlasses />
           </Button>
