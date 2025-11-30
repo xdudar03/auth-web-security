@@ -1,4 +1,4 @@
-import type { Visibility } from "../src/types/privacySetting.ts";
+import type { Visibility } from "./types/privacySetting.ts";
 
 export const privacyLevelsPresets: Record<
   string,

@@ -8,7 +8,7 @@ import {
   getUserPrivacyPresetById,
 } from "../database.ts";
 import type { Visibility } from "../types/privacySetting.ts";
-import { privacyLevelsPresets } from "../../data/presetsPL.ts";
+import { privacyLevelsPresets } from "../presetsPL.ts";
 import { updateUser } from "../database.ts";
 
 export function toggleUserPrivacyService(
