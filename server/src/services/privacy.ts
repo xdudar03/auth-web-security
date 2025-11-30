@@ -5,9 +5,11 @@ import {
   getUserPrivacyByUserIdAndField,
   getUserIdByPseudoId,
   getUserPrivacyFieldByUserId,
+  getUserPrivacyPresetById,
 } from "../database.ts";
 import type { Visibility } from "../types/privacySetting.ts";
 import { privacyLevelsPresets } from "../../data/presetsPL.ts";
+import { updateUser } from "../database.ts";
 
 export function toggleUserPrivacyService(
   userId: string,
@@ -61,4 +63,29 @@ export function getPrivacyPreset(preset: string) {
 
 export function getAllPrivacyPresets() {
   return Object.values(privacyLevelsPresets);
+}
+
+export function applyPrivacyPreset(userId: string, preset: string) {
+  const presetFields = privacyLevelsPresets[preset]?.fields;
+  if (!presetFields) {
+    throw new HttpError(404, "Preset not found");
+  }
+  const result: { field: string; visibility: Visibility }[] = [];
+  for (const field in presetFields) {
+    const visibility = presetFields[field] as Visibility;
+    toggleUserPrivacyService(userId, field, visibility);
+    result.push({ field: field, visibility: visibility });
+  }
+  updateUser(userId, { privacyPreset: preset });
+  console.log("result: ", result);
+  return result;
+}
+
+export function getUserPrivacyPreset(userId: string) {
+  const privacyPreset = getUserPrivacyPresetById(userId) as string;
+  console.log("privacyPreset", privacyPreset);
+  if (!privacyPreset) {
+    throw new HttpError(404, "Privacy preset not found");
+  }
+  return privacyPreset;
 }

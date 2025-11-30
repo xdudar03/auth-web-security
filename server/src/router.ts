@@ -41,6 +41,8 @@ import {
   getUsersPrivacy,
   getPrivacyPreset,
   getAllPrivacyPresets,
+  applyPrivacyPreset,
+  getUserPrivacyPreset,
 } from "./services/privacy.ts";
 import {
   getTransactionsById,
@@ -280,6 +282,16 @@ export const appRouter = router({
       .query(({ input }) => execute(() => getPrivacyPreset(input.preset))),
     getAllPrivacyPresets: publicProcedure.query(() =>
       execute(() => getAllPrivacyPresets())
+    ),
+    applyPrivacyPreset: publicProcedure
+      .input(z.object({ preset: z.string() }))
+      .mutation(({ input, ctx }) =>
+        execute(() =>
+          applyPrivacyPreset(ctx.user?.userId as string, input.preset)
+        )
+      ),
+    getUserPrivacyPreset: publicProcedure.query(({ ctx }) =>
+      execute(() => getUserPrivacyPreset(ctx.user?.userId as string))
     ),
     getUsersPrivacy: publicProcedure
       .input(

@@ -65,7 +65,7 @@ export const PrivacyToggleButtons = ({
             variant="ghost"
             size="icon"
             onClick={() => void onToggle('anonymized')}
-            className={isAnonymized ? 'bg-gray-200 dark:bg-gray-700' : ''}
+            className={isAnonymized ? 'active' : ''}
           >
             <HatGlasses />
           </Button>

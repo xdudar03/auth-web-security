@@ -22,6 +22,7 @@ export const User = z.object({
   spendings: z.optional(z.string().nullable()),
   shoppingHistory: z.optional(z.string().nullable()),
   privacy: z.optional(z.record(z.string(), PrivacySettings.shape.visibility)),
+  privacyPreset: z.optional(z.string().nullable()),
 });
 
 export type User = z.infer<typeof User>;

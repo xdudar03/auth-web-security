@@ -46,6 +46,7 @@ const initTable = () => {
       spendings TEXT,
       embedding TEXT,
       credentials TEXT,
+      privacyPreset TEXT,
       FOREIGN KEY (roleId) REFERENCES roles(roleId)
     )
   `);
@@ -195,7 +196,7 @@ function mapUndefinedToNull<T extends Record<string, any>>(
 }
 
 const addUserQuery = db.prepare(
-  `INSERT INTO users (userId, username, email, firstName, lastName, password, roleId, phoneNumber, dateOfBirth, gender, address, city, state, zip, country, spendings,  embedding, credentials) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` // credentials is a base64 string
+  `INSERT INTO users (userId, username, email, firstName, lastName, password, roleId, phoneNumber, dateOfBirth, gender, address, city, state, zip, country, spendings,  embedding, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` // credentials is a base64 string
 );
 
 const addUser = (user: User) => {
@@ -313,6 +314,16 @@ const getUserByUsernameQuery = db.prepare(
   `SELECT * FROM users WHERE username = ?`
 );
 
+const getUserPrivacyPresetQuery = db.prepare(
+  `SELECT privacyPreset FROM users WHERE userId = ?`
+);
+
+const getUserPrivacyPresetById = (userId: string) => {
+  const userData = getUserPrivacyPresetQuery.get(userId);
+  console.log("userData", userData);
+  return userData?.privacyPreset;
+};
+
 const getUserByIdQuery = db.prepare(`SELECT * FROM users WHERE userId = ?`);
 
 function updateUserQuery(userId: string, updates: Record<string, any>) {
@@ -334,6 +345,7 @@ function updateUserQuery(userId: string, updates: Record<string, any>) {
     "zip",
     "country",
     "spendings",
+    "privacyPreset",
   ];
 
   const setClauses = [];
@@ -965,4 +977,5 @@ export {
   getPseudonymByUserId,
   getUserIdByPseudoId,
   getUserPrivacyFieldByUserId,
+  getUserPrivacyPresetById,
 };
