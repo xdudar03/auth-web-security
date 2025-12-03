@@ -1,5 +1,3 @@
-import dynamic from 'next/dynamic';
-import type { MultiValue } from 'react-select';
 import { Input } from '@/components/ui/input';
 import {
   FormControl,
@@ -8,13 +6,11 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { MultiSelect } from '@/components/ui/multi-select';
 import type { UseFormReturn } from 'react-hook-form';
 import type { FormValues } from './types';
 import type { Shop } from '@/hooks/useUserContext';
-
-const AsyncSelect = dynamic(() => import('react-select/async'), {
-  ssr: false,
-});
+import { useMemo } from 'react';
 
 export default function RegistrationFields({
   form,
@@ -29,6 +25,20 @@ export default function RegistrationFields({
   ) => Promise<{ label: string; value: number }[]>;
   isLoadingShops: boolean;
 }) {
+  const shopOptions = useMemo(
+    () =>
+      allShops.map((shop: Shop) => ({
+        label: shop.shopName,
+        value: shop.shopId.toString(),
+      })),
+    [allShops]
+  );
+
+  const selectedShopIds = useMemo(() => {
+    const ids = form.watch('shopIds');
+    return ids ? ids.map((id: number) => id.toString()) : [];
+  }, [form]);
+
   return (
     <>
       <FormField
@@ -52,39 +62,17 @@ export default function RegistrationFields({
           <FormItem className="form-field">
             <FormLabel>Shops * </FormLabel>
             <FormControl>
-              <AsyncSelect
-                instanceId="shop-select"
-                loadOptions={loadShops}
-                defaultOptions={allShops.map((shop: Shop) => ({
-                  label: shop.shopName,
-                  value: shop.shopId,
-                }))}
-                isMulti
-                isLoading={isLoadingShops}
-                placeholder="Search and select shops..."
-                loadingMessage={() => 'Loading shops...'}
-                noOptionsMessage={({ inputValue }: { inputValue: string }) =>
-                  inputValue
-                    ? `No shops found for "${inputValue}"`
-                    : 'No shops available'
-                }
-                value={form
-                  .watch('shopIds')
-                  ?.map((id: number) => {
-                    const shop = allShops.find((s: Shop) => s.shopId === id);
-                    return shop
-                      ? { label: shop.shopName, value: shop.shopId }
-                      : null;
-                  })
-                  .filter(Boolean)}
-                onChange={(newValue) => {
-                  const selectedOptions = newValue as MultiValue<{
-                    label: string;
-                    value: number;
-                  }>;
-                  const shopIds = selectedOptions.map((option) => option.value);
+              <MultiSelect
+                options={shopOptions}
+                defaultValue={selectedShopIds}
+                onValueChange={(selectedValues) => {
+                  const shopIds = selectedValues.map((id: string) =>
+                    parseInt(id, 10)
+                  );
                   form.setValue('shopIds', shopIds);
                 }}
+                placeholder="Search and select shops..."
+                searchable
               />
             </FormControl>
           </FormItem>

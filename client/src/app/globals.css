@@ -18,6 +18,10 @@
   --error: #ef4444; /* red-400 */
   --warning: #f59e0b; /* amber-400 */
   --success: #10b981; /* green-600 */
+
+  /* Popover styling */
+  --popover: #ffffff; /* same as surface */
+  --popover-foreground: #0f172a; /* same as foreground */
 }
 
 @theme inline {
@@ -30,6 +34,8 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-ring: var(--ring);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -51,6 +57,8 @@
     --error: #7e1919;
     --warning: #744c0c;
     --success: #0e6447;
+    --popover: #0b1220; /* same as surface for dark mode */
+    --popover-foreground: #e2e8f0; /* same as foreground for dark mode */
   }
 }
 

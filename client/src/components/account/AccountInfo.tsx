@@ -13,6 +13,7 @@ import {
   handleFieldAnonymization,
   type FormValues,
 } from './anonymizationHandlers';
+import ProvidersManager from './ProvidersManager';
 
 export default function AccountInfo() {
   const { user, shops, privacy } = useUser();
@@ -142,6 +143,7 @@ export default function AccountInfo() {
             messages={messages}
             onToggleVisibility={handleToggleVisibility}
           />
+          <ProvidersManager />
         </form>
       </Form>
     </div>
