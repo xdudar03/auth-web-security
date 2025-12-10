@@ -1,5 +1,16 @@
 # auth-web-security
 
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+ (for local development)
+- Docker & Docker Compose (for containerized deployment)
+
+### Quick Start with Docker Compose
+
+The easiest way to get the entire stack running is with Docker Compose.
+
 ## Deployment (Docker Compose)
 
 1. Create a `.env` file at the repo root using the template below:
@@ -24,74 +35,79 @@ docker compose up --build -d
 ```
 
 Services:
+
 - client: http://localhost:3000
 - server: http://localhost:4000
-- model:  http://localhost:5000
 
 Health endpoints:
+
 - server: GET /health
-- model:  GET /health
 
-## Notes
-- The Next.js client proxies all requests from `/api/*` to the server (`SERVER_BASE_URL`).
-- The server accepts CORS origins set via `CORS_ORIGIN` (comma-separated list allowed).
-## Privacy-preserving face recognition
+## Local Development (npm install)
 
-### The flow of the system
+To run the services locally on your machine:
 
-Client side:
+### 1. Install Dependencies
 
-- User upload a photo of their face
-- The photo is anonymized on device (eigenface, k-same pixel, noise, etc.)
-  - https://github.com/TechStark/opencv-js
-  - https://github.com/justadudewhohacks/face-api.js
-  - https://www.npmjs.com/package/ml-pca
-- The anonymized photo is sent to the server
+**Client (Next.js):**
 
-Passwordless authentication:
-
-https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API
-https://simplewebauthn.dev/docs/
-
-- User upload a photo of their face
-- The photo is anonymized on device (eigenface, k-same pixel, noise, etc.)
-- The anonymized photo is sent to the server
-- The server matches the anonymized photo with the one in the database
-- If the photo is matched, the server returns a one-time password (OTP) to the user via email or SMS
-- The OTP is valid for a short period of time (e.g., 5 minutes)
-- The user uses the OTP to log in to the system
-
-Server side:
-
-- With face recognition model, the server matches the anonymized photo with the one in the database
-- If the photo is matched, the server returns the user ID.
-- If the photo is not matched, the server returns an "401. Unauthorized" error.
-
-<!-- Anonymization process:
-
-- The photo is resized to 100x100 pixels.
-- The photo is converted to grayscale.
-- The photo is normalized to [0, 1].
-- The photo is anonymized using the k-same pixel method on the client side. -->
-
-### The flow of the face recognition model
-
-The face recognition model is a simple CNN model:
-
-```python
-    model_input = layers.Input(shape=input_shape, name="input_image")
-
-    x = layers.Conv2D(32, (3, 3), activation='relu', padding='same', name="conv1_1")(model_input)
-    x = layers.BatchNormalization(name="bn1_1")(x)
-    x = layers.Conv2D(32, (3, 3), activation='relu', padding='same', name="conv1_2")(x)
-    x = layers.BatchNormalization(name="bn1_2")(x)
-    x = layers.MaxPooling2D((2, 2), name="pool1")(x)
-    x = layers.Dropout(0.25, name="drop1")(x)
+```bash
+cd client
+npm install
 ```
 
-- The photo is resized to 100x100 pixels.
-- The photo is converted to grayscale.
-- The photo is normalized to [0, 1].
-- The photo is anonymized using the eigenface method, k-same pixel method and noise method.
-- The photo is reconstructed to evaluate the quality of the anonymization.
-- The photo is stored in the database.
+**Server (Express):**
+
+```bash
+cd server
+npm install
+```
+
+### 2. Set up Environment Variables
+
+Create a `.env` file at the repo root:
+
+```
+# Server
+SESSION_SECRET=replace-with-strong-random-secret
+CORS_ORIGIN=http://localhost:3000
+MODEL_BASE_URL=http://localhost:5000
+
+# Client
+SERVER_BASE_URL=http://localhost:4000
+
+# Model (Flask)
+FLASK_SECRET_KEY=replace-with-strong-random-secret
+EXPRESS_BASE_URL=http://localhost:4000
+```
+
+Additionally, create `.env.local` in the `client` directory for Next.js-specific variables:
+
+```
+NEXT_PUBLIC_SERVER_BASE_URL=http://localhost:4000
+```
+
+### 3. Run the Services
+
+**Terminal 1 - Start the Express Server:**
+
+```bash
+cd server
+npm run dev
+# Runs on http://localhost:4000
+```
+
+**Terminal 2 - Start the Next.js Client:**
+
+```bash
+cd client
+npm run dev
+# Runs on http://localhost:3000
+```
+
+The application will be accessible at `http://localhost:3000`.
+
+## Notes
+
+- The Next.js client proxies all requests from `/api/*` to the server (`SERVER_BASE_URL`).
+- The server accepts CORS origins set via `CORS_ORIGIN` (comma-separated list allowed).
