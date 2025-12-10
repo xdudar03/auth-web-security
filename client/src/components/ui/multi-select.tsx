@@ -801,7 +801,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                 getAllOptions().length
               } options selected. ${placeholder}`}
               className={cn(
-                'flex h-auto min-h-10 items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-left text-foreground shadow-sm transition-colors hover:bg-surface/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background [&_svg]:pointer-events-auto',
+                'flex h-auto min-h-10 items-center justify-between gap-2 rounded-md border border-border bg-surface px-0 py-2 text-left text-foreground shadow-sm transition-colors hover:bg-surface/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background [&_svg]:pointer-events-auto',
                 autoSize ? 'w-auto' : 'w-full',
                 responsiveSettings.compactMode && 'min-h-9 text-xs',
                 screenSize === 'mobile' && 'min-h-12 text-base',
