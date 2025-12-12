@@ -52,18 +52,15 @@ export default function ProviderDashboard() {
       />
       <AccountStatsCard />
       <UsersTable
-        setShowUserInfoModal={setShowUserInfoModal}
         users={users}
+        setShowUserInfoModal={setShowUserInfoModal}
         setActiveUser={setActiveUser}
-        setMode={setMode}
       />
       {showUserInfoModal && activeUser && (
         <UserInfoModal
           activeUser={activeUser as User}
           setShowUserInfoModal={setShowUserInfoModal}
           setActiveUser={setActiveUser}
-          mode={mode}
-          setMode={setMode}
           onUserUpdated={allUsersQuery.refetch}
         />
       )}

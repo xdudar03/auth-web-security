@@ -9,32 +9,33 @@ import { Role, Shop, User } from '@/hooks/useUserContext';
 import UserInfoModal from './UserInfoModal';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useQuery } from '@tanstack/react-query';
+import { Visibility } from '../../../../server/src/types/privacySetting';
 
 export type AdminUserRow = {
   user: Omit<User, 'embedding' | 'credentials' | 'password'>;
   role: Pick<Role, 'roleName' | 'roleId'>;
   shops: Shop[];
+  privacy?: Record<string, Visibility>;
 };
 
 export default function AdminDashboard() {
   const trpc = useTRPC();
   const listUsersQuery = useQuery(trpc.admin.listUsers.queryOptions());
   const users = listUsersQuery.data?.users || [];
-  console.log('users in admin dashboard: ', users);
   const isLoading = listUsersQuery.isLoading;
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
   const [activeUser, setActiveUser] = useState<AdminUserRow['user'] | null>(
     null
   );
-  const [mode, setMode] = useState<'view' | 'edit'>('view');
 
   // Add privacy to active user if it exists
   if (activeUser) {
-    activeUser.privacy = users.find(
+    const userData = users.find(
       (user) => user.user.userId === activeUser.userId
-    )?.privacy;
+    );
+    activeUser.privacy = userData?.privacy;
   }
-  console.log('activeUser in admin dashboard: ', activeUser);
+
   return (
     <div className="grid w-full gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr">
       <SettingsCard />
@@ -53,15 +54,12 @@ export default function AdminDashboard() {
         setShowUserInfoModal={setShowUserInfoModal}
         users={users}
         setActiveUser={setActiveUser}
-        setMode={setMode}
       />
       {showUserInfoModal && activeUser && (
         <UserInfoModal
           activeUser={activeUser as User}
           setShowUserInfoModal={setShowUserInfoModal}
           setActiveUser={setActiveUser}
-          mode={mode}
-          setMode={setMode}
           onUserUpdated={listUsersQuery.refetch}
         />
       )}

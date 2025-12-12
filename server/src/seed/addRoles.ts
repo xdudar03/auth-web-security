@@ -3,7 +3,7 @@ import { addRole } from "../database.ts";
 const addHardcodedRoles = () => {
   addRole({
     roleName: "admin",
-    canChangeUsersCredentials: true,
+    canChangeUsersCredentials: false,
     canChangeUsersRoles: true,
     canReadUsers: true,
     canReadUsersCredentials: true,

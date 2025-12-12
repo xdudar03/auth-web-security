@@ -2,13 +2,37 @@
 import { useUser } from '@/hooks/useUserContext';
 import ShoppingTable from './ShoppingTable';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { useTRPC } from '@/hooks/TrpcContext';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function ShoppingHistory() {
-  const { shops } = useUser();
+  const { shops, user } = useUser();
   const [spendings, setSpendings] = useState<{
     total: number;
     currency: string;
   }>({ total: 0, currency: 'USD' });
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+
+  const addTestTransactionsMutation = useMutation(
+    trpc.transactions.addTestTransactions.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: trpc.transactions.getTransactionsById.queryOptions({
+            userId: user?.userId as string,
+          }).queryKey,
+        });
+      },
+    })
+  );
+
+  const handleAddTestTransactions = async () => {
+    if (!user?.userId) return;
+    await addTestTransactionsMutation.mutateAsync({
+      userId: user.userId,
+    });
+  };
 
   return (
     <div className="flex flex-col gap-4 w-full bg-surface rounded-lg p-4">
@@ -19,18 +43,32 @@ export default function ShoppingHistory() {
         </p>
       </div>
       <div className="flex flex-col gap-2 border-t border-border pt-4">
-        {shops && shops.length > 0 ? (
-          <p className="text-sm">
-            You are currently shopping at:{' '}
-            {shops.map((s) => s.shopName).join(', ')}
-          </p>
-        ) : null}
-        <p className="text-sm">
-          Your total spendings:{' '}
-          <span className="font-bold">
-            {spendings.total} {spendings.currency}
-          </span>
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex flex-col gap-2">
+            {shops && shops.length > 0 ? (
+              <p className="text-sm">
+                You are currently shopping at:{' '}
+                {shops.map((s) => s.shopName).join(', ')}
+              </p>
+            ) : null}
+            <p className="text-sm">
+              Your total spendings:{' '}
+              <span className="font-bold">
+                {spendings.total} {spendings.currency}
+              </span>
+            </p>
+          </div>
+          <Button
+            onClick={handleAddTestTransactions}
+            disabled={addTestTransactionsMutation.isPending}
+            size="sm"
+            variant="outline"
+          >
+            {addTestTransactionsMutation.isPending
+              ? 'Adding...'
+              : 'Add Test Transactions'}
+          </Button>
+        </div>
         <ShoppingTable setSpendings={setSpendings} />
       </div>
     </div>

@@ -47,6 +47,7 @@ import {
 import {
   getTransactionsById,
   getTransactionsByShopIdService,
+  addTestTransactionsService,
 } from "./services/transactions.ts";
 import type { User } from "./types/user.ts";
 
@@ -206,9 +207,12 @@ export const appRouter = router({
           updates: z.object({}).passthrough(),
         })
       )
-      .mutation(({ input }) =>
-        execute(() => updateUserById(input.userId, input.updates as any))
-      ),
+      .mutation(({ input }) => {
+        // Admin users cannot update user information
+        throw new Error(
+          "Admins cannot edit user information. Use the reset password email feature instead."
+        );
+      }),
   }),
   shops: router({
     getAllShops: publicProcedure.query(() => execute(() => getAllShops())),
@@ -311,6 +315,11 @@ export const appRouter = router({
       .input(z.object({ shopId: z.number() }))
       .query(({ input }) =>
         execute(() => getTransactionsByShopIdService(input.shopId))
+      ),
+    addTestTransactions: publicProcedure
+      .input(z.object({ userId: z.string() }))
+      .mutation(({ input }) =>
+        execute(() => addTestTransactionsService(input.userId))
       ),
   }),
 });

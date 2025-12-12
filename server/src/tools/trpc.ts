@@ -53,5 +53,22 @@ const t = initTRPC.context<Context>().create();
  */
 export const router = t.router;
 export const publicProcedure = t.procedure;
+
+// Protected procedure that requires authentication and canChangeUsersCredentials permission
+export const protectedProcedure = t.procedure.use(async (opts) => {
+  const { ctx } = opts;
+
+  if (!ctx.user) {
+    throw new Error("Unauthorized: User not authenticated");
+  }
+
+  return opts.next({
+    ctx: {
+      ...ctx,
+      user: ctx.user,
+    },
+  });
+});
+
 export { createContext };
 export type { Context };

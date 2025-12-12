@@ -6,9 +6,8 @@ import {
   Table,
   Row,
 } from '@tanstack/react-table';
-import { Eye, Pencil, Trash } from 'lucide-react';
+import { Eye, Trash } from 'lucide-react';
 import { useMemo, useState, useCallback } from 'react';
-import { useUser } from '@/hooks/useUserContext';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table as UITable,
@@ -25,43 +24,17 @@ export default function UsersTable({
   setShowUserInfoModal,
   users,
   setActiveUser,
-  setMode,
 }: {
   setShowUserInfoModal: (show: boolean) => void;
   users: AdminUserRow[];
   setActiveUser: (user: AdminUserRow['user']) => void;
-  setMode: (mode: 'view' | 'edit') => void;
 }) {
-  const { role } = useUser();
-  console.log('role: ', role);
-
   const handleView = useCallback(
     (user: AdminUserRow['user']) => {
-      console.log('user in handleView: ', user);
-
       setActiveUser(user);
       setShowUserInfoModal(true);
-      setMode('view');
     },
-    [setActiveUser, setMode, setShowUserInfoModal]
-  );
-
-  const handleEdit = useCallback(
-    async (user: AdminUserRow['user']) => {
-      if (role?.canChangeUsersCredentials) {
-        setShowUserInfoModal(true);
-        setActiveUser(user);
-        setMode('edit');
-      } else {
-        alert('You do not have permission to edit this user');
-      }
-    },
-    [
-      role?.canChangeUsersCredentials,
-      setActiveUser,
-      setMode,
-      setShowUserInfoModal,
-    ]
+    [setActiveUser, setShowUserInfoModal]
   );
 
   const handleDelete = useCallback((user: AdminUserRow['user']) => {
@@ -121,14 +94,6 @@ export default function UsersTable({
             >
               <Eye className="w-4 h-4" />
             </Button>
-            {role?.canChangeUsersCredentials ? (
-              <Button
-                variant="ghost"
-                onClick={() => handleEdit(row.original.user)}
-              >
-                <Pencil className="w-4 h-4" />
-              </Button>
-            ) : null}
             <Button
               className="icon-btn"
               variant="ghost"
@@ -141,7 +106,7 @@ export default function UsersTable({
         accessorKey: 'actions',
       },
     ],
-    [handleView, handleEdit, handleDelete, role?.canChangeUsersCredentials]
+    [handleView, handleDelete]
   );
   const [rowSelection, setRowSelection] = useState({});
   const table = useReactTable({
@@ -154,7 +119,6 @@ export default function UsersTable({
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
   });
-  // console.log('rowSelection', rowSelection);
   return (
     <div className="lg:col-span-2 col-span-1 bg-surface rounded-lg h-full overflow-y-auto">
       <div className="flex flex-col h-full min-h-0 box-border">
