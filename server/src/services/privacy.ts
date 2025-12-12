@@ -35,7 +35,12 @@ export function toggleUserPrivacyService(
 export function getUsersPrivacy(
   userFields: { pseudoId: string; field: string }[]
 ) {
-  const results: { pseudoId: string; field: string; visibility: string }[] = [];
+  const results: {
+    pseudoId: string;
+    field: string;
+    visibility: string;
+    userId: string;
+  }[] = [];
   console.log("userFields: ", userFields);
   for (const { pseudoId, field } of userFields) {
     const userId = getUserIdByPseudoId(pseudoId);
@@ -45,13 +50,14 @@ export function getUsersPrivacy(
     }
     const result = getUserPrivacyFieldByUserId(userId, field);
     console.log("result: ", result);
-    if (result) {
-      results.push({
-        pseudoId: pseudoId,
-        field: field,
-        visibility: result.visibility as string,
-      });
-    }
+    // If privacy setting exists, use it; otherwise default to 'hidden'
+    const visibility = result?.visibility ?? "hidden";
+    results.push({
+      pseudoId: pseudoId,
+      field: field,
+      visibility: visibility as string,
+      userId: userId,
+    });
   }
   console.log("results: ", results);
   return results;

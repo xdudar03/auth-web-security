@@ -169,23 +169,40 @@ export const associationColumn = (
 export const customerColumn = ({
   userPrivacy,
 }: {
-  userPrivacy: { pseudoId: string; visibility: string; field: string }[];
+  userPrivacy: {
+    pseudoId: string;
+    visibility: string;
+    field: string;
+    userId: string;
+  }[];
 }): ColumnDef<HistoryEntryProvider, unknown> => {
   return {
     id: 'customer',
     header: 'Customer',
     meta: { headerClassName: 'text-left', cellClassName: 'text-left' },
     cell: ({ row }: CellContext<HistoryEntryProvider, unknown>) => {
-      if (
-        userPrivacy.find(
-          (p: { pseudoId: string; visibility: string; field: string }) =>
-            p.field === `shoppingHistory_transaction_${row.original.id}` &&
-            p.visibility !== 'hidden'
-        )
-      ) {
-        return row.original.customer;
-      } else {
-        return 'Hidden';
+      const privacySetting = userPrivacy.find(
+        (p: {
+          pseudoId: string;
+          visibility: string;
+          field: string;
+          userId: string;
+        }) => p.field === `shoppingHistory_transaction_${row.original.id}`
+      );
+
+      const visibility = privacySetting?.visibility ?? 'hidden';
+
+      switch (visibility) {
+        // Linked (visible) -> show userId from privacy settings
+        case 'visible':
+          return privacySetting?.userId || 'N/A';
+        // Anonymized -> show pseudonym
+        case 'anonymized':
+          return row.original.customer || 'N/A';
+        // Hidden -> show nothing
+        case 'hidden':
+        default:
+          return 'Hidden';
       }
     },
   };

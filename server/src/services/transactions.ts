@@ -142,6 +142,13 @@ export const addTestTransactionsService = async (userId: string) => {
       paymentMethod: "google_pay",
       purchaseType: "online",
     },
+    {
+      shopId: 1,
+      items: [{ name: "Apple", qty: 5 }],
+      location: "Store #1",
+      paymentMethod: "cash",
+      purchaseType: "in_store",
+    },
     // Shop 2 transactions
     {
       shopId: 2,
