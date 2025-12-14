@@ -7,6 +7,7 @@ import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUserContext';
 import InfoRow from './user-info/InfoRow';
+import { useState } from 'react';
 
 interface UserInfoModalProps {
   activeUser: User;
@@ -22,13 +23,28 @@ export default function UserInfoModal({
 }: UserInfoModalProps) {
   const { role } = useUser();
   const trpc = useTRPC();
+  const [message, setMessage] = useState({ message: '', type: '' });
   const sendResetPasswordEmailMutation = useMutation(
     trpc.email.sendResetPasswordEmail.mutationOptions({
       onSuccess: (data) => {
         console.log('reset password email sent: ', data);
+        setMessage({
+          message: 'Reset password email sent successfully',
+          type: 'success',
+        });
+        setTimeout(() => {
+          setMessage({ message: '', type: '' });
+        }, 3000);
       },
       onError: (error) => {
         console.error('Error sending reset password email', error);
+        setMessage({
+          message: 'Error sending reset password email',
+          type: 'error',
+        });
+        setTimeout(() => {
+          setMessage({ message: '', type: '' });
+        }, 3000);
       },
     })
   );
@@ -112,9 +128,20 @@ export default function UserInfoModal({
         onClose={handleClose}
         description="Send Reset Password Email"
         footer={
-          <Button type="button" onClick={handleSendResetPasswordEmail}>
-            Send Reset Password Email
-          </Button>
+          <div className="flex flex-col gap-2 w-full">
+            <Button type="button" onClick={handleSendResetPasswordEmail}>
+              Send Reset Password Email
+            </Button>
+            {message.message && (
+              <div
+                className={`alert ${
+                  message.type === 'success' ? 'alert-success' : 'alert-error'
+                }`}
+              >
+                {message.message}
+              </div>
+            )}
+          </div>
         }
       >
         <div className="flex flex-col gap-4 items-center justify-center py-6">

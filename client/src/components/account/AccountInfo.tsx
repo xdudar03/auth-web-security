@@ -23,7 +23,7 @@ export default function AccountInfo() {
   const queryClient = useQueryClient();
 
   const updateUserMutation = useMutation(
-    trpc.admin.updateUser.mutationOptions({
+    trpc.user.updateProfile.mutationOptions({
       onSuccess: () => {
         setMode('view');
         queryClient.invalidateQueries({

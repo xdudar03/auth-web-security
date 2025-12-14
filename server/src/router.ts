@@ -214,6 +214,32 @@ export const appRouter = router({
         );
       }),
   }),
+  user: router({
+    updateProfile: publicProcedure
+      .input(
+        z.object({
+          userId: z.string(),
+          updates: z.object({}).passthrough(),
+        })
+      )
+      .mutation(({ input, ctx }) => {
+        // Users can only update their own profile
+        const currentUserId = (ctx.user as User)?.userId;
+        if (!currentUserId) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Not authenticated",
+          });
+        }
+        if (currentUserId !== input.userId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Users can only update their own profile",
+          });
+        }
+        return execute(() => updateUserById(input.userId, input.updates));
+      }),
+  }),
   shops: router({
     getAllShops: publicProcedure.query(() => execute(() => getAllShops())),
     getAllUsersFromShop: publicProcedure
