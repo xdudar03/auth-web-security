@@ -1,61 +1,90 @@
-import { MODEL_BASE_URL } from "../config.ts";
 import { HttpError } from "../errors.ts";
+import {
+  ModelHealthResponse,
+  ModelStatusResponse,
+  PredictionResponse,
+  VerificationResponse,
+} from "../types/model.ts";
 
-async function fetchJsonWithStatus(url: string, init?: RequestInit) {
+const MODEL_BASE_URL = process.env.MODEL_BASE_URL || "http://localhost:5000";
+
+async function fetchModel<T>(
+  endpoint: string,
+  options?: RequestInit,
+): Promise<T> {
   try {
-    const response = await fetch(url, init);
-    let data: unknown = null;
-    try {
-      data = await response.json();
-    } catch {
-      data = null;
+    const response = await fetch(`${MODEL_BASE_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new HttpError(
+        response.status,
+        errorData.detail || `Model request failed: ${response.statusText}`,
+      );
     }
-    return { status: response.status, data };
+
+    return response.json();
   } catch (error) {
+    if (error instanceof HttpError) throw error;
     console.error("Model service request failed", error);
     throw new HttpError(502, "Model service unavailable");
   }
 }
 
-export async function checkModelHealth() {
-  try {
-    const r = await fetch(`${MODEL_BASE_URL}/`);
-    return { ok: true, status: r.status };
-  } catch (err) {
-    console.error("Model health check failed", err);
-    throw new HttpError(502, String(err));
-  }
+/**
+ * Check if the model service is healthy.
+ */
+export async function checkModelHealth(): Promise<ModelHealthResponse> {
+  return fetchModel<ModelHealthResponse>("/health");
 }
 
-export async function checkPhoto(dataUrl?: string) {
-  if (!dataUrl) {
-    throw new HttpError(400, "dataUrl is required");
-  }
-  const { status, data } = await fetchJsonWithStatus(
-    `${MODEL_BASE_URL}/api/check_photo_json`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dataUrl }),
-    }
-  );
-
-  return { status, data };
+/**
+ * Get detailed model status.
+ */
+export async function getModelStatus(): Promise<ModelStatusResponse> {
+  return fetchModel<ModelStatusResponse>("/status");
 }
 
-export async function loadDataset(dataset: "yaleface" | "lfw") {
-  const endpoint = dataset === "yaleface" ? "load_yaleface" : "load_lfw";
-  const { status, data } = await fetchJsonWithStatus(
-    `${MODEL_BASE_URL}/api/${endpoint}`,
-    { method: "POST" }
-  );
-  return { status, data };
+/**
+ * Send embedding to model for face recognition prediction.
+ *
+ * @param embedding - Array of numbers representing the face embedding
+ * @param userId - Optional user ID for verification mode
+ */
+export async function predictFromEmbedding(
+  embedding: number[],
+  userId?: string,
+): Promise<PredictionResponse> {
+  return fetchModel<PredictionResponse>("/predict", {
+    method: "POST",
+    body: JSON.stringify({
+      embedding,
+      user_id: userId,
+    }),
+  });
 }
 
-export async function deleteDataset() {
-  const { status, data } = await fetchJsonWithStatus(
-    `${MODEL_BASE_URL}/api/delete_db`,
-    { method: "POST" }
-  );
-  return { status, data };
+/**
+ * Verify if an embedding matches a specific user.
+ *
+ * @param embedding - Array of numbers representing the face embedding
+ * @param userId - User ID to verify against
+ */
+export async function verifyIdentity(
+  embedding: number[],
+  userId: string,
+): Promise<VerificationResponse> {
+  return fetchModel<VerificationResponse>("/verify", {
+    method: "POST",
+    body: JSON.stringify({
+      embedding,
+      user_id: userId,
+    }),
+  });
 }

@@ -56,15 +56,15 @@ services:
   #     context: ./model
   #   environment:
   #     - EXPRESS_BASE_URL=http://server:4000
-  #     - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
   #   ports:
   #     - "5000:5000"
   #   volumes:
-  #     - model_db:/app/data
+  #     - model_data:/app/data
   #   healthcheck:
   #     test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/health').getcode()==200 else 1)"]
   #     interval: 10s
   #     timeout: 5s
   #     retries: 5
+
 volumes:
   sqlite_db:

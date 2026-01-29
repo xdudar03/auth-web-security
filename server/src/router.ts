@@ -20,13 +20,13 @@ import {
   listUsers,
   updateUserById,
 } from "./services/admin.ts";
+import { checkHealth, pingHealth } from "./services/health.ts";
 import {
   checkModelHealth,
-  checkPhoto,
-  deleteDataset,
-  loadDataset,
+  getModelStatus,
+  predictFromEmbedding,
+  verifyIdentity,
 } from "./services/model.ts";
-import { checkHealth, pingHealth } from "./services/health.ts";
 import { HttpError } from "./errors.ts";
 import { getAllShops, getAllUsersFromShop } from "./services/shops.ts";
 import {
@@ -96,6 +96,30 @@ export const appRouter = router({
     root: publicProcedure.query(() => pingHealth()),
     status: publicProcedure.query(() => checkHealth()),
   }),
+  model: router({
+    health: publicProcedure.query(() => execute(() => checkModelHealth())),
+    status: publicProcedure.query(() => execute(() => getModelStatus())),
+    predict: publicProcedure
+      .input(
+        z.object({
+          embedding: z.array(z.number()),
+          userId: z.string().optional(),
+        }),
+      )
+      .mutation(({ input }) =>
+        execute(() => predictFromEmbedding(input.embedding, input.userId)),
+      ),
+    verify: publicProcedure
+      .input(
+        z.object({
+          embedding: z.array(z.number()),
+          userId: z.string(),
+        }),
+      )
+      .mutation(({ input }) =>
+        execute(() => verifyIdentity(input.embedding, input.userId)),
+      ),
+  }),
   passwordless: router({
     getRegistrationOptions: publicProcedure
       .input(z.object({ userId: z.string() }))
@@ -103,16 +127,16 @@ export const appRouter = router({
         execute(() =>
           getRegistrationOptions(
             input.userId,
-            ctx.req.session as ChallengeSession
-          )
-        )
+            ctx.req.session as ChallengeSession,
+          ),
+        ),
       ),
     verifyRegistration: publicProcedure
       .input(z.any())
       .mutation(({ input, ctx }) =>
         execute(() =>
-          verifyRegistration(input, ctx.req.session as ChallengeSession)
-        )
+          verifyRegistration(input, ctx.req.session as ChallengeSession),
+        ),
       ),
     getAuthenticationOptions: publicProcedure
       .input(z.object({ username: z.string() }))
@@ -120,9 +144,9 @@ export const appRouter = router({
         execute(() =>
           getAuthenticationOptions(
             input.username,
-            ctx.req.session as ChallengeSession
-          )
-        )
+            ctx.req.session as ChallengeSession,
+          ),
+        ),
       ),
     verifyAuthentication: publicProcedure
       .input(z.any())
@@ -130,9 +154,9 @@ export const appRouter = router({
         execute(() =>
           verifyAuthentication(
             input as any,
-            ctx.req.session as ChallengeSession
-          )
-        )
+            ctx.req.session as ChallengeSession,
+          ),
+        ),
       ),
   }),
   biometric: router({
@@ -145,7 +169,7 @@ export const appRouter = router({
           password: z.string(),
           roleId: z.union([z.string(), z.number()]),
           shopIds: z.array(z.number()),
-        })
+        }),
       )
       .mutation(({ input }) => execute(() => registerBiometricUser(input))),
     authenticate: publicProcedure
@@ -155,62 +179,50 @@ export const appRouter = router({
       .input(
         z.object({
           embedding: z.string(), // json serialized array of numbers
-        })
+        }),
       )
       .mutation(({ input, ctx }) =>
         execute(() =>
           changeBiometricEmbedding(
             { embedding: JSON.parse(input.embedding) },
-            ctx.user as User
-          )
-        )
+            ctx.user as User,
+          ),
+        ),
       ),
     changePassword: publicProcedure
       .input(
         z.object({
           oldPassword: z.string(),
           newPassword: z.string(),
-        })
+        }),
       )
       .mutation(({ input, ctx }) =>
-        execute(() => changeBiometricPassword(input, ctx.user as User))
+        execute(() => changeBiometricPassword(input, ctx.user as User)),
       ),
     confirmPassword: publicProcedure
       .input(z.object({ password: z.string() }))
       .mutation(({ input, ctx }) =>
-        execute(() => confirmBiometricPassword(input, ctx.user as User))
+        execute(() => confirmBiometricPassword(input, ctx.user as User)),
       ),
-  }),
-  model: router({
-    health: publicProcedure.query(() => execute(() => checkModelHealth())),
-    checkPhoto: publicProcedure
-      .input(z.object({ dataUrl: z.string() }))
-      .mutation(({ input }) => execute(() => checkPhoto(input.dataUrl))),
-    loadDataset: publicProcedure
-      .input(z.enum(["yaleface", "lfw"]))
-      .mutation(({ input }) => execute(() => loadDataset(input))),
-    deleteDataset: publicProcedure.mutation(() =>
-      execute(() => deleteDataset())
-    ),
   }),
   admin: router({
     listUsers: publicProcedure.query(() => execute(() => listUsers())),
     getUser: publicProcedure
       .input(z.object({ userId: z.string().optional() }))
       .query(({ input }) =>
-        execute(() => getUserWithRoleById(input.userId ?? ""))
+        execute(() => getUserWithRoleById(input.userId ?? "")),
       ),
     updateUser: publicProcedure
       .input(
         z.object({
           userId: z.string(),
           updates: z.object({}).passthrough(),
-        })
+        }),
       )
       .mutation(({ input }) => {
         // Admin users cannot update user information
         throw new Error(
-          "Admins cannot edit user information. Use the reset password email feature instead."
+          "Admins cannot edit user information. Use the reset password email feature instead.",
         );
       }),
   }),
@@ -220,7 +232,7 @@ export const appRouter = router({
         z.object({
           userId: z.string(),
           updates: z.object({}).passthrough(),
-        })
+        }),
       )
       .mutation(({ input, ctx }) => {
         // Users can only update their own profile
@@ -251,25 +263,25 @@ export const appRouter = router({
       .input(z.object({ to: z.string(), userId: z.string() }))
       .mutation(({ input }) =>
         execute(() =>
-          sendEmailWithToken(input.to, input.userId, "confirmation")
-        )
+          sendEmailWithToken(input.to, input.userId, "confirmation"),
+        ),
       ),
     sendResetPasswordEmail: publicProcedure
       .input(z.object({ to: z.string(), userId: z.string() }))
       .mutation(({ input }) =>
         execute(() =>
-          sendEmailWithToken(input.to, input.userId, "reset_password")
-        )
+          sendEmailWithToken(input.to, input.userId, "reset_password"),
+        ),
       ),
     verifyToken: publicProcedure
       .input(
         z.object({
           token: z.string(),
           purpose: z.enum(["reset_password", "confirmation"]),
-        })
+        }),
       )
       .mutation(({ input }) =>
-        execute(() => verifyToken(input.token, input.purpose))
+        execute(() => verifyToken(input.token, input.purpose)),
       ),
     resetPassword: publicProcedure
       .input(
@@ -277,17 +289,17 @@ export const appRouter = router({
           token: z.string(),
           newPassword: z.string(),
           userId: z.string(),
-        })
+        }),
       )
       .mutation(({ input }) =>
         execute(() =>
-          resetPassword(input.token, input.newPassword, input.userId)
-        )
+          resetPassword(input.token, input.newPassword, input.userId),
+        ),
       ),
   }),
   info: router({
     getUserInfo: publicProcedure.query(({ ctx }) =>
-      execute(() => getUserInfo((ctx.user as JwtPayload) ?? {}))
+      execute(() => getUserInfo((ctx.user as JwtPayload) ?? {})),
     ),
   }),
   privacy: router({
@@ -296,40 +308,40 @@ export const appRouter = router({
         z.object({
           field: z.string(),
           visibility: z.enum(["hidden", "anonymized", "visible"]),
-        })
+        }),
       )
       .mutation(({ input, ctx }) =>
         execute(() =>
           toggleUserPrivacyService(
             ctx.user?.userId as string,
             input.field,
-            input.visibility
-          )
-        )
+            input.visibility,
+          ),
+        ),
       ),
     getPrivacyPreset: publicProcedure
       .input(z.object({ preset: z.string() }))
       .query(({ input }) => execute(() => getPrivacyPreset(input.preset))),
     getAllPrivacyPresets: publicProcedure.query(() =>
-      execute(() => getAllPrivacyPresets())
+      execute(() => getAllPrivacyPresets()),
     ),
     applyPrivacyPreset: publicProcedure
       .input(z.object({ preset: z.string() }))
       .mutation(({ input, ctx }) =>
         execute(() =>
-          applyPrivacyPreset(ctx.user?.userId as string, input.preset)
-        )
+          applyPrivacyPreset(ctx.user?.userId as string, input.preset),
+        ),
       ),
     getUserPrivacyPreset: publicProcedure.query(({ ctx }) =>
-      execute(() => getUserPrivacyPreset(ctx.user?.userId as string))
+      execute(() => getUserPrivacyPreset(ctx.user?.userId as string)),
     ),
     getUsersPrivacy: publicProcedure
       .input(
         z.object({
           userFields: z.array(
-            z.object({ pseudoId: z.string(), field: z.string() })
+            z.object({ pseudoId: z.string(), field: z.string() }),
           ),
-        })
+        }),
       )
       .query(({ input }) => execute(() => getUsersPrivacy(input.userFields))),
   }),
@@ -340,12 +352,12 @@ export const appRouter = router({
     getTransactionsByShopId: publicProcedure
       .input(z.object({ shopId: z.number() }))
       .query(({ input }) =>
-        execute(() => getTransactionsByShopIdService(input.shopId))
+        execute(() => getTransactionsByShopIdService(input.shopId)),
       ),
     addTestTransactions: publicProcedure
       .input(z.object({ userId: z.string() }))
       .mutation(({ input }) =>
-        execute(() => addTestTransactionsService(input.userId))
+        execute(() => addTestTransactionsService(input.userId)),
       ),
   }),
 });

@@ -24,13 +24,11 @@ COPY requirements.txt ./
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # Copy app source
-COPY src ./src
-# COPY data\gui_database.db ./data/gui_database.db
+COPY mok ./mok
 
 EXPOSE 5000
 
-# Gunicorn for production
-ENV GUNICORN_CMD_ARGS="--bind 0.0.0.0:5000 --workers 2 --threads 2 --timeout 60"
-CMD ["gunicorn", "-k", "gthread", "-w", "2", "-b", "0.0.0.0:5000", "src.app:app"]
+# Default: run the API server
+CMD ["uvicorn", "mok.api.server:app", "--host", "0.0.0.0", "--port", "5000"]
 
 
