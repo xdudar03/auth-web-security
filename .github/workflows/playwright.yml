@@ -19,6 +19,11 @@ jobs:
       - name: Install dependencies (server)
         run: npm ci
         working-directory: ./server
+      - name: Set up database
+        run: |
+          mkdir -p ./server/data
+          ./seedDb.sh
+        working-directory: ./server
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
         working-directory: ./client
