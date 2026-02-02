@@ -13,9 +13,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-      - name: Install dependencies
+      - name: Install dependencies (client)
         run: npm ci
         working-directory: ./client
+      - name: Install dependencies (server)
+        run: npm ci
+        working-directory: ./server
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
         working-directory: ./client
