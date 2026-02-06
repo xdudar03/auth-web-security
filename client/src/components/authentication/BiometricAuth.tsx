@@ -7,7 +7,11 @@ import cropImage, {
   imageToMatrix,
 } from '@/lib/anonymization/anonimizationImage';
 import OvalOverlay from './OvalOverlay';
-import { PCAEigenfaces } from '@/lib/anonymization/pcaEigenface';
+import {
+  dpSvdEmbeddingFromFlattened,
+  dpSvdReconstructFromFlattened,
+  type DpSvdOptions,
+} from '@/lib/anonymization/dpSvd';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation } from '@tanstack/react-query';
 
@@ -33,7 +37,6 @@ export default function BiometricAuth({
   );
   const [capturedImageUrl, setCapturedImageUrl] = useState<string>();
   const [reconstructedImageUrl, setReconstructedImageUrl] = useState<string>();
-  const [capturedFrames, setCapturedFrames] = useState<CapturedFrame[]>([]);
   const { user } = useUser();
   const trpc = useTRPC();
   const register = useMutation(
@@ -56,14 +59,12 @@ export default function BiometricAuth({
   const maskId = useId();
   const overlayMaskId = `biometric-mask-${maskId.replace(/:/g, '')}`;
   const TARGET_SIZE = 100;
-  const MAX_COMPONENTS = 5;
-  const STREAM_FRAME_COUNT = 20;
-  const STREAM_INTERVAL_MS = 250;
-
-  const sleep = (ms: number) =>
-    new Promise<void>((resolve) => {
-      window.setTimeout(resolve, ms);
-    });
+  const DP_SVD_OPTIONS: DpSvdOptions = {
+    epsilon: 0.4,
+    nSingularValues: 15,
+    imageSize: [TARGET_SIZE, TARGET_SIZE],
+    blockSize: 25,
+  };
 
   const createImageUrlFromPixels = (
     pixels: number[],
@@ -100,6 +101,13 @@ export default function BiometricAuth({
     ctx.putImageData(imageData, 0, 0);
     return canvas.toDataURL('image/png');
   };
+  const STREAM_FRAME_COUNT = 5;
+  const STREAM_INTERVAL_MS = 100;
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
 
   async function startCamera() {
     try {
@@ -151,39 +159,34 @@ export default function BiometricAuth({
         return;
       }
 
-      setCapturedFrames(frames);
       const latestFrame = frames[frames.length - 1];
       setCapturedImage(latestFrame.data);
       setCapturedImageUrl(latestFrame.imageUrl);
 
-      const pcaGen = new PCAEigenfaces(
-        [TARGET_SIZE, TARGET_SIZE],
-        MAX_COMPONENTS
-      );
       const flattenedFrames = frames.map((frame) => {
         const matrix = imageToMatrix(frame.data, TARGET_SIZE);
         return matrix.flat();
       });
 
-      flattenedFrames.forEach((flattened) => pcaGen.addImage(flattened));
       let projection: number[] = [];
-
-      const { eigenfaces, meanFace, components } = pcaGen.generate();
-
       try {
-        // eigenvector projection
-        projection = pcaGen.project(
-          flattenedFrames[flattenedFrames.length - 1]
+        projection = dpSvdEmbeddingFromFlattened(
+          flattenedFrames[flattenedFrames.length - 1],
+          DP_SVD_OPTIONS
         );
-        console.log('projection:', projection);
-        const reconstructed = pcaGen.reconstruct(projection);
+        console.log('dp_svd projection:', projection);
+
+        const reconstructed = dpSvdReconstructFromFlattened(
+          flattenedFrames[flattenedFrames.length - 1],
+          DP_SVD_OPTIONS
+        );
         const reconstructedUrl = createImageUrlFromPixels(
-          reconstructed,
+          reconstructed.flat(),
           TARGET_SIZE
         );
         setReconstructedImageUrl(reconstructedUrl);
       } catch (error) {
-        console.error('Eigenface reconstruction failed', error);
+        console.error('DP-SVD embedding failed', error);
         setReconstructedImageUrl(undefined);
       }
 
@@ -204,9 +207,8 @@ export default function BiometricAuth({
       setIsOvalVisible(true);
       setCapturedImage(null);
       setCapturedImageUrl(undefined);
-      setCapturedFrames([]);
-      setReconstructedImageUrl(undefined);
       setIsCapturingStream(false);
+      setReconstructedImageUrl(undefined);
     }
   };
 
@@ -335,15 +337,15 @@ export default function BiometricAuth({
         )}
         {reconstructedImageUrl && (
           <div className="flex flex-col items-center gap-2 text-center">
-            <h3 className="text-md font-semibold">Reconstructed eigenface</h3>
+            <h3 className="text-md font-semibold">DP-SVD reconstruction</h3>
             <Image
               src={reconstructedImageUrl}
-              alt="Reconstructed eigenface"
+              alt="DP-SVD reconstruction"
               width={TARGET_SIZE}
               height={TARGET_SIZE}
             />
             <span className="helper-text">
-              Approximation of your capture using the current eigenface basis.
+              Approximation of your capture after DP-SVD.
             </span>
           </div>
         )}
