@@ -1,22 +1,16 @@
 import os
-import sys
-import io
 import base64
 import argparse
-from typing import Tuple
 
 import numpy as np
 from PIL import Image
 
 # Import modules from the project
-import mok.privacy.anonymization_process_peep as ap
 from mok.preprocessing.image_preprocessing import preprocess_images_yalefaces
 from mok.data.data_loader import load_anonymized_images_flat, load_label_encoder
 from mok.pipeline.ml_controller import MLController
 from mok.config.settings import FOLDER_PATH, OUTPUT_FOLDER
 from mok.scripts.dp_svd import run_dp_svd
-from mok.scripts.k_same_pixel import run_k_same_pixel
-from mok.scripts.anonymize_peep import run_peep
 
 def run_training(
     data_dir: str,
@@ -40,7 +34,7 @@ def run_training(
     return controller
 
 
-def save_evaluation_artifacts(output: dict, save_dir: str, model_name: str, method: str) -> None:
+def save_evaluation_artifacts(output: dict, save_dir: str, model_name: str) -> None:
     """Persist evaluation artifacts (report image, curves, confusion matrix)."""
     try:
         
@@ -48,7 +42,7 @@ def save_evaluation_artifacts(output: dict, save_dir: str, model_name: str, meth
         # Save classification report image (base64 -> PNG)
         report_b64 = output.get("classification_report")
         if report_b64:
-            report_path = os.path.join(save_dir, f"{model_name}_{method}_classification_report.png")
+            report_path = os.path.join(save_dir, f"{model_name}_classification_report.png")
             with open(report_path, "wb") as f:
                 f.write(base64.b64decode(report_b64))
             print(f"Saved classification report: {report_path}")
@@ -56,7 +50,7 @@ def save_evaluation_artifacts(output: dict, save_dir: str, model_name: str, meth
         # Save training curves image (if provided)
         curves_img = output.get("curves")
         if curves_img is not None and isinstance(curves_img, Image.Image):
-            curves_path = os.path.join(save_dir, f"{model_name}_{method}_training_curves.png")
+            curves_path = os.path.join(save_dir, f"{model_name}_training_curves.png")
             try:
                 curves_img.save(curves_path)
                 print(f"Saved training curves image: {curves_path}")
@@ -66,7 +60,7 @@ def save_evaluation_artifacts(output: dict, save_dir: str, model_name: str, meth
         # Save confusion matrix as CSV
         cm = output.get("confusion_matrix")
         if cm is not None:
-            cm_csv_path = os.path.join(save_dir, f"{model_name}_{method}_confusion_matrix.csv")
+            cm_csv_path = os.path.join(save_dir, f"{model_name}_confusion_matrix.csv")
             try:
                 np.savetxt(cm_csv_path, cm, fmt="%d", delimiter=",")
                 print(f"Saved confusion matrix CSV: {cm_csv_path}")
@@ -79,13 +73,6 @@ def save_evaluation_artifacts(output: dict, save_dir: str, model_name: str, meth
 def main():
     parser = argparse.ArgumentParser(
         description="End-to-end pipeline: anonymize images then train the model."
-    )
-    parser.add_argument(
-        "--method",
-        type=str,
-        choices=["dp_svd", "peep", "k_same_pixel"],
-        default="peep",
-        help="Anonymization method to use: 'dp_svd' or 'peep' or 'k_same_pixel'.",
     )
     parser.add_argument(
         "--input-dir",
@@ -112,34 +99,10 @@ def main():
         help="Target image height (pixels).",
     )
     parser.add_argument(
-        "--n-components-ratio",
-        type=float,
-        default=0.8,
-        help="Ratio of PCA components to keep relative to per-subject sample count.",
-    )
-    parser.add_argument(
-        "--epsilon-projection",
-        type=float,
-        default=1.0,
-        help="Differential privacy epsilon for the noised projection.",
-    )
-    parser.add_argument(
-        "--epsilon-eigenvectors",
-        type=float,
-        default=10.0,
-        help="Differential privacy epsilon for the noised eigenvectors.",
-    )
-    parser.add_argument(
         "--epsilon-dp-svd",
         type=float,
         default=0.4,
         help="Differential privacy epsilon for the DP-SVD anonymization.",
-    )
-    parser.add_argument(
-        "--k",
-        type=int,
-        default=10,
-        help="Number of images to group for k-same-pixel anonymization.",
     )
     parser.add_argument(
         "--n-singular-values",
@@ -157,35 +120,16 @@ def main():
 
     image_size = (args.img_height, args.img_width)  # (height, width) for numpy convention
 
-    print(f"\n=== STEP 1/2: Anonymization ({args.method}) ===")
-    if args.method == "peep":
-        run_peep(
-            input_dir=args.input_dir,
-            output_dir="datasets/peep",
-            image_size=image_size,
-            n_components_ratio=args.n_components_ratio,
-            epsilon_projection=args.epsilon_projection,
-            epsilon_eigenvectors=args.epsilon_eigenvectors,
-        )
-        anonymized_dir = "datasets/peep"
-    elif args.method == "k_same_pixel":
-        run_k_same_pixel(
-            input_dir=args.input_dir,
-            output_dir="datasets/k_same_pixel_faces",
-            k=args.k,
-            image_size=image_size,
-        )
-        anonymized_dir = "datasets/k_same_pixel_faces"
-    else:
-        run_dp_svd(
-            input_dir=args.input_dir,
-            output_dir="datasets/dp_svd",
-            epsilon=args.epsilon_dp_svd,
-            n_singular_values=args.n_singular_values,
-            block_size=args.block_size,
-            image_size=image_size,
-        )
-        anonymized_dir = "datasets/dp_svd"
+    print("\n=== STEP 1/2: Anonymization ===")
+    run_dp_svd(
+        input_dir=args.input_dir,
+        output_dir=args.output_dir,
+        epsilon=args.epsilon_dp_svd,
+        n_singular_values=args.n_singular_values,
+        block_size=args.block_size,
+        image_size=image_size,
+    )
+    anonymized_dir = args.output_dir
 
     print("\n=== STEP 2/2: Training ===")
     controller = run_training(
@@ -205,7 +149,6 @@ def main():
             controller.output_train,
             controller._model_save_dir,
             controller.MODEL_NAME,
-            args.method,
         )
 
     print("\nTraining completed.")

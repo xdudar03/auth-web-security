@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import os
 from typing import List, Optional, Tuple
@@ -60,6 +61,28 @@ class DPSVDAnonymizer:
         # reconstruct obfuscated matrix
         return (U_k * S_noisy) @ Vt_k
 
+    def _apply_dp_svd_coeffs(
+        self, matrix: np.ndarray, k_vals: int, eps: float
+    ) -> np.ndarray:
+        """
+        Apply DP-SVD logic and return low-rank coefficient matrix (U_k * S_noisy).
+        Shape: (height, k)
+        """
+        U, S, _Vt = np.linalg.svd(matrix, full_matrices=False)
+
+        # keep top-k singular values
+        k = min(k_vals, len(S))
+        U_k = U[:, :k]
+        S_k = S[:k]
+
+        # add Laplace noise to singular values
+        scale = 1.0 / eps
+        noise = np.random.laplace(0, scale, k)
+        S_noisy = np.clip(S_k + noise, 0, None)
+
+        # return coefficient matrix for embedding
+        return U_k * S_noisy
+
     def _dp_svd_one(self, img: np.ndarray, denoise: bool = False) -> np.ndarray:
         """Apply DP-SVD to a single grayscale image in [0, 1]."""
         if self.block_size is None:
@@ -94,6 +117,42 @@ class DPSVDAnonymizer:
 
         return recon
 
+    def _dp_svd_one_coeffs(self, img: np.ndarray) -> np.ndarray:
+        """
+        Return low-rank coefficient vector for a single image.
+        If block_size is set, returns concatenated per-block coefficients
+        in row-major order (top-left to bottom-right), with edge padding.
+        """
+        if self.block_size is None:
+            coeffs = self._apply_dp_svd_coeffs(
+                img, self.n_singular_values, self.epsilon
+            )
+            return coeffs.flatten()
+
+        h, w = img.shape
+        bs = self.block_size
+        block_vectors = []
+
+        for i in range(0, h, bs):
+            for j in range(0, w, bs):
+                block = img[i:i+bs, j:j+bs]
+                bh, bw = block.shape
+
+                if bh < bs or bw < bs:
+                    block = np.pad(
+                        block, ((0, bs-bh), (0, bs-bw)), mode='edge'
+                    )
+
+                coeffs = self._apply_dp_svd_coeffs(
+                    block, self.n_singular_values, self.epsilon
+                )
+                block_vectors.append(coeffs.flatten())
+
+        if not block_vectors:
+            return np.array([], dtype=np.float32)
+
+        return np.concatenate(block_vectors)
+
     # ------------------------------------------------------------------
     # PUBLIC API
     # ------------------------------------------------------------------
@@ -120,6 +179,34 @@ class DPSVDAnonymizer:
             dp_img = self._dp_svd_one(img, denoise=denoise)
             anonymized[idx] = dp_img.flatten()
         return anonymized
+
+    def embeddings_from_images(self, flattened_images: np.ndarray) -> np.ndarray:
+        """
+        Generate DP-SVD embeddings (low-rank coefficients) for flattened images.
+
+        Returns:
+            np.ndarray: Embedding matrix of shape (num_images, embedding_dim).
+                - If block_size is None: embedding_dim = height * k
+                - If block_size is set: embedding_dim = n_blocks * block_size * k
+                  where n_blocks = ceil(height/bs) * ceil(width/bs)
+        """
+        n_images, _n_pixels = flattened_images.shape
+        height, width = self.image_size  # (height, width)
+        if self.block_size is None:
+            embedding_dim = height * self.n_singular_values
+        else:
+            bs = self.block_size
+            blocks_h = math.ceil(height / bs)
+            blocks_w = math.ceil(width / bs)
+            embedding_dim = blocks_h * blocks_w * bs * self.n_singular_values
+
+        embeddings = np.zeros((n_images, embedding_dim), dtype=np.float32)
+        for idx in range(n_images):
+            img = flattened_images[idx].reshape(height, width)
+            coeffs = self._dp_svd_one_coeffs(img)
+            embeddings[idx] = coeffs
+
+        return embeddings
 
     # ------------------------------------------------------------------
     # RECONSTRUCTION AND VISUALIZATION HELPERS
