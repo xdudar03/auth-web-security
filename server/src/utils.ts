@@ -4,7 +4,6 @@ export function mapResponseQuery(query: any) {
       userId: query.userId,
       username: query.username,
       password: query.password,
-      embedding: query.embedding,
       roleId: query.roleId,
       credentials: query.credentials,
       email: query.email,

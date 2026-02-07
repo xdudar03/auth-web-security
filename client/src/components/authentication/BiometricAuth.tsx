@@ -129,7 +129,7 @@ export default function BiometricAuth({
     }
   };
 
-  const runBiometricAction = async (payload: User) => {
+  const runBiometricAction = async (payload: User & { embedding: string }) => {
     if (action === 'login') {
       await authenticate.mutateAsync({
         username: payload.username,
@@ -194,7 +194,7 @@ export default function BiometricAuth({
         ...user,
         embedding: JSON.stringify(projection),
         userId: user?.userId ?? '',
-      } as User;
+      } as User & { embedding: string };
 
       try {
         await runBiometricAction(userWithEmbedding);

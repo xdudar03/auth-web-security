@@ -1,9 +1,9 @@
 import {
   addUser,
   addUserToShop,
-  db,
   getAllUsers,
   updateUser,
+  addUserEmbedding,
   getUserById,
   getUserWithRoleQuery,
   getUserForAuthentication,
@@ -94,7 +94,7 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
 
   const isPasswordValid = await bcrypt.compare(
     password,
-    user.password as string
+    user.password as string,
   );
   if (!isPasswordValid) {
     throw new HttpError(400, "Invalid password");
@@ -106,10 +106,12 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
 
 export async function changeBiometricEmbedding(
   input: ChangeEmbeddingInput,
-  user: User
+  user: User,
 ) {
   const { embedding } = input;
-  console.log("embedding: ", embedding);
+  const serializedEmbedding =
+    typeof embedding === "string" ? embedding : JSON.stringify(embedding);
+  console.log("embedding: ", serializedEmbedding);
 
   if (!user.userId) {
     throw new HttpError(401, "Unauthorized");
@@ -120,7 +122,7 @@ export async function changeBiometricEmbedding(
     throw new HttpError(400, "User not found");
   }
 
-  updateUser(existingUser.userId, { embedding: embedding });
+  addUserEmbedding(existingUser.userId, serializedEmbedding);
 
   return {
     message: "Biometric changed successfully",
@@ -129,7 +131,7 @@ export async function changeBiometricEmbedding(
 
 export async function changeBiometricPassword(
   input: ChangePasswordInput,
-  user: User
+  user: User,
 ) {
   const { oldPassword, newPassword } = input;
   console.log("user jwt: ", user);
@@ -146,7 +148,7 @@ export async function changeBiometricPassword(
 
   const isPasswordValid = await bcrypt.compare(
     oldPassword,
-    existingUser.password
+    existingUser.password,
   );
 
   if (!isPasswordValid) {
@@ -162,7 +164,7 @@ export async function changeBiometricPassword(
 
 export async function confirmBiometricPassword(
   input: ConfirmPasswordInput,
-  user: User
+  user: User,
 ) {
   const { password } = input;
 

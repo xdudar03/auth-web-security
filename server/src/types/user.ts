@@ -5,7 +5,6 @@ export const User = z.object({
   userId: z.string(),
   username: z.string(),
   password: z.string(),
-  embedding: z.optional(z.string().nullable()),
   roleId: z.optional(z.number().nullable()),
   credentials: z.optional(z.string().nullable()),
   email: z.string(),

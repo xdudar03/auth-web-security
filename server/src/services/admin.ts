@@ -26,7 +26,7 @@ export function sanitizeUserSummary(row: any) {
   });
   const { user, role, shops: mappedShops, privacy: mappedPrivacy } = result;
 
-  const { embedding, credentials, password, ...safeUser } = user;
+  const { credentials, password, ...safeUser } = user;
   const {
     canChangeUsersCredentials,
     canChangeUsersRoles,

@@ -10,25 +10,28 @@ from PIL import Image
 
 class DatabaseController:
 
-    _table_name = "noised_user_components"
-    _column_id = "id"
-    _column_data = "array"
+    _embeddings_table_name = "user_embeddings"
+    _embeddings_user_id = "userId"
+    _embeddings_data = "embedding"
 
     # Dataset directories
     ORIGINAL_DIR = "dataset-yalefaces"        # original YaleFaces images
     ANONYMIZED_DIR = "dataset-peep"  # anonymized images (output of pipeline)
 
     def __init__(self, path=os.path.join("data", "gui_database.db")):
-        self.path = os.path.abspath(path)
+        shared_path = os.environ.get("SQLITE_DB_PATH")
+        resolved_path = shared_path.strip() if shared_path else path
+        self.path = os.path.abspath(resolved_path)
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         # Log in the database
         self.conn = sqlite3.connect(self.path)
         self.cursor = self.conn.cursor()
-        # Create noised user table
         self.cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS {self._table_name} (
-                {self._column_id} INTEGER PRIMARY KEY AUTOINCREMENT,
-                {self._column_data} TEXT
+            CREATE TABLE IF NOT EXISTS {self._embeddings_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                {self._embeddings_user_id} TEXT NOT NULL,
+                {self._embeddings_data} TEXT NOT NULL,
+                createdAt TEXT DEFAULT CURRENT_TIMESTAMP
             )
         ''')
     def __del__(self):
@@ -36,56 +39,58 @@ class DatabaseController:
         self.conn.commit()
         self.conn.close()
 
-    def add_user(self, noised_vectors: np.ndarray):
-        json_array = json.dumps(noised_vectors.tolist())
-        self.cursor.execute(f"INSERT INTO {self._table_name} ({self._column_data}) VALUES (?)",(json_array,))
+    def add_embedding(self, user_id: str, embedding):
+        if isinstance(embedding, np.ndarray):
+            serialized = json.dumps(embedding.tolist())
+        elif isinstance(embedding, (list, tuple)):
+            serialized = json.dumps(list(embedding))
+        else:
+            serialized = str(embedding)
+        self.cursor.execute(
+            f"INSERT INTO {self._embeddings_table_name} ({self._embeddings_user_id}, {self._embeddings_data}) VALUES (?, ?)",
+            (user_id, serialized),
+        )
         self.conn.commit()
-        return self.cursor.lastrowid # Send user id
-
-    def get_user(self, id) -> np.ndarray:
-        self.cursor.execute(f"SELECT {self._column_data} FROM {self._table_name} WHERE {self._column_id} = (?)", (id,))
-        result = self.cursor.fetchone()
-        if result:
-            retrieved_json = result[0]
-            retrieved_array = np.array(json.loads(retrieved_json))
-            return retrieved_array # Send user data
-        return None # No user with this id
-
-    def update_user(self, id, new_noised_vectors: np.ndarray):
-        json_array = json.dumps(new_noised_vectors.tolist())
-        self.cursor.execute(f"UPDATE {self._table_name} SET {self._column_data} = (?) WHERE {self._column_id} = (?)",(json_array, id))
-        self.conn.commit()
-        return self.cursor.rowcount # Number of affected rows
-
-    def delete_user(self, id):
-        self.cursor.execute(f"DELETE FROM {self._table_name} WHERE {self._column_id} = (?)",(id,))
-        self.conn.commit()
-        return self.cursor.rowcount # Number of affected rows
+        return self.cursor.lastrowid
 
     def get_user_id_list(self):
-        self.cursor.execute(f"SELECT {self._column_id} FROM {self._table_name}")
+        self.cursor.execute(f"""
+            SELECT DISTINCT {self._embeddings_user_id}
+            FROM {self._embeddings_table_name}
+        """)
         result = self.cursor.fetchall()
         return [row[0] for row in result] # Send list of user IDs
 
     def get_user_vectors(self):
-        self.cursor.execute(f"SELECT {self._column_data} FROM {self._table_name}")
+        self.cursor.execute(
+            f"SELECT {self._embeddings_data} FROM {self._embeddings_table_name}"
+        )
         result = self.cursor.fetchall()
         return [row[0] for row in result]
 
-    def get_table(self):
-        self.cursor.execute(f"SELECT * FROM {self._table_name}")
-        result = self.cursor.fetchall()
-        return result
+    def get_embeddings_table(self):
+        self.cursor.execute(f"""
+            SELECT {self._embeddings_user_id}, {self._embeddings_data}
+            FROM {self._embeddings_table_name}
+        """)
+        return self.cursor.fetchall()
 
 
     def reset_database(self):
-        # Close database connexions
+        # Only reset model tables to avoid wiping shared DB
         self.conn.commit()
-        self.conn.close()
-        # Delete database file
-        os.remove(self.path)
-        # Restart database creation
-        self.__init__(self.path)
+        self.cursor.execute(f"DROP TABLE IF EXISTS {self._embeddings_table_name}")
+        self.conn.commit()
+        # Recreate tables
+        self.cursor.execute(f'''
+            CREATE TABLE IF NOT EXISTS {self._embeddings_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                {self._embeddings_user_id} TEXT NOT NULL,
+                {self._embeddings_data} TEXT NOT NULL,
+                createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        self.conn.commit()
         return
 
 
@@ -94,7 +99,7 @@ class DatabaseController:
         self.reset_database()
         for _user_id, images_b64 in user_to_images_b64.items():
             images_b64 = np.array(images_b64)
-            self.add_user(images_b64)
+            self.add_embedding(_user_id, images_b64)
 
 
     def load_anonymized_dataset_from_folder(self, directory: str = None):

@@ -44,10 +44,18 @@ const initTable = () => {
       zip TEXT,
       country TEXT,
       spendings TEXT,
-      embedding TEXT,
       credentials TEXT,
       privacyPreset TEXT,
       FOREIGN KEY (roleId) REFERENCES roles(roleId)
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_embeddings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId TEXT NOT NULL,
+      embedding TEXT NOT NULL,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(userId)
     )
   `);
   db.exec(`
@@ -172,13 +180,13 @@ type ReplaceUndefinedWithNull<T> = {
 type X = ReplaceUndefinedWithNull<{ x?: number }>;
 
 function mapUndefinedToNull<T extends Record<string, any>>(
-  value: T
+  value: T,
 ): ReplaceUndefinedWithNull<T> {
   const normalized = Object.fromEntries(
     Object.entries(value).map(([key, val]) => [
       key,
       val === undefined ? null : val,
-    ])
+    ]),
   );
 
   // This is a proxy to ensure that undefined values are converted to null
@@ -196,7 +204,7 @@ function mapUndefinedToNull<T extends Record<string, any>>(
 }
 
 const addUserQuery = db.prepare(
-  `INSERT INTO users (userId, username, email, firstName, lastName, password, roleId, phoneNumber, dateOfBirth, gender, address, city, state, zip, country, spendings,  embedding, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` // credentials is a base64 string
+  `INSERT INTO users (userId, username, email, firstName, lastName, password, roleId, phoneNumber, dateOfBirth, gender, address, city, state, zip, country, spendings, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, // credentials is a base64 string
 );
 
 const addUser = (user: User) => {
@@ -212,36 +220,35 @@ const addUser = (user: User) => {
     userWithoutUndefined.phoneNumber,
     userWithoutUndefined.dateOfBirth,
     userWithoutUndefined.gender,
-    userWithoutUndefined.address
+    userWithoutUndefined.address,
     // userWithoutUndefined.city,
     // userWithoutUndefined.state,
     // userWithoutUndefined.zip,
     // userWithoutUndefined.country,
     // userWithoutUndefined.spendings,
-    // userWithoutUndefined.embedding,
     // userWithoutUndefined.credentials
   );
 };
 
 // 1 is admin, 2 is user, 3 is shop owner
 const addRoleQuery = db.prepare(
-  `INSERT INTO roles (roleName, canChangeUsersCredentials, canChangeUsersRoles, canReadUsers, canReadUsersCredentials, canReadUsersSettings, canReadUsersRoles, canAccessAdminPanel, canAccessUserPanel, canAccessProviderPanel, hasGlobalAccessToAllShops) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  `INSERT INTO roles (roleName, canChangeUsersCredentials, canChangeUsersRoles, canReadUsers, canReadUsersCredentials, canReadUsersSettings, canReadUsersRoles, canAccessAdminPanel, canAccessUserPanel, canAccessProviderPanel, hasGlobalAccessToAllShops) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 );
 
 const addUserPrivacyQuery = db.prepare(
-  `INSERT INTO privacy_settings (userId, field, visibility) VALUES (?, ?, ?)`
+  `INSERT INTO privacy_settings (userId, field, visibility) VALUES (?, ?, ?)`,
 );
 
 const addShopQuery = db.prepare(
-  `INSERT INTO shops (shopName, shopDescription, shopAddress, shopOwnerId) VALUES (?, ?, ?, ?)`
+  `INSERT INTO shops (shopName, shopDescription, shopAddress, shopOwnerId) VALUES (?, ?, ?, ?)`,
 );
 
 const addTokenQuery = db.prepare(
-  `INSERT INTO tokens (token, expiresAt, purpose, userId) VALUES (?, ?, ?, ?)`
+  `INSERT INTO tokens (token, expiresAt, purpose, userId) VALUES (?, ?, ?, ?)`,
 );
 
 const getTokenQuery = db.prepare(
-  `SELECT * FROM tokens WHERE token = ? AND purpose = ?`
+  `SELECT * FROM tokens WHERE token = ? AND purpose = ?`,
 );
 const getToken = (tokenString: string, purpose: string) => {
   const tokenData = getTokenQuery.get(tokenString, purpose);
@@ -254,43 +261,43 @@ const getToken = (tokenString: string, purpose: string) => {
 };
 
 const deleteTokenQuery = db.prepare(
-  `DELETE FROM tokens WHERE token = ? AND purpose = ?`
+  `DELETE FROM tokens WHERE token = ? AND purpose = ?`,
 );
 
 const getShopByIdQuery = db.prepare(`SELECT * FROM shops WHERE shopId = ?`);
 
 const getShopByOwnerIdQuery = db.prepare(
-  `SELECT * FROM shops WHERE shopOwnerId = ?`
+  `SELECT * FROM shops WHERE shopOwnerId = ?`,
 );
 
 const getAllShopsQuery = db.prepare(`SELECT * FROM shops`);
 
 const getUserPrivacyByUserIdQuery = db.prepare(
-  `SELECT field, visibility FROM privacy_settings WHERE userId = ?`
+  `SELECT field, visibility FROM privacy_settings WHERE userId = ?`,
 );
 
 const getUserPrivacyByUserIdAndFieldQuery = db.prepare(
-  `SELECT field, visibility FROM privacy_settings WHERE userId = ? AND field = ?`
+  `SELECT field, visibility FROM privacy_settings WHERE userId = ? AND field = ?`,
 );
 
 const updateUserPrivacyQuery = db.prepare(
-  `UPDATE privacy_settings SET visibility = ? WHERE userId = ? AND field = ?`
+  `UPDATE privacy_settings SET visibility = ? WHERE userId = ? AND field = ?`,
 );
 
 const insertUserPrivacyQuery = db.prepare(
-  `INSERT INTO privacy_settings (userId, field, visibility) VALUES (?, ?, ?)`
+  `INSERT INTO privacy_settings (userId, field, visibility) VALUES (?, ?, ?)`,
 );
 
 const addUserToShopQuery = db.prepare(
-  `INSERT INTO user_shops (userId, shopId) VALUES (?, ?)`
+  `INSERT INTO user_shops (userId, shopId) VALUES (?, ?)`,
 );
 
 const addShopOwnerToShopQuery = db.prepare(
-  `UPDATE shops SET shopOwnerId = ? WHERE shopId = ?`
+  `UPDATE shops SET shopOwnerId = ? WHERE shopId = ?`,
 );
 
 const getUserShopsQuery = db.prepare(
-  `SELECT shops.* FROM shops JOIN user_shops ON shops.shopId = user_shops.shopId WHERE user_shops.userId = ?`
+  `SELECT shops.* FROM shops JOIN user_shops ON shops.shopId = user_shops.shopId WHERE user_shops.userId = ?`,
 );
 
 const getShopUsersQuery = db.prepare(
@@ -299,23 +306,23 @@ const getShopUsersQuery = db.prepare(
   INNER JOIN user_shops ON users.userId = user_shops.userId 
   INNER JOIN roles ON roles.roleId = users.roleId
   INNER JOIN shops ON shops.shopId = user_shops.shopId
-  WHERE user_shops.shopId = ?`
+  WHERE user_shops.shopId = ?`,
 );
 
 const getRoleByIdQuery = db.prepare(`SELECT * FROM roles WHERE roleId = ?`);
 
 const getRoleByUserIdQuery = db.prepare(
-  `SELECT * FROM roles WHERE roleId = (SELECT roleId FROM users WHERE userId = ?)`
+  `SELECT * FROM roles WHERE roleId = (SELECT roleId FROM users WHERE userId = ?)`,
 );
 
 const getRoleByNameQuery = db.prepare(`SELECT * FROM roles WHERE roleName = ?`);
 
 const getUserByUsernameQuery = db.prepare(
-  `SELECT * FROM users WHERE username = ?`
+  `SELECT * FROM users WHERE username = ?`,
 );
 
 const getUserPrivacyPresetQuery = db.prepare(
-  `SELECT privacyPreset FROM users WHERE userId = ?`
+  `SELECT privacyPreset FROM users WHERE userId = ?`,
 );
 
 const getUserPrivacyPresetById = (userId: string) => {
@@ -335,7 +342,6 @@ function updateUserQuery(userId: string, updates: Record<string, any>) {
     "lastName",
     "phoneNumber",
     "dateOfBirth",
-    "embedding",
     "credentials",
     "roleId",
     "gender",
@@ -375,8 +381,16 @@ function updateUserQuery(userId: string, updates: Record<string, any>) {
   return result;
 }
 
+const addUserEmbeddingQuery = db.prepare(
+  `INSERT INTO user_embeddings (userId, embedding) VALUES (?, ?)`,
+);
+
+const addUserEmbedding = (userId: string, embedding: string) => {
+  addUserEmbeddingQuery.run(userId, embedding);
+};
+
 const updateRoleQuery = db.prepare(
-  `UPDATE roles SET roleName = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ?, canAccessAdminPanel = ?, canAccessUserPanel = ?, canAccessProviderPanel = ?, hasGlobalAccessToAllShops = ? WHERE roleId = ?`
+  `UPDATE roles SET roleName = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ?, canAccessAdminPanel = ?, canAccessUserPanel = ?, canAccessProviderPanel = ?, hasGlobalAccessToAllShops = ? WHERE roleId = ?`,
 );
 
 const getRolesQuery = db.prepare(`SELECT * FROM roles`);
@@ -387,69 +401,69 @@ const deleteRoleQuery = db.prepare(`DELETE FROM roles WHERE roleId = ?`);
 
 // Items, transactions, and pseudonyms helpers
 const addItemQuery = db.prepare(
-  `INSERT INTO items (itemName, itemPrice, shopId) VALUES (?, ?, ?)`
+  `INSERT INTO items (itemName, itemPrice, shopId) VALUES (?, ?, ?)`,
 );
 
 const getItemByNameAndShopQuery = db.prepare(
-  `SELECT * FROM items WHERE itemName = ? AND shopId = ?`
+  `SELECT * FROM items WHERE itemName = ? AND shopId = ?`,
 );
 
 const addTransactionQuery = db.prepare(
-  `INSERT INTO transactions (shopId, pseudoId, totalPrice, location, paymentMethod, purchaseType) VALUES (?, ?, ?, ?, ?, ?)`
+  `INSERT INTO transactions (shopId, pseudoId, totalPrice, location, paymentMethod, purchaseType) VALUES (?, ?, ?, ?, ?, ?)`,
 );
 
 const addTransactionItemQuery = db.prepare(
-  `INSERT INTO transaction_items (transactionId, itemId, quantity) VALUES (?, ?, ?)`
+  `INSERT INTO transaction_items (transactionId, itemId, quantity) VALUES (?, ?, ?)`,
 );
 
 const linkUserTransactionQuery = db.prepare(
-  `INSERT INTO user_transactions (userId, transactionId) VALUES (?, ?)`
+  `INSERT INTO user_transactions (userId, transactionId) VALUES (?, ?)`,
 );
 
 const addPseudonymQuery = db.prepare(
-  `INSERT INTO pseudonyms (pseudoId, userId, expiresAt) VALUES (?, ?, ?)`
+  `INSERT INTO pseudonyms (pseudoId, userId, expiresAt) VALUES (?, ?, ?)`,
 );
 
 const getLastInsertRowIdQuery = db.prepare(`SELECT last_insert_rowid() as id`);
 
 const getTransactionsByUserIdQuery = db.prepare(
-  `SELECT * FROM transactions INNER JOIN transaction_items ON transactions.transactionId = transaction_items.transactionId INNER JOIN items ON transaction_items.itemId = items.itemId WHERE transactions.pseudoId = ?`
+  `SELECT * FROM transactions INNER JOIN transaction_items ON transactions.transactionId = transaction_items.transactionId INNER JOIN items ON transaction_items.itemId = items.itemId WHERE transactions.pseudoId = ?`,
 );
 
 const getTransactionsByShopIdQuery = db.prepare(
-  `SELECT * FROM transactions INNER JOIN transaction_items ON transactions.transactionId = transaction_items.transactionId INNER JOIN items ON transaction_items.itemId = items.itemId WHERE transactions.shopId = ?`
+  `SELECT * FROM transactions INNER JOIN transaction_items ON transactions.transactionId = transaction_items.transactionId INNER JOIN items ON transaction_items.itemId = items.itemId WHERE transactions.shopId = ?`,
 );
 
 const getTransactionByTransactionIdQuery = db.prepare(
-  `SELECT * FROM transactions WHERE transactionId = ?`
+  `SELECT * FROM transactions WHERE transactionId = ?`,
 );
 
 const getTransactionItemsByTransactionIdQuery = db.prepare(
-  `SELECT * FROM transaction_items WHERE transactionId = ?`
+  `SELECT * FROM transaction_items WHERE transactionId = ?`,
 );
 
 const getUserTransactionsByUserIdQuery = db.prepare(
-  `SELECT * FROM user_transactions WHERE userId = ?`
+  `SELECT * FROM user_transactions WHERE userId = ?`,
 );
 
 const getUserTransactionsByTransactionIdQuery = db.prepare(
-  `SELECT * FROM user_transactions WHERE transactionId = ?`
+  `SELECT * FROM user_transactions WHERE transactionId = ?`,
 );
 
 const getPseudonymByUserIdQuery = db.prepare(
-  `SELECT * FROM pseudonyms WHERE userId = ?`
+  `SELECT * FROM pseudonyms WHERE userId = ?`,
 );
 
 const getUserIdByPseudoIdQuery = db.prepare(
-  `SELECT userId FROM pseudonyms WHERE pseudoId = ?`
+  `SELECT userId FROM pseudonyms WHERE pseudoId = ?`,
 );
 
 const getUserPrivacyFieldByUserIdQuery = db.prepare(
-  `SELECT visibility FROM privacy_settings WHERE userId = ? AND field = ?`
+  `SELECT visibility FROM privacy_settings WHERE userId = ? AND field = ?`,
 );
 
 const getUserWithRoleQuery = db.prepare(
-  `SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE users.userId = ?`
+  `SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE users.userId = ?`,
 );
 
 // User queries
@@ -497,18 +511,18 @@ const getAllUsers = () => {
 };
 
 const getUserForAuthenticationQuery = db.prepare(
-  `SELECT * FROM users WHERE username = ? OR email = ? OR phoneNumber = ?`
+  `SELECT * FROM users WHERE username = ? OR email = ? OR phoneNumber = ?`,
 );
 
 const getUserForAuthentication = (
   username: string,
   email: string,
-  phoneNumber: string
+  phoneNumber: string,
 ) => {
   const userData = getUserForAuthenticationQuery.get(
     username,
     email,
-    phoneNumber
+    phoneNumber,
   );
   const result = User.safeParse(userData);
   if (!result.success) {
@@ -531,7 +545,7 @@ const addRole = (role: Omit<Role, "roleId">) => {
     role.canAccessAdminPanel ? 1 : 0,
     role.canAccessUserPanel ? 1 : 0,
     role.canAccessProviderPanel ? 1 : 0,
-    role.hasGlobalAccessToAllShops ? 1 : 0
+    role.hasGlobalAccessToAllShops ? 1 : 0,
   );
 };
 
@@ -592,7 +606,7 @@ const updateRole = (roleId: number, role: Role) => {
     role.canAccessUserPanel ? 1 : 0,
     role.canAccessProviderPanel ? 1 : 0,
     role.hasGlobalAccessToAllShops ? 1 : 0,
-    roleId
+    roleId,
   );
 };
 
@@ -607,7 +621,7 @@ const addShop = (shop: Omit<Shop, "shopId">) => {
     shopWithoutId.shopName,
     shopWithoutId.shopDescription,
     shopWithoutId.shopAddress,
-    shopWithoutId.shopOwnerId
+    shopWithoutId.shopOwnerId,
   );
 };
 
@@ -681,7 +695,7 @@ const addToken = (token: Token) => {
     tokenWithoutId.token,
     tokenWithoutId.expiresAt,
     tokenWithoutId.purpose,
-    tokenWithoutId.userId
+    tokenWithoutId.userId,
   );
 };
 
@@ -691,13 +705,13 @@ const deleteToken = (token: string, purpose: string) => {
 
 // Privacy Settings queries
 const addUserPrivacy = (
-  privacySetting: Omit<PrivacySettingRecord, "privacyId">
+  privacySetting: Omit<PrivacySettingRecord, "privacyId">,
 ) => {
   const settingWithoutId = mapUndefinedToNull(privacySetting);
   addUserPrivacyQuery.run(
     settingWithoutId.userId,
     settingWithoutId.field,
-    settingWithoutId.visibility
+    settingWithoutId.visibility,
   );
 };
 
@@ -721,7 +735,7 @@ const getUserPrivacyByUserIdAndField = (userId: string, field: string) => {
   if (!result.success) {
     console.error(
       "Parse error in getUserPrivacyByUserIdAndField:",
-      result.error
+      result.error,
     );
     return null;
   }
@@ -729,25 +743,25 @@ const getUserPrivacyByUserIdAndField = (userId: string, field: string) => {
 };
 
 const updateUserPrivacy = (
-  privacySetting: Omit<PrivacySettingRecord, "privacyId">
+  privacySetting: Omit<PrivacySettingRecord, "privacyId">,
 ) => {
   const settingWithoutId = mapUndefinedToNull(privacySetting);
   console.log("settingWithoutId: ", settingWithoutId);
   return updateUserPrivacyQuery.run(
     settingWithoutId.visibility,
     settingWithoutId.userId,
-    settingWithoutId.field
+    settingWithoutId.field,
   );
 };
 
 const insertUserPrivacy = (
-  privacySetting: Omit<PrivacySettingRecord, "privacyId">
+  privacySetting: Omit<PrivacySettingRecord, "privacyId">,
 ) => {
   const settingWithoutId = mapUndefinedToNull(privacySetting);
   return insertUserPrivacyQuery.run(
     settingWithoutId.userId,
     settingWithoutId.field,
-    settingWithoutId.visibility
+    settingWithoutId.visibility,
   );
 };
 
@@ -762,7 +776,7 @@ const addItem = (item: Omit<Item, "itemId">) => {
   addItemQuery.run(
     itemWithoutId.itemName,
     itemWithoutId.itemPrice,
-    itemWithoutId.shopId
+    itemWithoutId.shopId,
   );
 };
 
@@ -785,7 +799,7 @@ const addTransaction = (transaction: Omit<Transaction, "transactionId">) => {
     transactionWithoutId.totalPrice,
     transactionWithoutId.location,
     transactionWithoutId.paymentMethod,
-    transactionWithoutId.purchaseType
+    transactionWithoutId.purchaseType,
   );
 };
 
@@ -795,7 +809,7 @@ const getTransactionByTransactionId = (transactionId: number) => {
   if (!result.success) {
     console.error(
       "Parse error in getTransactionByTransactionId:",
-      result.error
+      result.error,
     );
     return null;
   }
@@ -836,7 +850,7 @@ const addTransactionItem = (transactionItem: TransactionItem) => {
   addTransactionItemQuery.run(
     itemWithoutAutoId.transactionId,
     itemWithoutAutoId.itemId,
-    itemWithoutAutoId.quantity
+    itemWithoutAutoId.quantity,
   );
 };
 
@@ -848,7 +862,7 @@ const getTransactionItemsByTransactionId = (transactionId: number) => {
       if (!result.success) {
         console.error(
           "Parse error in getTransactionItemsByTransactionId:",
-          result.error
+          result.error,
         );
         return null;
       }
@@ -870,7 +884,7 @@ const getUserTransactionsByUserId = (userId: string) => {
       if (!result.success) {
         console.error(
           "Parse error in getUserTransactionsByUserId:",
-          result.error
+          result.error,
         );
         return null;
       }
@@ -888,7 +902,7 @@ const getUserTransactionsByTransactionId = (transactionId: number) => {
       if (!result.success) {
         console.error(
           "Parse error in getUserTransactionsByTransactionId:",
-          result.error
+          result.error,
         );
         return null;
       }
@@ -903,7 +917,7 @@ const addPseudonym = (pseudonym: Pseudonym) => {
   addPseudonymQuery.run(
     pseudonymData.pseudoId,
     pseudonymData.userId,
-    pseudonymData.expiresAt
+    pseudonymData.expiresAt,
   );
 };
 
@@ -936,6 +950,7 @@ export {
   getUserById,
   getRoleByUserId,
   updateUser,
+  addUserEmbedding,
   updateRole,
   deleteUser,
   addRole,
