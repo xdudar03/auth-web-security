@@ -7,8 +7,6 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 
-
-
 from tensorflow import float32, convert_to_tensor
 from tensorflow.image import resize, rgb_to_grayscale, grayscale_to_rgb, convert_image_dtype
 from tensorflow.keras.models import Sequential, load_model
@@ -27,13 +25,12 @@ import mok.models.ml_models as ml_models
 from mok.preprocessing.utils_image import base64_image_to_numpy
 from mok.persistence.database_controller import DatabaseController
 
-
-
 class MLController:
 
     # Data source & final model
     X, y, label_encoder = None, None, None
     model = None
+    inference_model = None
     duration = 0
 
     # Paths
@@ -51,8 +48,7 @@ class MLController:
     RANDOM_STATE = 42
     N_TRAIN_PER_SUBJECT = 7
     #####--- create_model ---#####
-    MODEL_NAME = 'simple_cnn_yale_anony_v1'
-    MODEL_ARCHITECTURE = 'simple_cnn'
+    MODEL_NAME = 'arcface_yale_anony_v1'
     #####--- train_model ---#####
 
     # for dp-svd anonymization
@@ -60,9 +56,12 @@ class MLController:
     BATCH_SIZE = 16
     EPOCHS = 140
 
+    # ArcFace settings
+    ARC_EMBEDDING_DIM = 128
+    ARC_MARGIN = 0.35
+    ARC_SCALE = 30.0
+
     EARLY_STOPPING_PATIENCE = 20
-    TRANSFER_BASE_MODEL_NAME = 'MobileNetV2'
-    TRANSFER_FREEZE_BASE = True
     
     ##########################################
 
@@ -152,14 +151,14 @@ class MLController:
             model_save_dir=self._model_save_dir,
             log_dir=self._log_dir,
             model_name=self.MODEL_NAME,
-            model_architecture=self.MODEL_ARCHITECTURE,
             learning_rate=self.LEARNING_RATE,
+            arc_embedding_dim=self.ARC_EMBEDDING_DIM,
+            arc_margin=self.ARC_MARGIN,
+            arc_scale=self.ARC_SCALE,
             early_stopping_patience=self.EARLY_STOPPING_PATIENCE,
-            transfer_base_model_name=self.TRANSFER_BASE_MODEL_NAME,
-            transfer_freeze_base=self.TRANSFER_FREEZE_BASE,
         )
         # Save output
-        self.model, self.callbacks, self.model_filepath, self.summary_text = res
+        self.model, self.inference_model, self.callbacks, self.model_filepath, self.summary_text = res
 
     def train_model(self):
         self.duration = time.time()
@@ -171,6 +170,7 @@ class MLController:
             self.label_encoder, self.model_filepath,
             model_save_dir=self._model_save_dir,
             model_name=self.MODEL_NAME,
+            inference_model=self.inference_model,
             batch_size=self.BATCH_SIZE,
             epochs=self.EPOCHS,
         )
@@ -333,12 +333,12 @@ def create_model(
     input_shape: (int, int),
     model_save_dir='ml_models/trained/',
     log_dir='ml_models/logs/',
-    model_name='simple_cnn_yale_anony_v1',
-    model_architecture='simple_cnn',
+    model_name='arcface_yale_anony_v1',
     learning_rate=0.001,
+    arc_embedding_dim=128,
+    arc_margin=0.35,
+    arc_scale=30.0,
     early_stopping_patience=10,
-    transfer_base_model_name='MobileNetV2',
-    transfer_freeze_base=True,
     show_logs=False
     ):
     """
@@ -350,14 +350,14 @@ def create_model(
     :param model_save_dir: Folder to save trained ml_models, label encoder, etc.
     :param log_dir: Folder for TensorBoard logs (optional, leave blank or None to disable)
     :param model_name: Base name for saved files (model, logs, curves)
-    :param model_architecture: Architecture choice in ml_models.py: 'simple_cnn', 'transfer_MobileNetV2', 'transfer_ResNet50', etc.
     --- Training Settings ---
     :param learning_rate: Learning rate for the Adam optimizer
+    :param arc_embedding_dim: ArcFace embedding dimension
+    :param arc_margin: ArcFace angular margin
+    :param arc_scale: ArcFace scale factor
     :param early_stopping_patience: Patience for EarlyStopping (number of epochs without improvement on val_accuracy before stopping). Set to 0 or a negative value to disable EarlyStopping.
-    --- For Transfer Learning (if MODEL_ARCHITECTURE starts with 'transfer_') ---    :param transfer_base_model_name:
-    :param transfer_freeze_base: Name of the base model to load from tf.keras.applications
     --- Display print logs ---
-    :param show_logs: Should the base model weights be frozen during the first training? Set to False for fine-tuning (often requires a lower LEARNING_RATE).
+    :param show_logs: Display training logs
 
     :return: model, callbacks, model_filepath, summary_text
     """
@@ -368,7 +368,6 @@ def create_model(
     # Display model parameters
     if show_logs:
         print("Custom configuration loaded :")
-        print(f"  - Model Architecture: {model_architecture}")
         print(f"  - Model Name: {model_name}")
         print(f"  - Image Dimensions: {input_shape}")
 
@@ -382,16 +381,13 @@ def create_model(
     # --- 4. Model Construction ---
     # --- --------------------- ---
     if show_logs: print("\n--- Model Construction ---")
-    if model_architecture == 'simple_cnn':
-        model = ml_models.build_simple_cnn(input_shape=input_shape, num_classes=num_classes)
-    elif model_architecture.startswith('transfer_'):
-        if show_logs: print(f"Using the basic model: {transfer_base_model_name}, Freeze: {transfer_freeze_base}")
-        model = ml_models.build_transfer_model(input_shape=input_shape,
-                                               num_classes=num_classes,
-                                               base_model_name=transfer_base_model_name,
-                                               freeze_base=transfer_freeze_base)
-    else:
-        raise Exception(f"Error: Unrecognized model architecture in config: {model_architecture}")
+    model, inference_model = ml_models.build_arcface_cnn(
+        input_shape=input_shape,
+        num_classes=num_classes,
+        embedding_dim=arc_embedding_dim,
+        margin=arc_margin,
+        scale=arc_scale
+    )
     if model is None:
         raise Exception("Critical error while building the model. Stopping.")
 
@@ -459,7 +455,7 @@ def create_model(
     csv_logger_callback = CSVLogger(csv_log_path, append=False)
     callbacks.append(csv_logger_callback)
 
-    return model, callbacks, model_filepath, summary_text
+    return model, inference_model, callbacks, model_filepath, summary_text
 
 
 
@@ -516,7 +512,8 @@ def train_model(
     label_encoder,
     model_filepath,
     model_save_dir='ml_models/trained/',
-    model_name='simple_cnn_yale_anony_v1',
+    model_name='arcface_yale_anony_v1',
+    inference_model=None,
     batch_size=32,
     epochs=50,
     show_logs=False
@@ -535,6 +532,7 @@ def train_model(
     :param model_filepath: from create_model()
     :param model_save_dir: same as in create_model()
     :param model_name: same as in create_model()
+    :param inference_model: from create_model()
     --- Training Settings ---
     :param batch_size: Batch size
     :param epochs: Maximum number of training epochs
@@ -554,12 +552,18 @@ def train_model(
         print(f"  - Epochs: {epochs}, Batch Size: {batch_size}")
 
     if show_logs: print("\n--- Start training ---")
+    train_inputs = [X_train, y_train] if len(model.inputs) == 2 else X_train
+    if validation_data is not None:
+        val_x, val_y = validation_data
+        validation_payload = ([val_x, val_y], val_y) if len(model.inputs) == 2 else (val_x, val_y)
+    else:
+        validation_payload = None
     try:
         history = model.fit(
-            X_train, y_train,
+            train_inputs, y_train,
             epochs=epochs,
             batch_size=batch_size,
-            validation_data=validation_data,
+            validation_data=validation_payload,
             callbacks=callbacks,
             verbose=(show_logs==True)
         )
@@ -580,13 +584,22 @@ def train_model(
     data_loader.save_label_encoder(label_encoder, encoder_save_path)
 
     # Evaluation
-    eval_loss, eval_acc = model.evaluate(X_test, y_test)
-    y_pred = np.argmax(model.predict(X_test), axis=1)
+    eval_model = inference_model if inference_model is not None else model
+    eval_inputs = X_test if inference_model is not None else ([X_test, y_test] if len(model.inputs) == 2 else X_test)
+    eval_loss, eval_acc = eval_model.evaluate(eval_inputs, y_test)
+    y_pred = np.argmax(eval_model.predict(eval_inputs), axis=1)
     cm = confusion_matrix(y_test, y_pred)
     report = classification_report(y_test, y_pred, output_dict=False)
 
     # Capture report to image
     report = pillow_image_to_bytes(text_to_image(report))
+
+    # Save inference model if it exists (ArcFace)
+    if inference_model is not None:
+        inference_model_filepath = os.path.join(model_save_dir, f"{model_name}_inference.h5")
+        if show_logs: print(f"\n--- Saving inference model ---")
+        inference_model.save(inference_model_filepath)
+        if show_logs: print(f"Inference model saved in: {inference_model_filepath}")
 
     if history is not None:
         if show_logs: print("\n--- Displaying learning curves ---")
@@ -633,8 +646,9 @@ def preprocess_single_image(
     """
     try:
         image = formate_ml_image(image_array, input_shape)
-        image = np.expand_dims(image, axis=-1)
-        image = np.expand_dims(image, axis=0)
+        # formate_ml_image already returns shape (H, W), add batch dimension only
+        image = np.expand_dims(image, axis=0)  # Shape: (1, H, W)
+        image = np.expand_dims(image, axis=-1)  # Shape: (1, H, W, 1)
         print(f"Preprocessed image, final shape: {image.shape}")
         return image
     except Exception as e:
@@ -645,7 +659,7 @@ def preprocess_single_image(
 def predict_image(
     image_array: np.ndarray,
     model_save_dir: str = 'ml_models/trained/',
-    model_name: str = 'simple_cnn_yale_anony_v1',
+    model_name: str = 'arcface_yale_anony_v1',
     input_shape: tuple = (100, 100, 1),
     show_logs = False,
     ):
@@ -666,10 +680,12 @@ def predict_image(
 
     model_filepath = os.path.join(model_save_dir, f"{model_name}.h5")
     encoder_filepath = os.path.join(model_save_dir, f"{model_name}_label_encoder.joblib")
+    inference_model_filepath = os.path.join(model_save_dir, f"{model_name}_inference.h5")
 
     if show_logs:
         print(f"  - Model used: {model_filepath}")
         print(f"  - Encoder used: {encoder_filepath}")
+        print(f"  - Inference model used: {inference_model_filepath}")
         print(f"  - Image to predict: NumPy array, shape={image_array.shape}")
 
     # --- ------------------------- ---
@@ -678,7 +694,18 @@ def predict_image(
     if show_logs: print("\n--- Loading the model and encoder ---")
     if not os.path.exists(model_filepath):
         raise Exception(f"Error: Template file not found: {model_filepath}")
-    model = load_model(model_filepath)
+   # Import ArcFace layer for custom_objects if needed
+    from mok.models.ml_models import ArcFace, L2Normalize, ZeroLabelsLayer
+    custom_objects = {"ArcFace": ArcFace, "L2Normalize": L2Normalize, "ZeroLabelsLayer": ZeroLabelsLayer}
+
+    # Check if inference model exists (ArcFace models use separate inference model)
+    if os.path.exists(inference_model_filepath):
+        print(f"Using inference model: {inference_model_filepath}")
+        model = load_model(inference_model_filepath, custom_objects=custom_objects, safe_mode=False)
+    else:
+        print(f"Using training model: {model_filepath}")
+        print(f"Note: Inference model not found at {inference_model_filepath}")
+        model = load_model(model_filepath, custom_objects=custom_objects, safe_mode=False)
 
     # Load the label encoder
     label_encoder = data_loader.load_label_encoder(encoder_filepath)
@@ -698,7 +725,16 @@ def predict_image(
     # --- ---------------------- ---
     if show_logs: print("\n--- Prediction ---")
     try:
-        prediction_probabilities = model.predict(preprocessed_image)
+        # Check if model expects 2 inputs (ArcFace training model) or 1 input
+        if len(model.inputs) == 2:
+            print("Note: Model expects 2 inputs (training model). Inference model not available.")
+            print("For better performance, retrain the model to generate the inference model.")
+            # For ArcFace training model: pass dummy labels (zeros) for inference
+            dummy_labels = np.zeros(preprocessed_image.shape[0], dtype=np.int32)
+            prediction_probabilities = model.predict([preprocessed_image, dummy_labels])
+        else:
+            # Standard model or inference model: single input
+            prediction_probabilities = model.predict(preprocessed_image)
 
         predicted_index = np.argmax(prediction_probabilities[0])
         prediction_confidence = prediction_probabilities[0][predicted_index]
