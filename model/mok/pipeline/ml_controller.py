@@ -34,7 +34,7 @@ class MLController:
     duration = 0
 
     # Paths
-    _db_path = os.environ.get("SQLITE_DB_PATH", "data/gui_database.db")
+    _db_path = os.environ.get("SQLITE_DB_PATH", DatabaseController.DEFAULT_DB_PATH)
     _ml_output = "data/ml_models"
     _model_save_dir = f'{_ml_output}/trained'
     _log_dir = f'{_ml_output}/logs'
@@ -95,23 +95,48 @@ class MLController:
     def get_data_from_db(cls, db_path = None):
         resolved_path = db_path or os.environ.get(
             "SQLITE_DB_PATH",
-            str(os.path.join("data", "gui_database.db")),
+            DatabaseController.DEFAULT_DB_PATH,
         )
         db = DatabaseController(resolved_path)
+        print(f"Getting data from database at {resolved_path}")
         image_dict = {}
         embeddings_result = db.get_embeddings_table()
         for user_id, raw_value in embeddings_result:
             try:
                 decoded = json.loads(raw_value)
-                images = decoded if isinstance(decoded, list) else [raw_value]
             except Exception:
-                images = raw_value.split(',') if isinstance(raw_value, str) else [raw_value]
+                decoded = raw_value
+            images = []
+            if isinstance(decoded, list):
+                if decoded and all(isinstance(item, (int, float)) for item in decoded):
+                    images = [np.array(decoded)]
+                elif decoded and all(isinstance(item, (list, tuple)) for item in decoded):
+                    if all(all(isinstance(val, (int, float)) for val in item) for item in decoded):
+                        images = [np.array(decoded)]
+                    elif all(isinstance(item, str) for item in decoded):
+                        images = decoded
+                    else:
+                        images = [np.array(decoded)]
+                elif decoded and all(isinstance(item, str) for item in decoded):
+                    images = decoded
+                else:
+                    images = [np.array(decoded)]
+            else:
+                images = [decoded]
             parsed_images = []
             for img in images:
                 if isinstance(img, (list, tuple)):
                     parsed_images.append(np.array(img))
+                elif isinstance(img, np.ndarray):
+                    parsed_images.append(img)
                 else:
-                    parsed_images.append(base64_image_to_numpy(img))
+                    try:
+                        parsed_images.append(base64_image_to_numpy(img))
+                    except Exception:
+                        if isinstance(decoded, (list, tuple, np.ndarray)):
+                            parsed_images.append(np.array(decoded))
+                        else:
+                            raise
             image_dict.setdefault(user_id, []).extend(parsed_images)
         X, y = [], []
         for user_id, images in image_dict.items():
@@ -124,6 +149,26 @@ class MLController:
         label_encoder = LabelEncoder()
         y_encoded = label_encoder.fit_transform(y)
         return X, y_encoded, label_encoder
+
+    def add_embedding(self, user_id: str, embedding):
+        db = DatabaseController(self._db_path)
+        return db.add_embedding(user_id, embedding)
+
+    def get_embedding_count(self) -> int:
+        db = DatabaseController(self._db_path)
+        return len(db.get_embeddings_table())
+
+    def reload_data_from_db(self):
+        self.X, self.y, self.label_encoder = self.get_data_from_db(self._db_path)
+
+    def retrain_from_db(self):
+        self.reload_data_from_db()
+        print(f"Reloaded data from database: {self.X.shape}")
+        if self.X is None or len(self.X) == 0:
+            raise ValueError("No embeddings available for training.")
+        self.prepare_data()
+        self.create_model()
+        return self.train_model()
 
     def prepare_data(self):
         # Prepare data

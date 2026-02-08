@@ -175,7 +175,7 @@ export const appRouter = router({
     authenticate: publicProcedure
       .input(z.object({ username: z.string(), password: z.string() }))
       .mutation(({ input }) => execute(() => authenticateBiometricUser(input))),
-    changeEmbedding: publicProcedure
+    changeEmbedding: publicProcedure // TODO: better naming
       .input(
         z.object({
           embedding: z.string(), // json serialized array of numbers

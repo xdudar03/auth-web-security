@@ -27,3 +27,8 @@ export const VerificationResponse = z.object({
   user_id: z.string(),
 });
 export type VerificationResponse = z.infer<typeof VerificationResponse>;
+
+export const AddEmbeddingResponse = z.object({
+  message: z.string(),
+});
+export type AddEmbeddingResponse = z.infer<typeof AddEmbeddingResponse>;

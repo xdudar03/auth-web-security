@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { dpSvdEmbeddingFromMatrix } from "../lib/dpSvd.ts";
 import sharp from "sharp";
+import { initialModelTraining } from "../services/model.ts";
 
 const TARGET_SIZE = 100;
 const DP_SVD_OPTIONS = {
@@ -74,7 +75,6 @@ const addEmbeddings = async () => {
       continue;
     }
     const uId = `u10${subjectId}`;
-    console.log(uId);
 
     try {
       const { data, info } = await sharp(imagePath)

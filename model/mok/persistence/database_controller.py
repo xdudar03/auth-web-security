@@ -8,6 +8,10 @@ from PIL import Image
 
 
 
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+DEFAULT_DB_PATH = os.path.join(_REPO_ROOT, "server", "data", "users.db")
+
+
 class DatabaseController:
 
     _embeddings_table_name = "user_embeddings"
@@ -18,7 +22,9 @@ class DatabaseController:
     ORIGINAL_DIR = "dataset-yalefaces"        # original YaleFaces images
     ANONYMIZED_DIR = "dataset-peep"  # anonymized images (output of pipeline)
 
-    def __init__(self, path=os.path.join("data", "gui_database.db")):
+    DEFAULT_DB_PATH = DEFAULT_DB_PATH
+
+    def __init__(self, path=DEFAULT_DB_PATH):
         shared_path = os.environ.get("SQLITE_DB_PATH")
         resolved_path = shared_path.strip() if shared_path else path
         self.path = os.path.abspath(resolved_path)
@@ -40,12 +46,16 @@ class DatabaseController:
         self.conn.close()
 
     def add_embedding(self, user_id: str, embedding):
+        print(f"Adding embedding to database at {self.path}")
+        print(f"Embedding: {embedding}")
+        print(f"User ID: {user_id}")
         if isinstance(embedding, np.ndarray):
             serialized = json.dumps(embedding.tolist())
         elif isinstance(embedding, (list, tuple)):
             serialized = json.dumps(list(embedding))
         else:
             serialized = str(embedding)
+        print(f"Serialized embedding: {serialized}")
         self.cursor.execute(
             f"INSERT INTO {self._embeddings_table_name} ({self._embeddings_user_id}, {self._embeddings_data}) VALUES (?, ?)",
             (user_id, serialized),

@@ -13,6 +13,7 @@ import jwt from "jsonwebtoken";
 import { jwtSecret } from "../tools/trpc.ts";
 import bcrypt from "bcryptjs";
 import type { User } from "../types/user.ts";
+import { addNewEmbedding } from "./model.ts";
 
 type RegistrationInput = {
   userId: string;
@@ -123,6 +124,14 @@ export async function changeBiometricEmbedding(
   }
 
   addUserEmbedding(existingUser.userId, serializedEmbedding);
+  const response = await addNewEmbedding(
+    existingUser.userId,
+    serializedEmbedding,
+  );
+  console.log("response from addNewEmbedding: ", response);
+  if (response.message !== "Embedding added; retraining started") {
+    throw new HttpError(500, "Failed to add embedding");
+  }
 
   return {
     message: "Biometric changed successfully",

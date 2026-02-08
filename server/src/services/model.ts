@@ -4,15 +4,17 @@ import {
   ModelStatusResponse,
   PredictionResponse,
   VerificationResponse,
+  AddEmbeddingResponse,
 } from "../types/model.ts";
 
-const MODEL_BASE_URL = process.env.MODEL_BASE_URL || "http://localhost:5000";
+const MODEL_BASE_URL = "http://localhost:5000"; // TODO: change to env variable
 
 async function fetchModel<T>(
   endpoint: string,
   options?: RequestInit,
 ): Promise<T> {
   try {
+    console.log("Fetching model from: ", `${MODEL_BASE_URL}${endpoint}`);
     const response = await fetch(`${MODEL_BASE_URL}${endpoint}`, {
       ...options,
       headers: {
@@ -86,5 +88,31 @@ export async function verifyIdentity(
       embedding,
       user_id: userId,
     }),
+  });
+}
+
+/**
+ * Add a new embedding to the database and re-train the model.
+ *
+ * @param userId - User ID to add the embedding for
+ * @param embedding - Stringified embedding to add
+ */
+export async function addNewEmbedding(
+  userId: string,
+  embedding: string,
+): Promise<AddEmbeddingResponse> {
+  return fetchModel<AddEmbeddingResponse>("/add_embedding", {
+    method: "POST",
+    body: JSON.stringify({
+      user_id: userId,
+      embedding: JSON.parse(embedding),
+    }),
+  });
+}
+
+export async function initialModelTraining() {
+  return fetchModel<AddEmbeddingResponse>("/initial_training", {
+    method: "POST",
+    body: JSON.stringify({}),
   });
 }

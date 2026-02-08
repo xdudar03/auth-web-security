@@ -11,14 +11,24 @@ import os
 from typing import List, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
+from threading import Lock
 
 from mok.pipeline.ml_controller import MLController
 
 
 # Global model controller (loaded on startup)
 _controller: Optional[MLController] = None
+_training_lock = Lock()
+
+
+def retrain_model_task(controller: MLController):
+    with _training_lock:
+        try:
+            controller.retrain_from_db()
+        except Exception as e:
+            print(f"Retraining failed: {e}")
 
 
 def get_controller() -> MLController:
@@ -163,6 +173,35 @@ async def verify_identity(request: EmbeddingRequest):
         "user_id": request.user_id,
     }
 
+
+@app.post("/add_embedding")
+async def add_embedding(request: EmbeddingRequest, background_tasks: BackgroundTasks):
+    """
+    Add a new embedding to the database and re-train the model.
+    """
+    controller = get_controller()
+    if not request.user_id:
+        raise HTTPException(status_code=400, detail="user_id is required for adding an embedding")
+    if not request.embedding:
+        raise HTTPException(status_code=400, detail="embedding is required for adding an embedding")
+    controller.add_embedding(request.user_id, request.embedding)
+    background_tasks.add_task(retrain_model_task, controller)
+    return {"message": "Embedding added; retraining started"}
+
+
+@app.post("/initial_training")
+async def initial_training(background_tasks: BackgroundTasks):
+    """
+    Initial model training using embeddings already in the DB.
+    """
+    controller = get_controller()
+    print(f"Controller: {controller}")
+    print(f"Getting embedding count: {controller.get_embedding_count()}")
+    print(f"Database path: {controller._db_path}")
+    if controller.get_embedding_count() == 0:
+        raise HTTPException(status_code=400, detail="No embeddings found in DB for training")
+    background_tasks.add_task(retrain_model_task, controller)
+    return {"message": "Initial training started from DB embeddings"}
 
 # ============== Main ==============
 
