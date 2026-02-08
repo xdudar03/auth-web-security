@@ -6,28 +6,25 @@ import numpy as np
 from PIL import Image
 
 # Import modules from the project
-from mok.preprocessing.image_preprocessing import preprocess_images_yalefaces
-from mok.data.data_loader import load_anonymized_images_flat, load_label_encoder
 from mok.pipeline.ml_controller import MLController
-from mok.config.settings import FOLDER_PATH, OUTPUT_FOLDER
-from mok.scripts.dp_svd import run_dp_svd
 
 def run_training(
-    data_dir: str,
+    data: tuple | None = None,
     img_width: int = 100,
     img_height: int = 100,
 ) -> MLController:
-    """Load anonymized images and run the ML training pipeline."""
-    X, y, label_encoder = load_anonymized_images_flat(
-        data_dir=data_dir,
-        img_width=img_width,
-        img_height=img_height,
-        color_mode='grayscale',
-    )
-    if X is None or y is None or label_encoder is None:
-        raise RuntimeError("Failed to load anonymized images for training.")
-
-    controller = MLController(data=(X, y, label_encoder))
+    """Run the ML training pipeline on provided anonymized data."""
+    if data is not None:
+        if not isinstance(data, tuple) or len(data) != 3:
+            raise ValueError("Expected data as (X, y, label_encoder).")
+        X, y, label_encoder = data
+        if X is None or y is None or label_encoder is None:
+            raise RuntimeError("Invalid training data provided.")
+        controller = MLController(data=(X, y, label_encoder))
+    else:
+        # Fallback: load anonymized vectors from the configured database.
+        controller = MLController()
+    controller.INPUT_SHAPE = (img_height, img_width, controller.INPUT_SHAPE[2])
     controller.prepare_data()
     controller.create_model()
     controller.train_model()
@@ -37,7 +34,6 @@ def run_training(
 def save_evaluation_artifacts(output: dict, save_dir: str, model_name: str) -> None:
     """Persist evaluation artifacts (report image, curves, confusion matrix)."""
     try:
-        
         os.makedirs(save_dir, exist_ok=True)
         # Save classification report image (base64 -> PNG)
         report_b64 = output.get("classification_report")
@@ -72,19 +68,7 @@ def save_evaluation_artifacts(output: dict, save_dir: str, model_name: str) -> N
 
 def main():
     parser = argparse.ArgumentParser(
-        description="End-to-end pipeline: anonymize images then train the model."
-    )
-    parser.add_argument(
-        "--input-dir",
-        type=str,
-        default=FOLDER_PATH,
-        help="Directory containing original images to anonymize (subjects grouped or flat).",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default=OUTPUT_FOLDER,
-        help="Directory where anonymized images will be saved.",
+        description="Train the model using already-anonymized image vectors."
     )
     parser.add_argument(
         "--img-width",
@@ -98,42 +82,10 @@ def main():
         default=100,
         help="Target image height (pixels).",
     )
-    parser.add_argument(
-        "--epsilon-dp-svd",
-        type=float,
-        default=0.4,
-        help="Differential privacy epsilon for the DP-SVD anonymization.",
-    )
-    parser.add_argument(
-        "--n-singular-values",
-        type=int,
-        default=15,
-        help="Number of singular values to keep for DP-SVD anonymization.",
-    )
-    parser.add_argument(
-        "--block-size",
-        type=int,
-        default=25,
-        help="Size of the blocks for block-based DP-SVD anonymization.",
-    )
     args = parser.parse_args()
 
-    image_size = (args.img_height, args.img_width)  # (height, width) for numpy convention
-
-    print("\n=== STEP 1/2: Anonymization ===")
-    run_dp_svd(
-        input_dir=args.input_dir,
-        output_dir=args.output_dir,
-        epsilon=args.epsilon_dp_svd,
-        n_singular_values=args.n_singular_values,
-        block_size=args.block_size,
-        image_size=image_size,
-    )
-    anonymized_dir = args.output_dir
-
-    print("\n=== STEP 2/2: Training ===")
+    print("\n=== Training ===")
     controller = run_training(
-        data_dir=anonymized_dir,
         img_width=args.img_width,
         img_height=args.img_height,
     )
