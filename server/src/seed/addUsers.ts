@@ -12,6 +12,7 @@ const addUsers = () => {
     lastName: "admin", // lastName
     password: bcrypt.hashSync("admin", salt), // password
     roleId: 1, // roleId
+    isBiometric: false,
   });
   addPseudonym({
     pseudoId: "padmin",
@@ -27,6 +28,7 @@ const addUsers = () => {
     lastName: "user", // lastName
     password: bcrypt.hashSync("user", salt), // password
     roleId: 2, // roleId
+    isBiometric: false,
   });
   addPseudonym({
     pseudoId: "puser",
@@ -42,6 +44,7 @@ const addUsers = () => {
     lastName: "shop owner 1", // lastName
     password: bcrypt.hashSync("shop owner 1", salt), // password
     roleId: 3, // roleId
+    isBiometric: false,
   });
   addPseudonym({
     pseudoId: "pshop1",
@@ -57,6 +60,7 @@ const addUsers = () => {
     lastName: "shop owner 2", // lastName
     password: bcrypt.hashSync("shop owner 2", salt), // password
     roleId: 3, // roleId
+    isBiometric: false,
   });
   addPseudonym({
     pseudoId: "pshop2",
@@ -72,6 +76,7 @@ const addUsers = () => {
     lastName: "shop owner 3", // lastName
     password: bcrypt.hashSync("shop owner 3", salt), // password
     roleId: 3, // roleId
+    isBiometric: false,
   });
   addPseudonym({
     pseudoId: "pshop3",

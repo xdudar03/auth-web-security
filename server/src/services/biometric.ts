@@ -65,6 +65,7 @@ export async function registerBiometricUser(input: RegistrationInput) {
     email,
     password: hashedPassword,
     roleId: typeof roleId === "string" ? Number(roleId) : roleId,
+    isBiometric: false,
   });
 
   // const user = getUserWithRoleQuery.get(userId);
@@ -112,7 +113,6 @@ export async function changeBiometricEmbedding(
   const { embedding } = input;
   const serializedEmbedding =
     typeof embedding === "string" ? embedding : JSON.stringify(embedding);
-  console.log("embedding: ", serializedEmbedding);
 
   if (!user.userId) {
     throw new HttpError(401, "Unauthorized");
@@ -128,6 +128,8 @@ export async function changeBiometricEmbedding(
     serializedEmbedding,
   );
   console.log("response from addNewEmbedding: ", response);
+
+  updateUser(existingUser.userId, { isBiometric: true });
   if (response.message !== "Embedding added; retraining started") {
     throw new HttpError(500, "Failed to add embedding");
   }

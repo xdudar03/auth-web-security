@@ -35,6 +35,7 @@ const initTable = () => {
       lastName TEXT,
       password TEXT NOT NULL,
       roleId INTEGER NOT NULL,
+      isBiometric BOOLEAN NOT NULL DEFAULT FALSE,
       phoneNumber TEXT,
       dateOfBirth TEXT,
       gender TEXT,
@@ -204,7 +205,7 @@ function mapUndefinedToNull<T extends Record<string, any>>(
 }
 
 const addUserQuery = db.prepare(
-  `INSERT INTO users (userId, username, email, firstName, lastName, password, roleId, phoneNumber, dateOfBirth, gender, address, city, state, zip, country, spendings, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, // credentials is a base64 string
+  `INSERT INTO users (userId, username, email, firstName, lastName, password, roleId, isBiometric, phoneNumber, dateOfBirth, gender, address, city, state, zip, country, spendings, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, // credentials is a base64 string
 );
 
 const addUser = (user: User) => {
@@ -217,6 +218,7 @@ const addUser = (user: User) => {
     userWithoutUndefined.lastName,
     userWithoutUndefined.password,
     userWithoutUndefined.roleId,
+    // userWithoutUndefined.isBiometric,
     userWithoutUndefined.phoneNumber,
     userWithoutUndefined.dateOfBirth,
     userWithoutUndefined.gender,
@@ -340,6 +342,7 @@ function updateUserQuery(userId: string, updates: Record<string, any>) {
     "password",
     "firstName",
     "lastName",
+    "isBiometric",
     "phoneNumber",
     "dateOfBirth",
     "credentials",
@@ -360,8 +363,11 @@ function updateUserQuery(userId: string, updates: Record<string, any>) {
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
       setClauses.push(`${key} = ?`);
-      // Convert arrays/objects to JSON strings for SQLite storage
-      if (typeof value === "object" && value !== null) {
+      // Normalize values so SQLite can bind them safely.
+      if (typeof value === "boolean") {
+        values.push(value ? 1 : 0);
+      } else if (typeof value === "object" && value !== null) {
+        // Convert arrays/objects to JSON strings for SQLite storage.
         values.push(JSON.stringify(value));
       } else {
         values.push(value);
@@ -492,6 +498,7 @@ const deleteUser = (userId: string) => {
 };
 
 const updateUser = (userId: string, updates: Partial<User>) => {
+  console.log("updates: ", updates);
   updateUserQuery(userId, updates);
 };
 

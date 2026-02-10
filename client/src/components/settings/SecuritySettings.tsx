@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 export default function SecuritySettings() {
   const { user } = useUser();
   console.log('user: ', user);
-  const isBiometric = user?.embedding && user?.embedding.length > 0;
+  const isBiometric = user?.isBiometric;
   const parsedCredentials = user?.credentials
     ? JSON.parse(user?.credentials)
     : [];

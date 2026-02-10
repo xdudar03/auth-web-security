@@ -9,6 +9,7 @@ export function mapResponseQuery(query: any) {
       email: query.email,
       firstName: query.firstName,
       lastName: query.lastName,
+      isBiometric: query.isBiometric,
       phoneNumber: query.phoneNumber,
       dateOfBirth: query.dateOfBirth,
     },

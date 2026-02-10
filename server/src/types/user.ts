@@ -10,6 +10,14 @@ export const User = z.object({
   email: z.string(),
   firstName: z.optional(z.string().nullable()),
   lastName: z.optional(z.string().nullable()),
+  isBiometric: z
+    .preprocess((value) => {
+      if (value === 0) return false;
+      if (value === 1) return true;
+      return value;
+    }, z.boolean().nullable())
+    .optional()
+    .default(false),
   phoneNumber: z.optional(z.string().nullable()),
   dateOfBirth: z.optional(z.string().nullable()),
   gender: z.optional(z.string().nullable()),
