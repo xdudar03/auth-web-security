@@ -22,7 +22,7 @@ jobs:
       - name: Set up database
         run: |
           mkdir -p ./server/data
-          ./seedDb.sh
+          ./seedDbGit.sh
         working-directory: ./server
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
