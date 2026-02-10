@@ -123,7 +123,6 @@ export async function changeBiometricEmbedding(
     throw new HttpError(400, "User not found");
   }
 
-  addUserEmbedding(existingUser.userId, serializedEmbedding);
   const response = await addNewEmbedding(
     existingUser.userId,
     serializedEmbedding,

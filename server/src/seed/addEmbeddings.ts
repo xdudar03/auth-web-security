@@ -69,6 +69,8 @@ const addEmbeddings = async () => {
     return;
   }
 
+  const embeddingsByUser = new Map<string, number[][]>();
+
   for (const imagePath of images) {
     const subjectId = parseSubjectId(imagePath);
     if (!subjectId) {
@@ -90,10 +92,19 @@ const addEmbeddings = async () => {
         info.channels,
       );
       const embedding = dpSvdEmbeddingFromMatrix(matrix, DP_SVD_OPTIONS);
-      addUserEmbedding(uId, JSON.stringify(embedding));
+      const existing = embeddingsByUser.get(uId) ?? [];
+      existing.push(embedding);
+      embeddingsByUser.set(uId, existing);
     } catch (error) {
       console.error(`Failed to process ${imagePath}`, error);
     }
+  }
+
+  for (const [userId, embeddings] of embeddingsByUser.entries()) {
+    if (!embeddings.length) {
+      continue;
+    }
+    addUserEmbedding(userId, JSON.stringify(embeddings));
   }
 };
 

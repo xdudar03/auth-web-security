@@ -8,7 +8,7 @@ Run with:
 """
 
 import os
-from typing import List, Optional
+from typing import List, Optional, Union
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -72,7 +72,7 @@ class HealthResponse(BaseModel):
 
 class EmbeddingRequest(BaseModel):
     """Request with face embedding for recognition."""
-    embedding: List[float]
+    embedding: Union[List[float], List[List[float]]]
     user_id: Optional[str] = None  # Optional: for verification mode
 
 
@@ -135,6 +135,11 @@ async def predict_embedding(request: EmbeddingRequest):
     try:
         import numpy as np
         
+        if request.embedding and isinstance(request.embedding[0], list):
+            raise HTTPException(
+                status_code=400,
+                detail="Prediction requires a single embedding array, not a list of embeddings",
+            )
         # Convert embedding to numpy array and reshape for model
         embedding = np.array(request.embedding, dtype=np.float32)
         
@@ -182,7 +187,7 @@ async def add_embedding(request: EmbeddingRequest, background_tasks: BackgroundT
     controller = get_controller()
     if not request.user_id:
         raise HTTPException(status_code=400, detail="user_id is required for adding an embedding")
-    if not request.embedding:
+    if request.embedding is None or len(request.embedding) == 0:
         raise HTTPException(status_code=400, detail="embedding is required for adding an embedding")
     controller.add_embedding(request.user_id, request.embedding)
     background_tasks.add_task(retrain_model_task, controller)

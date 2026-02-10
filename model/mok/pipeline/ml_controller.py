@@ -101,7 +101,9 @@ class MLController:
         print(f"Getting data from database at {resolved_path}")
         image_dict = {}
         embeddings_result = db.get_embeddings_table()
+        print(f"Embeddings rows fetched: {len(embeddings_result)}")
         for user_id, raw_value in embeddings_result:
+            print(f"Parsing embeddings for user_id={user_id} (raw_type={type(raw_value).__name__})")
             try:
                 decoded = json.loads(raw_value)
             except Exception:
@@ -112,7 +114,7 @@ class MLController:
                     images = [np.array(decoded)]
                 elif decoded and all(isinstance(item, (list, tuple)) for item in decoded):
                     if all(all(isinstance(val, (int, float)) for val in item) for item in decoded):
-                        images = [np.array(decoded)]
+                        images = [np.array(item) for item in decoded]
                     elif all(isinstance(item, str) for item in decoded):
                         images = decoded
                     else:
@@ -133,6 +135,7 @@ class MLController:
                     try:
                         parsed_images.append(base64_image_to_numpy(img))
                     except Exception:
+                        print(f"Failed base64 decode for user_id={user_id}, img_type={type(img).__name__}")
                         if isinstance(decoded, (list, tuple, np.ndarray)):
                             parsed_images.append(np.array(decoded))
                         else:
@@ -140,11 +143,15 @@ class MLController:
             image_dict.setdefault(user_id, []).extend(parsed_images)
         X, y = [], []
         for user_id, images in image_dict.items():
+            print(f"user_id={user_id} parsed_images={len(images)}")
             X.extend(images)
             # Y (labels) are the user ids
             y.extend([user_id] * len(images))
         X = np.array(X)
         y = np.array(y)
+        if len(X) > 0:
+            sample = X[0]
+            print(f"Sample embedding shape: {getattr(sample, 'shape', None)} ndim={getattr(sample, 'ndim', None)}")
         # LabelEncoder is used to convert from user ids to integers (0, 1, 2, ...)
         label_encoder = LabelEncoder()
         y_encoded = label_encoder.fit_transform(y)
@@ -163,7 +170,10 @@ class MLController:
 
     def retrain_from_db(self):
         self.reload_data_from_db()
-        print(f"Reloaded data from database: {self.X.shape}")
+        print(f"Reloaded data from database: X_shape={getattr(self.X, 'shape', None)} y_shape={getattr(self.y, 'shape', None)}")
+        if self.y is not None:
+            unique_labels = len(set(self.y.tolist())) if hasattr(self.y, "tolist") else "unknown"
+            print(f"Unique labels: {unique_labels}")
         if self.X is None or len(self.X) == 0:
             raise ValueError("No embeddings available for training.")
         self.prepare_data()
@@ -235,6 +245,31 @@ def formate_ml_image(
     input_shape: int,
     ):
     new_width, new_height, new_channels = input_shape
+    if image.ndim == 1:
+        expected_len = new_width * new_height * new_channels
+        if image.size != expected_len:
+            inferred_shape = None
+            if new_channels == 1:
+                if image.size % new_width == 0:
+                    inferred_shape = (new_width, image.size // new_width)
+                elif image.size % new_height == 0:
+                    inferred_shape = (image.size // new_height, new_height)
+                else:
+                    side = int(np.sqrt(image.size))
+                    if side * side == image.size:
+                        inferred_shape = (side, side)
+            if inferred_shape is None:
+                raise ValueError(
+                    f"1D embedding length {image.size} does not match expected "
+                    f"image size {expected_len} for input_shape={input_shape}"
+                )
+            print(
+                f"Reshaping 1D embedding of length {image.size} to {inferred_shape} "
+                f"before resize to {input_shape}"
+            )
+            image = image.reshape(*inferred_shape)
+        else:
+            image = image.reshape(new_width, new_height, new_channels)
     # Change number of channels
     if image.ndim == 2: # add channel dimension
         image = image[..., np.newaxis]
@@ -445,6 +480,11 @@ def create_model(
                   loss='sparse_categorical_crossentropy',
                   metrics=['accuracy'])
     if show_logs: print("Model compiled with Adam optimizer.")
+    if inference_model is not None:
+        inference_model.compile(optimizer=optimizer,
+                                loss='sparse_categorical_crossentropy',
+                                metrics=['accuracy'])
+        if show_logs: print("Inference model compiled with Adam optimizer.")
     model.summary()
 
     # Capture model summary
@@ -631,6 +671,10 @@ def train_model(
     # Evaluation
     eval_model = inference_model if inference_model is not None else model
     eval_inputs = X_test if inference_model is not None else ([X_test, y_test] if len(model.inputs) == 2 else X_test)
+    if getattr(eval_model, "optimizer", None) is None:
+        print("Inference model is not compiled; falling back to training model for eval.")
+        eval_model = model
+        eval_inputs = [X_test, y_test] if len(model.inputs) == 2 else X_test
     eval_loss, eval_acc = eval_model.evaluate(eval_inputs, y_test)
     y_pred = np.argmax(eval_model.predict(eval_inputs), axis=1)
     cm = confusion_matrix(y_test, y_pred)

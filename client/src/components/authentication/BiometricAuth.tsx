@@ -101,8 +101,8 @@ export default function BiometricAuth({
     ctx.putImageData(imageData, 0, 0);
     return canvas.toDataURL('image/png');
   };
-  const STREAM_FRAME_COUNT = 5;
-  const STREAM_INTERVAL_MS = 100;
+  const STREAM_FRAME_COUNT = 11;
+  const STREAM_INTERVAL_MS = 50;
 
   const sleep = (ms: number) =>
     new Promise<void>((resolve) => {
@@ -137,7 +137,7 @@ export default function BiometricAuth({
       });
     } else if (action === 'change') {
       await changeEmbedding.mutateAsync({
-        embedding: JSON.stringify(payload.embedding) ?? '',
+        embedding: payload.embedding ?? '',
       });
     }
   };
@@ -167,15 +167,24 @@ export default function BiometricAuth({
         const matrix = imageToMatrix(frame.data, TARGET_SIZE);
         return matrix.flat();
       });
+      const projections = flattenedFrames
+        .map((flattened, index) => {
+          try {
+            return dpSvdEmbeddingFromFlattened(flattened, DP_SVD_OPTIONS);
+          } catch (error) {
+            console.error(`DP-SVD embedding failed for frame ${index}`, error);
+            return null;
+          }
+        })
+        .filter((projection): projection is number[] => projection !== null);
+      console.log('projections length:', projections.length);
 
-      let projection: number[] = [];
+      if (!projections.length) {
+        console.error('No valid DP-SVD embeddings generated.');
+        return;
+      }
+
       try {
-        projection = dpSvdEmbeddingFromFlattened(
-          flattenedFrames[flattenedFrames.length - 1],
-          DP_SVD_OPTIONS
-        );
-        console.log('dp_svd projection:', projection);
-
         const reconstructed = dpSvdReconstructFromFlattened(
           flattenedFrames[flattenedFrames.length - 1],
           DP_SVD_OPTIONS
@@ -192,7 +201,7 @@ export default function BiometricAuth({
 
       const userWithEmbedding = {
         ...user,
-        embedding: JSON.stringify(projection),
+        embedding: JSON.stringify(projections),
         userId: user?.userId ?? '',
       } as User & { embedding: string };
 
