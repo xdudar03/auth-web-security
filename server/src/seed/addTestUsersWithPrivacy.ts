@@ -47,7 +47,7 @@ const FIELDS = [
 
 function setPrivacy(
   userId: string,
-  map: Record<(typeof FIELDS)[number], Visibility>
+  map: Record<(typeof FIELDS)[number], Visibility>,
 ) {
   for (const field of FIELDS) {
     const visibility = map[field] ?? "visible";
@@ -66,7 +66,7 @@ function seedUsersWithPrivacy() {
     lastName: "All",
     password: bcrypt.hashSync("password1", salt),
     roleId: 2,
-
+    isBiometric: false,
     phoneNumber: "+1-202-555-0101",
     dateOfBirth: "1990-01-01",
     gender: "non-binary",
@@ -79,7 +79,7 @@ function seedUsersWithPrivacy() {
   });
   setPrivacy(
     "u101",
-    Object.fromEntries(FIELDS.map((f) => [f, "hidden"])) as any
+    Object.fromEntries(FIELDS.map((f) => [f, "hidden"])) as any,
   );
   addUserToShop("u101", 3);
   addPseudonym({
@@ -107,10 +107,11 @@ function seedUsersWithPrivacy() {
     zip: "11111",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 1500 }),
+    isBiometric: false,
   });
   setPrivacy(
     "u102",
-    Object.fromEntries(FIELDS.map((f) => [f, "anonymized"])) as any
+    Object.fromEntries(FIELDS.map((f) => [f, "anonymized"])) as any,
   );
   addUserToShop("u102", 1);
   addPseudonym({
@@ -138,10 +139,11 @@ function seedUsersWithPrivacy() {
     zip: "90210",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 3200 }),
+    isBiometric: false,
   });
   setPrivacy(
     "u103",
-    Object.fromEntries(FIELDS.map((f) => [f, "visible"])) as any
+    Object.fromEntries(FIELDS.map((f) => [f, "visible"])) as any,
   );
   addUserToShop("u103", 2);
   addUserToShop("u103", 3);
@@ -164,6 +166,7 @@ function seedUsersWithPrivacy() {
     zip: "10001",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 640 }),
+    isBiometric: false,
   });
   setPrivacy("u104", {
     firstName: "visible",
@@ -202,6 +205,7 @@ function seedUsersWithPrivacy() {
     zip: "73301",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 9800 }),
+    isBiometric: false,
   });
   setPrivacy("u105", {
     firstName: "hidden",

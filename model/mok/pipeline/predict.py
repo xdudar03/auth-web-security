@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import argparse
 import os
 
-from mok.scripts.dp_svd import run_dp_svd
 SUBJECT_IDS = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16"]
 IMAGE_FILE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp", ".pgm", ".gif")
 
@@ -54,38 +53,11 @@ def list_image_files(folder: str) -> List[str]:
         and entry.lower().endswith(IMAGE_FILE_EXTENSIONS)
     ]
 
-
-def anonymize_my_face_images(
-    input_dir: str,
-    output_root: str,
-    image_size: Tuple[int, int],
-    *,
-    epsilon_dp_svd: float = 0.4,
-    n_singular_values: int = 4,
-    block_size: int = 20,
-) -> str:
-    """Apply the chosen anonymization to the my_face dataset before prediction."""
-    os.makedirs(output_root, exist_ok=True)
-
-    print(
-        f"Anonymizing {input_dir}; results will go to {output_root}."
-    )
-    run_dp_svd(
-        input_dir=input_dir,
-        output_dir=output_root,
-        image_size=image_size,
-        epsilon=epsilon_dp_svd,
-        n_singular_values=n_singular_values,
-        block_size=block_size,
-    )
-    print(f"Anonymization complete; images available in {output_root}")
-    return output_root
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Run validation predictions on the anonymized training data."
     )
-    parser.add_argument("--input-dir", type=str, default="datasets/anonymized")
+    parser.add_argument("--input-dir", type=str, default="datasets/yalefaces")
     args = parser.parse_args()
    
     controller = MLController()

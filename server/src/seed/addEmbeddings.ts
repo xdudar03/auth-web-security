@@ -1,4 +1,4 @@
-import { addUserEmbedding } from "../database.ts";
+import { addUser, addUserEmbedding, getUserById } from "../database.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { dpSvdEmbeddingFromMatrix } from "../lib/dpSvd.ts";
@@ -12,6 +12,87 @@ const DP_SVD_OPTIONS = {
   imageSize: [TARGET_SIZE, TARGET_SIZE] as [number, number],
   blockSize: 25,
 };
+
+addUser({
+  userId: "u106",
+  username: "u106",
+  password: "u106",
+  email: "u106@example.com",
+  isBiometric: false,
+  roleId: 2,
+});
+addUser({
+  userId: "u107",
+  username: "u107",
+  password: "u107",
+  email: "u107@example.com",
+  isBiometric: false,
+  roleId: 2,
+});
+addUser({
+  userId: "u108",
+  username: "u108",
+  password: "u108",
+  email: "u108@example.com",
+  isBiometric: false,
+  roleId: 2,
+});
+addUser({
+  userId: "u109",
+  username: "u109",
+  password: "u109",
+  email: "u109@example.com",
+  isBiometric: false,
+  roleId: 2,
+});
+addUser({
+  userId: "u110",
+  username: "u110",
+  password: "u110",
+  email: "u110@example.com",
+  isBiometric: false,
+  roleId: 2,
+});
+addUser({
+  userId: "u111",
+  username: "u111",
+  password: "u111",
+  email: "u111@example.com",
+  isBiometric: false,
+  roleId: 2,
+});
+addUser({
+  userId: "u112",
+  username: "u112",
+  password: "u112",
+  email: "u112@example.com",
+  isBiometric: false,
+  roleId: 2,
+});
+addUser({
+  userId: "u113",
+  username: "u113",
+  password: "u113",
+  email: "u113@example.com",
+  isBiometric: false,
+  roleId: 2,
+});
+addUser({
+  userId: "u114",
+  username: "u114",
+  password: "u114",
+  email: "u114@example.com",
+  isBiometric: false,
+  roleId: 2,
+});
+addUser({
+  userId: "u115",
+  username: "u115",
+  password: "u115",
+  email: "u115@example.com",
+  isBiometric: false,
+  roleId: 2,
+});
 
 const collectImages = (dirPath: string): string[] => {
   if (!fs.existsSync(dirPath)) {
@@ -62,7 +143,7 @@ const parseSubjectId = (filePath: string) => {
 };
 
 const addEmbeddings = async () => {
-  const datasetDir = path.resolve(process.cwd(), "dataset-yalefaces");
+  const datasetDir = path.resolve(process.cwd(), "yalefaces");
   const images = collectImages(datasetDir);
   if (!images.length) {
     console.warn(`No images found in ${datasetDir}`);
@@ -76,7 +157,12 @@ const addEmbeddings = async () => {
     if (!subjectId) {
       continue;
     }
-    const uId = `u10${subjectId}`;
+    const numericSubjectId = Number(subjectId);
+    if (Number.isNaN(numericSubjectId)) {
+      continue;
+    }
+    // subject01 -> u101, subject10 -> u110, subject15 -> u115
+    const uId = `u${100 + numericSubjectId}`;
 
     try {
       const { data, info } = await sharp(imagePath)
@@ -102,6 +188,10 @@ const addEmbeddings = async () => {
 
   for (const [userId, embeddings] of embeddingsByUser.entries()) {
     if (!embeddings.length) {
+      continue;
+    }
+    if (!getUserById(userId)) {
+      console.warn(`Skipping embeddings for unknown userId: ${userId}`);
       continue;
     }
     addUserEmbedding(userId, JSON.stringify(embeddings));

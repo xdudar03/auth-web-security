@@ -93,3 +93,4 @@ build/
 
 /server/src/users.json
 /server/data/users.db
+/server/yalefaces/

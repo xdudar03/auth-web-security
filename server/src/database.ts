@@ -210,6 +210,7 @@ const addUserQuery = db.prepare(
 
 const addUser = (user: User) => {
   const userWithoutUndefined = mapUndefinedToNull(user);
+  const biometricFlag = userWithoutUndefined.isBiometric ? 1 : 0;
   addUserQuery.run(
     userWithoutUndefined.userId,
     userWithoutUndefined.username,
@@ -218,17 +219,18 @@ const addUser = (user: User) => {
     userWithoutUndefined.lastName,
     userWithoutUndefined.password,
     userWithoutUndefined.roleId,
-    // userWithoutUndefined.isBiometric,
+    biometricFlag,
     userWithoutUndefined.phoneNumber,
     userWithoutUndefined.dateOfBirth,
     userWithoutUndefined.gender,
     userWithoutUndefined.address,
-    // userWithoutUndefined.city,
-    // userWithoutUndefined.state,
-    // userWithoutUndefined.zip,
-    // userWithoutUndefined.country,
-    // userWithoutUndefined.spendings,
-    // userWithoutUndefined.credentials
+    userWithoutUndefined.city,
+    userWithoutUndefined.state,
+    userWithoutUndefined.zip,
+    userWithoutUndefined.country,
+    userWithoutUndefined.spendings,
+    userWithoutUndefined.credentials,
+    userWithoutUndefined.privacyPreset,
   );
 };
 
@@ -798,7 +800,12 @@ const getItemByNameAndShop = (itemName: string, shopId: number) => {
 };
 
 // Transaction queries
-const addTransaction = (transaction: Omit<Transaction, "transactionId">) => {
+const addTransaction = (
+  transaction: Omit<
+    Transaction,
+    "transactionId" | "itemId" | "itemName" | "itemPrice" | "quantity"
+  >,
+) => {
   const transactionWithoutId = mapUndefinedToNull(transaction);
   addTransactionQuery.run(
     transactionWithoutId.shopId,

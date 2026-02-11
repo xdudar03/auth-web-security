@@ -89,89 +89,79 @@ class ZeroLabelsLayer(layers.Layer):
         return super().get_config()
 
 
-def build_arcface_cnn(
-    input_shape: Tuple[int, int, int],
+def build_arcface_vector(
+    input_dim: int,
     num_classes: int,
     embedding_dim: int = 128,
     margin: float = 0.25,
     scale: float = 64.0
 ) -> Tuple[models.Model, models.Model]:
     """
-    Builds a CNN model with ArcFace head for image classification.
+    Builds an ArcFace model that consumes precomputed feature vectors.
 
     Args:
-        input_shape: Tuple indicating the input image shape (height, width, channels).
+        input_dim: Length of input feature vector.
         num_classes: Number of output classes.
-        embedding_dim: Size of the feature embedding.
-        margin: ArcFace angular margin (in radians). Default: 0.25 (smaller than standard 0.5).
+        embedding_dim: Size of learned embedding before ArcFace head.
+        margin: ArcFace angular margin.
         scale: ArcFace scale factor.
 
     Returns:
         Tuple of (training_model, inference_model).
-        - training_model: Takes [image, label] inputs; for model.fit() with labels during training.
-        - inference_model: Takes image input only; for evaluation and inference.
     """
     print(
-        "Building ArcFace CNN model with "
-        f"input_shape={input_shape}, num_classes={num_classes}, margin={margin}"
+        "Building ArcFace vector model with "
+        f"input_dim={input_dim}, num_classes={num_classes}, margin={margin}"
     )
 
-    model_input = layers.Input(shape=input_shape, name="input_image")
+    feature_input = layers.Input(shape=(input_dim,), name="input_features")
     label_input = layers.Input(shape=(), dtype="int32", name="input_label")
 
-    x = layers.GaussianNoise(0.03, name="noise_input")(model_input)
+    x = layers.GaussianNoise(0.02, name="noise_input")(feature_input)
+    x = layers.Dense(512, activation="relu", kernel_regularizer=l2(1e-4), name="dense1")(x)
+    x = layers.BatchNormalization(name="bn1")(x)
+    x = layers.Dropout(0.35, name="drop1")(x)
+    x = layers.Dense(256, activation="relu", kernel_regularizer=l2(1e-4), name="dense2")(x)
+    x = layers.BatchNormalization(name="bn2")(x)
+    x = layers.Dropout(0.25, name="drop2")(x)
 
-    x = layers.Conv2D(32, (3, 3), activation="relu", padding="same", name="conv1_1", kernel_regularizer=l2(1e-4))(x)
-    x = layers.BatchNormalization(name="bn1_1")(x)
-    x = layers.Conv2D(32, (3, 3), activation="relu", padding="same", name="conv1_2", kernel_regularizer=l2(1e-4))(x)
-    x = layers.BatchNormalization(name="bn1_2")(x)
-    x = layers.MaxPooling2D((2, 2), name="pool1")(x)
-    x = layers.Dropout(0.3, name="drop1")(x)
-
-    x = layers.Conv2D(64, (3, 3), activation="relu", padding="same", name="conv2_1", kernel_regularizer=l2(1e-4))(x)
-    x = layers.BatchNormalization(name="bn2_1")(x)
-    x = layers.Conv2D(64, (3, 3), activation="relu", padding="same", name="conv2_2", kernel_regularizer=l2(1e-4))(x)
-    x = layers.BatchNormalization(name="bn2_2")(x)
-    x = layers.MaxPooling2D((2, 2), name="pool2")(x)
-    x = layers.Dropout(0.3, name="drop2")(x)
-
-    x = layers.Flatten(name="flatten")(x)
-    x = layers.Dense(embedding_dim, use_bias=False, name="embedding", kernel_regularizer=l2(1e-4))(x)
+    x = layers.Dense(
+        embedding_dim,
+        use_bias=False,
+        name="embedding",
+        kernel_regularizer=l2(1e-4),
+    )(x)
     x = layers.BatchNormalization(name="bn_embedding")(x)
     x = L2Normalize(name="embedding_norm")(x)
 
-    # Training model: uses ArcFace with margin
     arcface_logits = ArcFace(
         num_classes=num_classes,
         margin=margin,
         scale=scale,
         weight_regularizer=l2(1e-4),
-        name="arcface_logits"
+        name="arcface_logits",
     )([x, label_input])
     model_output = layers.Softmax(name="output_softmax")(arcface_logits)
-
     training_model = models.Model(
-        inputs=[model_input, label_input],
+        inputs=[feature_input, label_input],
         outputs=model_output,
-        name="arcface_cnn_train"
+        name="arcface_vector_train",
     )
 
-    # Inference model: passes zero labels (no margin applied)
-    zero_labels = ZeroLabelsLayer()(model_input)
+    zero_labels = ZeroLabelsLayer()(feature_input)
     inference_output = ArcFace(
         num_classes=num_classes,
         margin=margin,
         scale=scale,
         weight_regularizer=l2(1e-4),
-        name="arcface_logits"
+        name="arcface_logits",
     )([x, zero_labels])
     inference_output = layers.Softmax(name="output_softmax")(inference_output)
-
     inference_model = models.Model(
-        inputs=model_input,
+        inputs=feature_input,
         outputs=inference_output,
-        name="arcface_cnn_infer"
+        name="arcface_vector_infer",
     )
 
-    print("ArcFace CNN models built (training + inference).")
+    print("ArcFace vector models built (training + inference).")
     return training_model, inference_model

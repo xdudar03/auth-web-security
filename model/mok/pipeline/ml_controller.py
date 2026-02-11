@@ -1,4 +1,3 @@
-import base64
 import os
 import io
 import time
@@ -7,13 +6,9 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 
-from tensorflow import float32, convert_to_tensor
-from tensorflow.image import resize, rgb_to_grayscale, grayscale_to_rgb, convert_image_dtype
-from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense, Dropout, Activation
-from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.models import load_model
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, TensorBoard, CSVLogger
+from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard, CSVLogger
 
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
@@ -22,7 +17,6 @@ from sklearn.metrics import confusion_matrix, classification_report
 from mok.preprocessing.utils_image import pillow_image_to_bytes
 import mok.data.data_loader as data_loader
 import mok.models.ml_models as ml_models
-from mok.preprocessing.utils_image import base64_image_to_numpy
 from mok.persistence.database_controller import DatabaseController
 
 class MLController:
@@ -41,7 +35,7 @@ class MLController:
 
     ############# MODEL SETTINGS #############
     #####--- prepare_data_train_model ---#####
-    INPUT_SHAPE = (100, 100, 1)
+    INPUT_SHAPE = (0,)
     SPLIT_STRATEGY = 'stratified'
     TEST_SPLIT_RATIO = 0.2
     VALIDATION_SPLIT_RATIO = 0.15
@@ -71,6 +65,7 @@ class MLController:
     validation_data = None
     callbacks, model_filepath, summary_text = [None]*3
     output_train = None
+    vector_input_dim = None
 
     def __init__(self, db_path=None, ml_output=None, data=None):
         if db_path: self._db_path = db_path
@@ -83,13 +78,6 @@ class MLController:
             self.X, self.y, self.label_encoder = data
         else:
             self.X, self.y, self.label_encoder = self.get_data_from_db(self._db_path)
-
-    @classmethod
-    def convert_file_storage_to_numpy(cls, file_storage: str):
-        image = Image.open(file_storage.stream)
-        # TODO : do all the preprocessing & the PEEP processing
-        return np.array(image)
-
 
     @classmethod
     def get_data_from_db(cls, db_path = None):
@@ -108,39 +96,23 @@ class MLController:
                 decoded = json.loads(raw_value)
             except Exception:
                 decoded = raw_value
-            images = []
-            if isinstance(decoded, list):
-                if decoded and all(isinstance(item, (int, float)) for item in decoded):
-                    images = [np.array(decoded)]
-                elif decoded and all(isinstance(item, (list, tuple)) for item in decoded):
-                    if all(all(isinstance(val, (int, float)) for val in item) for item in decoded):
-                        images = [np.array(item) for item in decoded]
-                    elif all(isinstance(item, str) for item in decoded):
-                        images = decoded
-                    else:
-                        images = [np.array(decoded)]
-                elif decoded and all(isinstance(item, str) for item in decoded):
-                    images = decoded
-                else:
-                    images = [np.array(decoded)]
+            if not isinstance(decoded, list):
+                raise ValueError(
+                    f"Invalid embedding payload for user_id={user_id}: expected list, got {type(decoded).__name__}"
+                )
+
+            parsed_vectors = []
+            if decoded and all(isinstance(item, (int, float)) for item in decoded):
+                parsed_vectors.append(np.asarray(decoded, dtype=np.float32))
+            elif decoded and all(isinstance(item, (list, tuple)) for item in decoded):
+                for item in decoded:
+                    if not all(isinstance(val, (int, float)) for val in item):
+                        raise ValueError(f"Non-numeric embedding values for user_id={user_id}")
+                    parsed_vectors.append(np.asarray(item, dtype=np.float32))
             else:
-                images = [decoded]
-            parsed_images = []
-            for img in images:
-                if isinstance(img, (list, tuple)):
-                    parsed_images.append(np.array(img))
-                elif isinstance(img, np.ndarray):
-                    parsed_images.append(img)
-                else:
-                    try:
-                        parsed_images.append(base64_image_to_numpy(img))
-                    except Exception:
-                        print(f"Failed base64 decode for user_id={user_id}, img_type={type(img).__name__}")
-                        if isinstance(decoded, (list, tuple, np.ndarray)):
-                            parsed_images.append(np.array(decoded))
-                        else:
-                            raise
-            image_dict.setdefault(user_id, []).extend(parsed_images)
+                raise ValueError(f"Invalid embedding format for user_id={user_id}")
+
+            image_dict.setdefault(user_id, []).extend(parsed_vectors)
         X, y = [], []
         for user_id, images in image_dict.items():
             print(f"user_id={user_id} parsed_images={len(images)}")
@@ -184,7 +156,6 @@ class MLController:
         # Prepare data
         res = prepare_data_train_model(
             self.X, self.y, self.label_encoder,
-            input_shape=self.INPUT_SHAPE,
             split_strategy=self.SPLIT_STRATEGY,
             test_split_ratio=self.TEST_SPLIT_RATIO,
             validation_split_ratio=self.VALIDATION_SPLIT_RATIO,
@@ -196,13 +167,15 @@ class MLController:
          self.X_train, self.y_train,
          self.X_test, self.y_test,
          self.X_val, self.y_val,
-         self.validation_data) = res
+         self.validation_data,
+         self.vector_input_dim) = res
+        self.INPUT_SHAPE = (self.vector_input_dim,)
 
     def create_model(self):
         # Create model
         res = create_model(
             self.num_classes,
-            input_shape=self.INPUT_SHAPE,
+            vector_input_dim=self.vector_input_dim,
             model_save_dir=self._model_save_dir,
             log_dir=self._log_dir,
             model_name=self.MODEL_NAME,
@@ -236,65 +209,12 @@ class MLController:
         return self.output_train
 
 
-    def predict_image(self, image:np.array):
-        return predict_image(image, self._model_save_dir, self.MODEL_NAME, self.INPUT_SHAPE)
+    def predict_image(self, vector: np.array):
+        return predict_image(vector, self._model_save_dir, self.MODEL_NAME)
 
-
-def formate_ml_image(
-    image: np.array,
-    input_shape: int,
-    ):
-    new_width, new_height, new_channels = input_shape
-    if image.ndim == 1:
-        expected_len = new_width * new_height * new_channels
-        if image.size != expected_len:
-            inferred_shape = None
-            if new_channels == 1:
-                if image.size % new_width == 0:
-                    inferred_shape = (new_width, image.size // new_width)
-                elif image.size % new_height == 0:
-                    inferred_shape = (image.size // new_height, new_height)
-                else:
-                    side = int(np.sqrt(image.size))
-                    if side * side == image.size:
-                        inferred_shape = (side, side)
-            if inferred_shape is None:
-                raise ValueError(
-                    f"1D embedding length {image.size} does not match expected "
-                    f"image size {expected_len} for input_shape={input_shape}"
-                )
-            print(
-                f"Reshaping 1D embedding of length {image.size} to {inferred_shape} "
-                f"before resize to {input_shape}"
-            )
-            image = image.reshape(*inferred_shape)
-        else:
-            image = image.reshape(new_width, new_height, new_channels)
-    # Change number of channels
-    if image.ndim == 2: # add channel dimension
-        image = image[..., np.newaxis]
-    channels = image.shape[2]
-    if channels == 4:
-        image = image[..., :3]
-        channels = image.shape[2]
-    if channels == 3:
-        if new_channels == 1: # Convert rgb to grayscale if input_shape asked
-            image = convert_to_tensor(image)
-            image = rgb_to_grayscale(image).numpy()
-    elif channels == 1:
-        if new_channels == 3: # Convert grayscale to rgb if input_shape asked
-            image = convert_to_tensor(image)
-            image = grayscale_to_rgb(image).numpy()
-    elif image.shape[2] != 1:
-        raise ValueError("Image must be grayscale or RGB.")
-    # Resize & normalize image
-    image = convert_image_dtype(image, dtype=float32)
-    image = resize(image, [new_width, new_height], method="area").numpy()
-    return image
 
 def prepare_data_train_model(
     X, y, label_encoder,
-    input_shape=(100, 100, 1),
     split_strategy='stratified',
     test_split_ratio=0.2,
     validation_split_ratio=0.15,
@@ -303,13 +223,12 @@ def prepare_data_train_model(
     show_logs=False
     ):
     """
-    Prepare data for facial recognition model.
+    Prepare vector data for ArcFace training.
 
-    --- Images & labels set & image size
-    :param X: dataset (numpy array of images)
+    --- Vectors & labels ---
+    :param X: dataset (numpy array/list of vectors)
     :param y: labels
     :param label_encoder: sklearn.preprocessing._label.LabelEncoder
-    :param input_shape:  (width, height, channels) of images.
     --- Data Division Settings ---
     :param split_strategy: Division strategy: 'stratified' or 'fixed_per_subject'
     --- For 'stratified' split_strategy ---
@@ -321,7 +240,7 @@ def prepare_data_train_model(
     --- Display print logs ---
     :param show_logs:
 
-    :return num_classes, X_train, y_train, X_test, y_test, X_val, y_val, validation_data
+    :return num_classes, X_train, y_train, X_test, y_test, X_val, y_val, validation_data, vector_input_dim
     """
     # --- ------------------- ---
     # --- 2. Data Preparation ---
@@ -333,12 +252,22 @@ def prepare_data_train_model(
     # Display model parameters
     if show_logs:
         print("Custom configuration loaded:")
-        print(f"  - Image Dimensions: {input_shape}")
         print(f"  - Split Strategy: {split_strategy}")
         print("\n--- Prepare data ---")
 
-    # Normalize images in the same shape
-    X = np.array([formate_ml_image(img, input_shape) for img in X])
+    sample = np.asarray(X[0])
+    if sample.ndim != 1:
+        raise ValueError(
+            f"Expected 1D vectors but got sample shape={getattr(sample, 'shape', None)}"
+        )
+    vectors = [np.asarray(item, dtype=np.float32).reshape(-1) for item in X]
+    dims = {vec.shape[0] for vec in vectors}
+    if len(dims) != 1:
+        raise ValueError(f"Inconsistent vector lengths in embeddings: {sorted(dims)}")
+    vector_input_dim = vectors[0].shape[0]
+    X = np.vstack(vectors).astype(np.float32)
+    if show_logs:
+        print(f"Detected vector embeddings. input_dim={vector_input_dim}")
 
     # Get the total number of classes from the label encoder
     num_classes = len(label_encoder.classes_)
@@ -405,12 +334,12 @@ def prepare_data_train_model(
         validation_data = (X_val, y_val)
         if show_logs: print(f"Final Size - Training: {len(X_train)}, Validation: {len(X_val)}, Test: {len(X_test) if X_test is not None else 0}")
 
-    return num_classes, X_train, y_train, X_test, y_test, X_val, y_val, validation_data
+    return num_classes, X_train, y_train, X_test, y_test, X_val, y_val, validation_data, vector_input_dim
 
 
 def create_model(
     num_classes,
-    input_shape: (int, int),
+    vector_input_dim: int,
     model_save_dir='ml_models/trained/',
     log_dir='ml_models/logs/',
     model_name='arcface_yale_anony_v1',
@@ -422,10 +351,10 @@ def create_model(
     show_logs=False
     ):
     """
-    Create a facial recognition model.
+    Create a vector-based ArcFace model.
 
     :param num_classes: generated in prepare_data_train_model()
-    :param input_shape: same as in prepare_data_train_model()
+    :param vector_input_dim: length of input vectors
     --- Paths & name ---
     :param model_save_dir: Folder to save trained ml_models, label encoder, etc.
     :param log_dir: Folder for TensorBoard logs (optional, leave blank or None to disable)
@@ -449,7 +378,7 @@ def create_model(
     if show_logs:
         print("Custom configuration loaded :")
         print(f"  - Model Name: {model_name}")
-        print(f"  - Image Dimensions: {input_shape}")
+        print(f"  - Vector Input Dim: {vector_input_dim}")
 
     # Prepare output & log folder
     os.makedirs(model_save_dir, exist_ok=True)
@@ -461,12 +390,12 @@ def create_model(
     # --- 4. Model Construction ---
     # --- --------------------- ---
     if show_logs: print("\n--- Model Construction ---")
-    model, inference_model = ml_models.build_arcface_cnn(
-        input_shape=input_shape,
+    model, inference_model = ml_models.build_arcface_vector(
+        input_dim=vector_input_dim,
         num_classes=num_classes,
         embedding_dim=arc_embedding_dim,
         margin=arc_margin,
-        scale=arc_scale
+        scale=arc_scale,
     )
     if model is None:
         raise Exception("Critical error while building the model. Stopping.")
@@ -726,41 +655,35 @@ def train_model(
     }
 
 
-def preprocess_single_image(
-    image_array: np.array,
-    input_shape,
+def preprocess_single_vector(
+    vector_array: np.array,
+    expected_dim: int,
     ):
     """
-    Resizes, normalizes and formats a single image for prediction.
+    Validates and formats one embedding vector for prediction.
     """
     try:
-        image = formate_ml_image(image_array, input_shape)
-        # formate_ml_image already returns shape (H, W), add batch dimension only
-        image = np.expand_dims(image, axis=0)  # Shape: (1, H, W)
-        image = np.expand_dims(image, axis=-1)  # Shape: (1, H, W, 1)
-        print(f"Preprocessed image, final shape: {image.shape}")
-        return image
+        vector = np.asarray(vector_array, dtype=np.float32).reshape(-1)
+        if vector.size != expected_dim:
+            raise ValueError(
+                f"Input vector length {vector.size} does not match expected {expected_dim}"
+            )
+        vector = vector.reshape(1, expected_dim)
+        print(f"Preprocessed vector, final shape: {vector.shape}")
+        return vector
     except Exception as e:
-        print(f"Error during image preprocessing: {e}")
+        print(f"Error during vector preprocessing: {e}")
         return None
 
 
 def predict_image(
-    image_array: np.ndarray,
+    vector_array: np.ndarray,
     model_save_dir: str = 'ml_models/trained/',
     model_name: str = 'arcface_yale_anony_v1',
-    input_shape: tuple = (100, 100, 1),
     show_logs = False,
     ):
     """
-    Loads the model and encoder, predicts the identity for an image.
-
-    :param image_array: Single image as a NumPy array
-    :param model_save_dir: Directory containing the model and encoder
-    :param model_name: Base name of the model
-    :param input_shape: Tuple (H, W, C) representing the expected size
-
-    :return: predicted label (str)
+    Loads the model and encoder, predicts the identity for one embedding vector.
     """
     # --- ------------------------------- ---
     # --- 1. Load Configuration and Paths ---
@@ -775,7 +698,7 @@ def predict_image(
         print(f"  - Model used: {model_filepath}")
         print(f"  - Encoder used: {encoder_filepath}")
         print(f"  - Inference model used: {inference_model_filepath}")
-        print(f"  - Image to predict: NumPy array, shape={image_array.shape}")
+        print(f"  - Vector to predict: NumPy array, shape={vector_array.shape}")
 
     # --- ------------------------- ---
     # --- 2. Load Model and Encoder ---
@@ -802,12 +725,16 @@ def predict_image(
         raise Exception("Critical error: Unable to load label encoder.")
 
     # --- ----------------------------- ---
-    # --- 3. Preprocess the Input Image ---
+    # --- 3. Preprocess the Input Sample ---
     # --- ----------------------------- ---
-    if show_logs: print("\n--- Preprocessing of the input image ---")
-    preprocessed_image = preprocess_single_image(image_array, input_shape)
-    if preprocessed_image is None:
-        raise Exception("Image preprocessing failed.")
+    if show_logs: print("\n--- Preprocessing of the input vector ---")
+    feature_input_shape = model.input_shape[0] if isinstance(model.input_shape, list) else model.input_shape
+    if not isinstance(feature_input_shape, tuple):
+        feature_input_shape = tuple(feature_input_shape)
+    expected_dim = int(feature_input_shape[1])
+    preprocessed_vector = preprocess_single_vector(vector_array, expected_dim)
+    if preprocessed_vector is None:
+        raise Exception("Vector preprocessing failed.")
 
     # --- ---------------------- ---
     # --- 4. Make the Prediction ---
@@ -819,11 +746,11 @@ def predict_image(
             print("Note: Model expects 2 inputs (training model). Inference model not available.")
             print("For better performance, retrain the model to generate the inference model.")
             # For ArcFace training model: pass dummy labels (zeros) for inference
-            dummy_labels = np.zeros(preprocessed_image.shape[0], dtype=np.int32)
-            prediction_probabilities = model.predict([preprocessed_image, dummy_labels])
+            dummy_labels = np.zeros(preprocessed_vector.shape[0], dtype=np.int32)
+            prediction_probabilities = model.predict([preprocessed_vector, dummy_labels])
         else:
             # Standard model or inference model: single input
-            prediction_probabilities = model.predict(preprocessed_image)
+            prediction_probabilities = model.predict(preprocessed_vector)
 
         predicted_index = np.argmax(prediction_probabilities[0])
         prediction_confidence = prediction_probabilities[0][predicted_index]
