@@ -114,12 +114,17 @@ export const appRouter = router({
       .input(
         z.object({
           embedding: z.string(),
-          username: z.string(),
+          username: z.string().optional(),
+          userId: z.string().optional(),
         }),
       )
       .mutation(async ({ input }) =>
         execute(async () => {
-          const result = await verifyIdentity(input.embedding, input.username);
+          const result = await verifyIdentity(
+            input.embedding,
+            input.username,
+            input.userId,
+          );
           if (!result.verified) {
             return result;
           }

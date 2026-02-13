@@ -1,4 +1,4 @@
-from typing import Tuple, Optional
+from typing import Optional
 
 import tensorflow as tf
 from tensorflow.keras import layers, models
@@ -76,26 +76,13 @@ class L2Normalize(layers.Layer):
         return super().get_config()
 
 
-class ZeroLabelsLayer(layers.Layer):
-    """Generates zero labels for inference."""
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-    
-    def call(self, inputs):
-        batch_size = tf.shape(inputs)[0]
-        return tf.zeros(batch_size, dtype=tf.int32)
-    
-    def get_config(self):
-        return super().get_config()
-
-
 def build_arcface_vector(
     input_dim: int,
     num_classes: int,
     embedding_dim: int = 128,
     margin: float = 0.25,
     scale: float = 64.0
-) -> Tuple[models.Model, models.Model]:
+) -> models.Model:
     """
     Builds an ArcFace model that consumes precomputed feature vectors.
 
@@ -107,7 +94,7 @@ def build_arcface_vector(
         scale: ArcFace scale factor.
 
     Returns:
-        Tuple of (training_model, inference_model).
+        Training model.
     """
     print(
         "Building ArcFace vector model with "
@@ -148,20 +135,5 @@ def build_arcface_vector(
         name="arcface_vector_train",
     )
 
-    zero_labels = ZeroLabelsLayer()(feature_input)
-    inference_output = ArcFace(
-        num_classes=num_classes,
-        margin=margin,
-        scale=scale,
-        weight_regularizer=l2(1e-4),
-        name="arcface_logits",
-    )([x, zero_labels])
-    inference_output = layers.Softmax(name="output_softmax")(inference_output)
-    inference_model = models.Model(
-        inputs=feature_input,
-        outputs=inference_output,
-        name="arcface_vector_infer",
-    )
-
-    print("ArcFace vector models built (training + inference).")
-    return training_model, inference_model
+    print("ArcFace vector training model built.")
+    return training_model

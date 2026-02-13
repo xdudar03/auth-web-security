@@ -129,10 +129,11 @@ export default function BiometricAuth({
   }, [role, router]);
 
   useEffect(() => {
+    if (action !== 'login') return;
     if (!isAuthenticated) return;
     if (!role) return;
     redirectToDashboard();
-  }, [isAuthenticated, role, redirectToDashboard]);
+  }, [action, isAuthenticated, role, redirectToDashboard]);
 
   const sleep = (ms: number) =>
     new Promise<void>((resolve) => {
@@ -167,10 +168,10 @@ export default function BiometricAuth({
         throw new Error('Username is required');
       }
       const parsed = JSON.parse(payload.embedding);
-      const embedding = parsed[0];
-      console.log('embedding', embedding);
+      const embeddingBatch = Array.isArray(parsed[0]) ? parsed : [parsed];
+      console.log('embeddingBatch length', embeddingBatch.length);
       const response = await verify.mutateAsync({
-        embedding: JSON.stringify(embedding),
+        embedding: JSON.stringify(embeddingBatch),
         username: username,
       });
       console.log('response', response);

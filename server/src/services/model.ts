@@ -81,11 +81,16 @@ export async function predictFromEmbedding(
  */
 export async function verifyIdentity(
   embedding: string,
-  username: string,
+  username?: string,
+  userId?: string,
 ): Promise<VerificationResponse> {
-  const userId = getUserIdByUsername(username);
-  if (!userId) {
-    throw new HttpError(404, "User not found");
+  let userToVerify: string;
+  if (username) {
+    userToVerify = getUserIdByUsername(username);
+  } else if (userId) {
+    userToVerify = userId;
+  } else {
+    throw new HttpError(400, "Username or userId is required");
   }
   return fetchModel<VerificationResponse>("/verify", {
     method: "POST",

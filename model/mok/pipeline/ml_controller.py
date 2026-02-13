@@ -6,7 +6,6 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 
-from tensorflow.keras.models import load_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard, CSVLogger
 
@@ -20,12 +19,48 @@ import mok.data.data_loader as data_loader
 import mok.models.ml_models as ml_models
 from mok.persistence.database_controller import DatabaseController
 
+
+def _get_env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        print(f"Invalid float for {name}={raw!r}, using default {default}")
+        return default
+
+
+PREDICTION_CONFIDENCE_THRESHOLD = _get_env_float(
+    "MODEL_PREDICTION_CONFIDENCE_THRESHOLD", 0.8
+)
+PREDICTION_MARGIN_THRESHOLD = _get_env_float(
+    "MODEL_PREDICTION_MARGIN_THRESHOLD", 0.1
+)
+KNN_MAX_NEAREST_DISTANCE = _get_env_float(
+    "MODEL_KNN_MAX_NEAREST_DISTANCE", 0.0
+)
+
+
+def _top_two_margin(probabilities: np.ndarray) -> float:
+    if probabilities.size <= 1:
+        return 1.0
+    sorted_probs = np.sort(probabilities)
+    return float(sorted_probs[-1] - sorted_probs[-2])
+
+
+def _is_low_confidence(confidence: float, margin: float) -> bool:
+    return (
+        confidence < PREDICTION_CONFIDENCE_THRESHOLD
+        or margin < PREDICTION_MARGIN_THRESHOLD
+    )
+
+
 class MLController:
 
     # Data source & final model
     X, y, label_encoder = None, None, None
     model = None
-    inference_model = None
     duration = 0
 
     # Paths
@@ -187,7 +222,7 @@ class MLController:
             early_stopping_patience=self.EARLY_STOPPING_PATIENCE,
         )
         # Save output
-        self.model, self.inference_model, self.callbacks, self.model_filepath, self.summary_text = res
+        self.model, self.callbacks, self.model_filepath, self.summary_text = res
 
     def train_model(self):
         self.duration = time.time()
@@ -199,7 +234,6 @@ class MLController:
             self.label_encoder, self.model_filepath,
             model_save_dir=self._model_save_dir,
             model_name=self.MODEL_NAME,
-            inference_model=self.inference_model,
             batch_size=self.BATCH_SIZE,
             epochs=self.EPOCHS,
         )
@@ -391,7 +425,7 @@ def create_model(
     # --- 4. Model Construction ---
     # --- --------------------- ---
     if show_logs: print("\n--- Model Construction ---")
-    model, inference_model = ml_models.build_arcface_vector(
+    model = ml_models.build_arcface_vector(
         input_dim=vector_input_dim,
         num_classes=num_classes,
         embedding_dim=arc_embedding_dim,
@@ -410,11 +444,6 @@ def create_model(
                   loss='sparse_categorical_crossentropy',
                   metrics=['accuracy'])
     if show_logs: print("Model compiled with Adam optimizer.")
-    if inference_model is not None:
-        inference_model.compile(optimizer=optimizer,
-                                loss='sparse_categorical_crossentropy',
-                                metrics=['accuracy'])
-        if show_logs: print("Inference model compiled with Adam optimizer.")
     model.summary()
 
     # Capture model summary
@@ -470,7 +499,7 @@ def create_model(
     csv_logger_callback = CSVLogger(csv_log_path, append=False)
     callbacks.append(csv_logger_callback)
 
-    return model, inference_model, callbacks, model_filepath, summary_text
+    return model, callbacks, model_filepath, summary_text
 
 
 
@@ -569,7 +598,6 @@ def train_model(
     model_filepath,
     model_save_dir='ml_models/trained/',
     model_name='arcface_yale_anony_v1',
-    inference_model=None,
     batch_size=32,
     epochs=50,
     show_logs=False
@@ -588,7 +616,6 @@ def train_model(
     :param model_filepath: from create_model()
     :param model_save_dir: same as in create_model()
     :param model_name: same as in create_model()
-    :param inference_model: from create_model()
     --- Training Settings ---
     :param batch_size: Batch size
     :param epochs: Maximum number of training epochs
@@ -640,12 +667,8 @@ def train_model(
     data_loader.save_label_encoder(label_encoder, encoder_save_path)
 
     # Evaluation
-    eval_model = inference_model if inference_model is not None else model
-    eval_inputs = X_test if inference_model is not None else ([X_test, y_test] if len(model.inputs) == 2 else X_test)
-    if getattr(eval_model, "optimizer", None) is None:
-        print("Inference model is not compiled; falling back to training model for eval.")
-        eval_model = model
-        eval_inputs = [X_test, y_test] if len(model.inputs) == 2 else X_test
+    eval_model = model
+    eval_inputs = [X_test, y_test] if len(model.inputs) == 2 else X_test
     eval_loss, eval_acc = eval_model.evaluate(eval_inputs, y_test)
     y_pred = np.argmax(eval_model.predict(eval_inputs), axis=1)
     cm = confusion_matrix(y_test, y_pred)
@@ -653,13 +676,6 @@ def train_model(
 
     # Capture report to image
     report = pillow_image_to_bytes(text_to_image(report))
-
-    # Save inference model if it exists (ArcFace)
-    if inference_model is not None:
-        inference_model_filepath = os.path.join(model_save_dir, f"{model_name}_inference.h5")
-        if show_logs: print(f"\n--- Saving inference model ---")
-        inference_model.save(inference_model_filepath)
-        if show_logs: print(f"Inference model saved in: {inference_model_filepath}")
 
     image_pil = None
     if history is not None:
@@ -741,15 +757,11 @@ def predict_image(
     Loads the model and encoder, predicts the identity for one embedding vector.
     """
     try:
-        # --- ------------------------------- ---
-        # --- 1. Load Configuration and Paths ---
-        # --- ------------------------------- ---
+        # Load Configuration and Paths
         if show_logs:
             print("--- Starting the Prediction Script ---")
 
-        model_filepath = os.path.join(model_save_dir, f"{model_name}.h5")
         encoder_filepath = os.path.join(model_save_dir, f"{model_name}_label_encoder.joblib")
-        inference_model_filepath = os.path.join(model_save_dir, f"{model_name}_inference.h5")
         knn_model_filepath = os.path.join(model_save_dir, f"{model_name}_knn.joblib")
 
         # Load the label encoder (shared by ArcFace and KNN paths)
@@ -757,9 +769,7 @@ def predict_image(
         if label_encoder is None:
             raise Exception("Critical error: Unable to load label encoder.")
 
-        # --- ----------------------------- ---
-        # --- 2. KNN backend (if available) ---
-        # --- ----------------------------- ---
+        # KNN model for prediction 
         if os.path.exists(knn_model_filepath):
             if show_logs:
                 print(f"Using KNN model: {knn_model_filepath}")
@@ -777,64 +787,45 @@ def predict_image(
                 raise Exception("Vector preprocessing failed.")
 
             predicted_index = int(knn_model.predict(preprocessed_vector)[0])
+            nearest_distance = None
             if hasattr(knn_model, "predict_proba"):
-                prediction_confidence = float(np.max(knn_model.predict_proba(preprocessed_vector)[0]))
+                probabilities = knn_model.predict_proba(preprocessed_vector)[0]
+                prediction_confidence = float(np.max(probabilities))
+                prediction_margin = _top_two_margin(probabilities)
             else:
-                prediction_confidence = 1.0
+                distances = knn_model.kneighbors(
+                    preprocessed_vector, return_distance=True
+                )[0][0]
+                nearest_distance = float(distances[0]) if len(distances) > 0 else None
+                prediction_confidence = (
+                    float(1.0 / (1.0 + nearest_distance))
+                    if nearest_distance is not None
+                    else 0.0
+                )
+                prediction_margin = 1.0
 
             predicted_label = label_encoder.inverse_transform([predicted_index])[0]
+            should_reject = _is_low_confidence(prediction_confidence, prediction_margin)
+            if (
+                nearest_distance is not None
+                and KNN_MAX_NEAREST_DISTANCE > 0
+                and nearest_distance > KNN_MAX_NEAREST_DISTANCE
+            ):
+                should_reject = True
+
             if show_logs:
                 print("\n--- Prediction Result (KNN) ---")
                 print(f"  - Predicted Identity (Subject ID): {predicted_label}")
                 print(f"  - Trust: {prediction_confidence:.4f} ({prediction_confidence*100:.2f}%)")
+                print(f"  - Margin: {prediction_margin:.4f}")
+                if nearest_distance is not None:
+                    print(f"  - Nearest distance: {nearest_distance:.4f}")
+            if should_reject:
+                if show_logs:
+                    print("  - Rejected as unknown due to confidence/margin checks.")
+                return "unknown", 0.0
             return predicted_label, prediction_confidence
-
-        # --- ---------------------------------- ---
-        # --- 3. ArcFace backend (fallback path) ---
-        # --- ---------------------------------- ---
-        if not os.path.exists(model_filepath):
-            raise Exception(f"Error: Model file not found: {model_filepath}")
-
-        # Import ArcFace layer for custom_objects if needed
-        from mok.models.ml_models import ArcFace, L2Normalize, ZeroLabelsLayer
-        custom_objects = {"ArcFace": ArcFace, "L2Normalize": L2Normalize, "ZeroLabelsLayer": ZeroLabelsLayer}
-
-        if os.path.exists(inference_model_filepath):
-            if show_logs:
-                print(f"Using inference model: {inference_model_filepath}")
-            model = load_model(inference_model_filepath, custom_objects=custom_objects, safe_mode=False)
-        else:
-            if show_logs:
-                print(f"Using training model: {model_filepath}")
-                print(f"Note: Inference model not found at {inference_model_filepath}")
-            model = load_model(model_filepath, custom_objects=custom_objects, safe_mode=False)
-
-        feature_input_shape = model.input_shape[0] if isinstance(model.input_shape, list) else model.input_shape
-        if not isinstance(feature_input_shape, tuple):
-            feature_input_shape = tuple(feature_input_shape)
-        expected_dim = int(feature_input_shape[1])
-
-        preprocessed_vector = preprocess_single_vector(vector_array, expected_dim)
-        if preprocessed_vector is None:
-            raise Exception("Vector preprocessing failed.")
-
-        if len(model.inputs) == 2:
-            if show_logs:
-                print("Note: Model expects 2 inputs (training model). Inference model not available.")
-                print("For better performance, retrain the model to generate the inference model.")
-            dummy_labels = np.zeros(preprocessed_vector.shape[0], dtype=np.int32)
-            prediction_probabilities = model.predict([preprocessed_vector, dummy_labels])
-        else:
-            prediction_probabilities = model.predict(preprocessed_vector)
-
-        predicted_index = int(np.argmax(prediction_probabilities[0]))
-        prediction_confidence = float(prediction_probabilities[0][predicted_index])
-        predicted_label = label_encoder.inverse_transform([predicted_index])[0]
-        if show_logs:
-            print("\n--- Prediction Result (ArcFace) ---")
-            print(f"  - Predicted Identity (Subject ID): {predicted_label}")
-            print(f"  - Trust: {prediction_confidence:.4f} ({prediction_confidence*100:.2f}%)")
-        return predicted_label, prediction_confidence
+        
     except Exception as e:
         raise Exception(f"Error in prediction: {e}") from e
   

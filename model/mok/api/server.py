@@ -8,6 +8,7 @@ Run with:
 """
 
 import os
+import math
 from typing import List, Optional, Union
 from contextlib import asynccontextmanager
 import json
@@ -22,6 +23,24 @@ from mok.pipeline.ml_controller import MLController
 # Global model controller (loaded on startup)
 _controller: Optional[MLController] = None
 _training_lock = Lock()
+VERIFY_CONFIDENCE_THRESHOLD = float(
+    os.environ.get("MODEL_VERIFY_CONFIDENCE_THRESHOLD", "0.85")
+)
+VERIFY_MIN_ACCEPTED_FRAMES = int(
+    os.environ.get("MODEL_VERIFY_MIN_ACCEPTED_FRAMES", "3")
+)
+VERIFY_MIN_ACCEPTED_RATIO = float(
+    os.environ.get("MODEL_VERIFY_MIN_ACCEPTED_RATIO", "0.6")
+)
+
+
+def _decode_embedding_payload(embedding: Union[List[float], List[List[float]], str]):
+    if isinstance(embedding, str):
+        try:
+            embedding = json.loads(embedding)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail="Invalid embedding JSON string") from exc
+    return embedding
 
 
 def retrain_model_task(controller: MLController):
@@ -135,14 +154,17 @@ async def predict_embedding(request: EmbeddingRequest):
     
     try:
         import numpy as np
-        
-        if request.embedding and isinstance(request.embedding[0], list):
+
+        decoded_embedding = _decode_embedding_payload(request.embedding)
+        if not decoded_embedding:
+            raise HTTPException(status_code=400, detail="Embedding is required")
+        if decoded_embedding and isinstance(decoded_embedding[0], list):
             raise HTTPException(
                 status_code=400,
                 detail="Prediction requires a single embedding array, not a list of embeddings",
             )
         # Convert embedding to numpy array and reshape for model
-        embedding = np.array(request.embedding, dtype=np.float32)
+        embedding = np.array(decoded_embedding, dtype=np.float32)
         
         # Run prediction
         predicted_label, confidence = controller.predict_image(embedding)
@@ -155,10 +177,16 @@ async def predict_embedding(request: EmbeddingRequest):
         
         # If user_id provided, add verification result
         if request.user_id:
-            response.verified = (str(predicted_label) == request.user_id)
+            response.verified = (
+                str(predicted_label) == request.user_id
+                and str(predicted_label) != "unknown"
+                and float(confidence) >= VERIFY_CONFIDENCE_THRESHOLD
+            )
         
         return response
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
@@ -172,10 +200,39 @@ async def verify_identity(request: EmbeddingRequest):
     if not request.user_id:
         raise HTTPException(status_code=400, detail="user_id is required for verification")
     
-    result = await predict_embedding(request)
+    import numpy as np
+
+    controller = get_controller()
+    raw_embedding = _decode_embedding_payload(request.embedding)
+    if not raw_embedding:
+        raise HTTPException(status_code=400, detail="Embedding is required for verification")
+    if raw_embedding and isinstance(raw_embedding[0], list):
+        embedding_batch = raw_embedding
+    else:
+        embedding_batch = [raw_embedding]
+
+    frame_results = []
+    for embedding_item in embedding_batch:
+        embedding = np.array(embedding_item, dtype=np.float32)
+        predicted_label, confidence = controller.predict_image(embedding)
+        is_match = (
+            str(predicted_label) == request.user_id
+            and str(predicted_label) != "unknown"
+            and float(confidence) >= VERIFY_CONFIDENCE_THRESHOLD
+        )
+        frame_results.append((is_match, float(confidence)))
+
+    total_frames = len(frame_results)
+    accepted_frames = sum(1 for is_match, _ in frame_results if is_match)
+    ratio_required = max(1, math.ceil(total_frames * VERIFY_MIN_ACCEPTED_RATIO))
+    min_required = max(1, min(VERIFY_MIN_ACCEPTED_FRAMES, total_frames))
+    required_votes = max(min_required, ratio_required)
+    verified = accepted_frames >= required_votes
+    confidence = max((conf for is_match, conf in frame_results if is_match), default=0.0)
+
     return {
-        "verified": result.verified,
-        "confidence": result.confidence,
+        "verified": verified,
+        "confidence": confidence,
         "user_id": request.user_id,
     }
 
