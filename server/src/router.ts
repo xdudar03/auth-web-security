@@ -13,6 +13,7 @@ import {
   changeBiometricEmbedding,
   changeBiometricPassword,
   confirmBiometricPassword,
+  generateJwt,
   registerBiometricUser,
 } from "./services/biometric.ts";
 import {
@@ -112,12 +113,21 @@ export const appRouter = router({
     verify: publicProcedure
       .input(
         z.object({
-          embedding: z.array(z.number()),
-          userId: z.string(),
+          embedding: z.string(),
+          username: z.string(),
         }),
       )
-      .mutation(({ input }) =>
-        execute(() => verifyIdentity(input.embedding, input.userId)),
+      .mutation(async ({ input }) =>
+        execute(async () => {
+          const result = await verifyIdentity(input.embedding, input.username);
+          if (!result.verified) {
+            return result;
+          }
+          return {
+            ...result,
+            jwt: generateJwt(result.user_id),
+          };
+        }),
       ),
   }),
   passwordless: router({

@@ -25,6 +25,7 @@ export const VerificationResponse = z.object({
   verified: z.boolean(),
   confidence: z.number(),
   user_id: z.string(),
+  jwt: z.string().optional(),
 });
 export type VerificationResponse = z.infer<typeof VerificationResponse>;
 
@@ -32,3 +33,10 @@ export const AddEmbeddingResponse = z.object({
   message: z.string(),
 });
 export type AddEmbeddingResponse = z.infer<typeof AddEmbeddingResponse>;
+
+export const Embedding = z.object({
+  userId: z.string(),
+  embedding: z.string(),
+  createdAt: z.string().optional(),
+});
+export type Embedding = z.infer<typeof Embedding>;

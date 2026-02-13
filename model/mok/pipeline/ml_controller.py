@@ -13,6 +13,7 @@ from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard, CSVLogger
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.neighbors import KNeighborsClassifier
 
 from mok.preprocessing.utils_image import pillow_image_to_bytes
 import mok.data.data_loader as data_loader
@@ -209,7 +210,7 @@ class MLController:
         return self.output_train
 
 
-    def predict_image(self, vector: np.array):
+    def predict_image(self, vector: np.ndarray):
         return predict_image(vector, self._model_save_dir, self.MODEL_NAME)
 
 
@@ -519,6 +520,47 @@ def _draw_accuracy_and_loss_curves2(epochs_range, acc, loss, val_acc=None, val_l
     return plt
 
 
+def train_knn_model(
+    X_train,
+    y_train,
+    X_test=None,
+    y_test=None,
+    model_save_dir='ml_models/trained/',
+    model_name='arcface_yale_anony_v1',
+    n_neighbors=5,
+    show_logs=False
+    ):
+    """
+    Train and save a KNN classifier on embedding vectors.
+    """
+    if X_train is None or y_train is None or len(X_train) == 0:
+        raise Exception("KNN training requires non-empty training data.")
+
+    n_neighbors = max(1, min(int(n_neighbors), int(len(X_train))))
+    knn_model = KNeighborsClassifier(n_neighbors=n_neighbors, weights="distance")
+    knn_model.fit(X_train, y_train)
+
+    os.makedirs(model_save_dir, exist_ok=True)
+    knn_model_path = os.path.join(model_save_dir, f"{model_name}_knn.joblib")
+    data_loader.joblib.dump(knn_model, knn_model_path)
+
+    knn_accuracy = None
+    if X_test is not None and y_test is not None and len(X_test) > 0:
+        knn_accuracy = float(knn_model.score(X_test, y_test))
+
+    if show_logs:
+        print("\n--- KNN Training ---")
+        print(f"KNN saved in: {knn_model_path}")
+        if knn_accuracy is not None:
+            print(f"KNN test accuracy: {knn_accuracy:.4f}")
+
+    return {
+        "model_path": knn_model_path,
+        "n_neighbors": n_neighbors,
+        "accuracy": knn_accuracy,
+    }
+
+
 def train_model(
     model,
     X_train, y_train, X_test, y_test,
@@ -619,6 +661,7 @@ def train_model(
         inference_model.save(inference_model_filepath)
         if show_logs: print(f"Inference model saved in: {inference_model_filepath}")
 
+    image_pil = None
     if history is not None:
         if show_logs: print("\n--- Displaying learning curves ---")
         try:
@@ -640,6 +683,17 @@ def train_model(
         except Exception as plot_e:
             print(f"Error generating/saving curves: {plot_e}")
 
+    # Train a KNN classifier on the same embeddings and persist it for prediction fallback.
+    knn_output = train_knn_model(
+        X_train=X_train,
+        y_train=y_train,
+        X_test=X_test,
+        y_test=y_test,
+        model_save_dir=model_save_dir,
+        model_name=model_name,
+        show_logs=show_logs,
+    )
+
     if show_logs:
         print(f"The best model should be saved in : {model_filepath}")
         print(f"The label encoder is saved in : {encoder_save_path}")
@@ -651,7 +705,8 @@ def train_model(
         "evaluation": {
             "loss": eval_loss,
             "accuracy": eval_acc
-        }
+        },
+        "knn": knn_output,
     }
 
 
@@ -685,81 +740,101 @@ def predict_image(
     """
     Loads the model and encoder, predicts the identity for one embedding vector.
     """
-    # --- ------------------------------- ---
-    # --- 1. Load Configuration and Paths ---
-    # --- ------------------------------- ---
-    if show_logs: print("--- Starting the Prediction Script ---")
-
-    model_filepath = os.path.join(model_save_dir, f"{model_name}.h5")
-    encoder_filepath = os.path.join(model_save_dir, f"{model_name}_label_encoder.joblib")
-    inference_model_filepath = os.path.join(model_save_dir, f"{model_name}_inference.h5")
-
-    if show_logs:
-        print(f"  - Model used: {model_filepath}")
-        print(f"  - Encoder used: {encoder_filepath}")
-        print(f"  - Inference model used: {inference_model_filepath}")
-        print(f"  - Vector to predict: NumPy array, shape={vector_array.shape}")
-
-    # --- ------------------------- ---
-    # --- 2. Load Model and Encoder ---
-    # --- ------------------------- ---
-    if show_logs: print("\n--- Loading the model and encoder ---")
-    if not os.path.exists(model_filepath):
-        raise Exception(f"Error: Template file not found: {model_filepath}")
-   # Import ArcFace layer for custom_objects if needed
-    from mok.models.ml_models import ArcFace, L2Normalize, ZeroLabelsLayer
-    custom_objects = {"ArcFace": ArcFace, "L2Normalize": L2Normalize, "ZeroLabelsLayer": ZeroLabelsLayer}
-
-    # Check if inference model exists (ArcFace models use separate inference model)
-    if os.path.exists(inference_model_filepath):
-        print(f"Using inference model: {inference_model_filepath}")
-        model = load_model(inference_model_filepath, custom_objects=custom_objects, safe_mode=False)
-    else:
-        print(f"Using training model: {model_filepath}")
-        print(f"Note: Inference model not found at {inference_model_filepath}")
-        model = load_model(model_filepath, custom_objects=custom_objects, safe_mode=False)
-
-    # Load the label encoder
-    label_encoder = data_loader.load_label_encoder(encoder_filepath)
-    if label_encoder is None:
-        raise Exception("Critical error: Unable to load label encoder.")
-
-    # --- ----------------------------- ---
-    # --- 3. Preprocess the Input Sample ---
-    # --- ----------------------------- ---
-    if show_logs: print("\n--- Preprocessing of the input vector ---")
-    feature_input_shape = model.input_shape[0] if isinstance(model.input_shape, list) else model.input_shape
-    if not isinstance(feature_input_shape, tuple):
-        feature_input_shape = tuple(feature_input_shape)
-    expected_dim = int(feature_input_shape[1])
-    preprocessed_vector = preprocess_single_vector(vector_array, expected_dim)
-    if preprocessed_vector is None:
-        raise Exception("Vector preprocessing failed.")
-
-    # --- ---------------------- ---
-    # --- 4. Make the Prediction ---
-    # --- ---------------------- ---
-    if show_logs: print("\n--- Prediction ---")
     try:
-        # Check if model expects 2 inputs (ArcFace training model) or 1 input
+        # --- ------------------------------- ---
+        # --- 1. Load Configuration and Paths ---
+        # --- ------------------------------- ---
+        if show_logs:
+            print("--- Starting the Prediction Script ---")
+
+        model_filepath = os.path.join(model_save_dir, f"{model_name}.h5")
+        encoder_filepath = os.path.join(model_save_dir, f"{model_name}_label_encoder.joblib")
+        inference_model_filepath = os.path.join(model_save_dir, f"{model_name}_inference.h5")
+        knn_model_filepath = os.path.join(model_save_dir, f"{model_name}_knn.joblib")
+
+        # Load the label encoder (shared by ArcFace and KNN paths)
+        label_encoder = data_loader.load_label_encoder(encoder_filepath)
+        if label_encoder is None:
+            raise Exception("Critical error: Unable to load label encoder.")
+
+        # --- ----------------------------- ---
+        # --- 2. KNN backend (if available) ---
+        # --- ----------------------------- ---
+        if os.path.exists(knn_model_filepath):
+            if show_logs:
+                print(f"Using KNN model: {knn_model_filepath}")
+            knn_model = data_loader.joblib.load(knn_model_filepath)
+
+            if hasattr(knn_model, "n_features_in_"):
+                expected_dim = int(knn_model.n_features_in_)
+            elif hasattr(knn_model, "_fit_X"):
+                expected_dim = int(knn_model._fit_X.shape[1])
+            else:
+                raise Exception("KNN model does not expose input feature dimension.")
+
+            preprocessed_vector = preprocess_single_vector(vector_array, expected_dim)
+            if preprocessed_vector is None:
+                raise Exception("Vector preprocessing failed.")
+
+            predicted_index = int(knn_model.predict(preprocessed_vector)[0])
+            if hasattr(knn_model, "predict_proba"):
+                prediction_confidence = float(np.max(knn_model.predict_proba(preprocessed_vector)[0]))
+            else:
+                prediction_confidence = 1.0
+
+            predicted_label = label_encoder.inverse_transform([predicted_index])[0]
+            if show_logs:
+                print("\n--- Prediction Result (KNN) ---")
+                print(f"  - Predicted Identity (Subject ID): {predicted_label}")
+                print(f"  - Trust: {prediction_confidence:.4f} ({prediction_confidence*100:.2f}%)")
+            return predicted_label, prediction_confidence
+
+        # --- ---------------------------------- ---
+        # --- 3. ArcFace backend (fallback path) ---
+        # --- ---------------------------------- ---
+        if not os.path.exists(model_filepath):
+            raise Exception(f"Error: Model file not found: {model_filepath}")
+
+        # Import ArcFace layer for custom_objects if needed
+        from mok.models.ml_models import ArcFace, L2Normalize, ZeroLabelsLayer
+        custom_objects = {"ArcFace": ArcFace, "L2Normalize": L2Normalize, "ZeroLabelsLayer": ZeroLabelsLayer}
+
+        if os.path.exists(inference_model_filepath):
+            if show_logs:
+                print(f"Using inference model: {inference_model_filepath}")
+            model = load_model(inference_model_filepath, custom_objects=custom_objects, safe_mode=False)
+        else:
+            if show_logs:
+                print(f"Using training model: {model_filepath}")
+                print(f"Note: Inference model not found at {inference_model_filepath}")
+            model = load_model(model_filepath, custom_objects=custom_objects, safe_mode=False)
+
+        feature_input_shape = model.input_shape[0] if isinstance(model.input_shape, list) else model.input_shape
+        if not isinstance(feature_input_shape, tuple):
+            feature_input_shape = tuple(feature_input_shape)
+        expected_dim = int(feature_input_shape[1])
+
+        preprocessed_vector = preprocess_single_vector(vector_array, expected_dim)
+        if preprocessed_vector is None:
+            raise Exception("Vector preprocessing failed.")
+
         if len(model.inputs) == 2:
-            print("Note: Model expects 2 inputs (training model). Inference model not available.")
-            print("For better performance, retrain the model to generate the inference model.")
-            # For ArcFace training model: pass dummy labels (zeros) for inference
+            if show_logs:
+                print("Note: Model expects 2 inputs (training model). Inference model not available.")
+                print("For better performance, retrain the model to generate the inference model.")
             dummy_labels = np.zeros(preprocessed_vector.shape[0], dtype=np.int32)
             prediction_probabilities = model.predict([preprocessed_vector, dummy_labels])
         else:
-            # Standard model or inference model: single input
             prediction_probabilities = model.predict(preprocessed_vector)
 
-        predicted_index = np.argmax(prediction_probabilities[0])
-        prediction_confidence = prediction_probabilities[0][predicted_index]
-
+        predicted_index = int(np.argmax(prediction_probabilities[0]))
+        prediction_confidence = float(prediction_probabilities[0][predicted_index])
         predicted_label = label_encoder.inverse_transform([predicted_index])[0]
         if show_logs:
-            print("\n--- Prediction Result ---")
-            print(f"  - Predicted Identity (Subject ID) : {predicted_label}")
-            print(f"  - Trust : {prediction_confidence:.4f} ({prediction_confidence*100:.2f}%)")
+            print("\n--- Prediction Result (ArcFace) ---")
+            print(f"  - Predicted Identity (Subject ID): {predicted_label}")
+            print(f"  - Trust: {prediction_confidence:.4f} ({prediction_confidence*100:.2f}%)")
         return predicted_label, prediction_confidence
     except Exception as e:
-        print(f"Error in prediction: {e}")
+        raise Exception(f"Error in prediction: {e}") from e
+  

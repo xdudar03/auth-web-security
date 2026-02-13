@@ -6,6 +6,7 @@ import {
   VerificationResponse,
   AddEmbeddingResponse,
 } from "../types/model.ts";
+import { getUserIdByUsername } from "../database.ts";
 
 const MODEL_BASE_URL = "http://localhost:5000"; // TODO: change to env variable
 
@@ -76,16 +77,20 @@ export async function predictFromEmbedding(
  * Verify if an embedding matches a specific user.
  *
  * @param embedding - Array of numbers representing the face embedding
- * @param userId - User ID to verify against
+ * @param username - Username to verify against
  */
 export async function verifyIdentity(
-  embedding: number[],
-  userId: string,
+  embedding: string,
+  username: string,
 ): Promise<VerificationResponse> {
+  const userId = getUserIdByUsername(username);
+  if (!userId) {
+    throw new HttpError(404, "User not found");
+  }
   return fetchModel<VerificationResponse>("/verify", {
     method: "POST",
     body: JSON.stringify({
-      embedding,
+      embedding: JSON.parse(embedding),
       user_id: userId,
     }),
   });

@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import Image from 'next/image';
 import { User, useUser } from '@/hooks/useUserContext';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,10 @@ import {
   type DpSvdOptions,
 } from '@/lib/anonymization/dpSvd';
 import { useTRPC } from '@/hooks/TrpcContext';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Input } from '../ui/input';
+import { useRouter } from 'next/navigation';
+import useJwt from '@/hooks/useJwt';
 
 type CapturedFrame = {
   data: Uint8ClampedArray;
@@ -27,6 +30,7 @@ export default function BiometricAuth({
   title: string;
   action: string;
 }) {
+  const [username, setUsername] = useState('');
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isCapturingStream, setIsCapturingStream] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -37,7 +41,10 @@ export default function BiometricAuth({
   );
   const [capturedImageUrl, setCapturedImageUrl] = useState<string>();
   const [reconstructedImageUrl, setReconstructedImageUrl] = useState<string>();
-  const { user } = useUser();
+  const { user, role, isAuthenticated } = useUser();
+  const { setJwt } = useJwt();
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const trpc = useTRPC();
   const register = useMutation(
     trpc.biometric.register.mutationOptions({
@@ -48,6 +55,13 @@ export default function BiometricAuth({
   );
   const authenticate = useMutation(
     trpc.biometric.authenticate.mutationOptions()
+  );
+  const verify = useMutation(
+    trpc.model.verify.mutationOptions({
+      onError: (error) => {
+        console.error('error', error);
+      },
+    })
   );
   const changeEmbedding = useMutation(
     trpc.biometric.changeEmbedding.mutationOptions({
@@ -104,6 +118,22 @@ export default function BiometricAuth({
   const STREAM_FRAME_COUNT = 11;
   const STREAM_INTERVAL_MS = 50;
 
+  const redirectToDashboard = useCallback(() => {
+    if (role?.canAccessAdminPanel) {
+      router.push('/admin-dashboard');
+    } else if (role?.canAccessProviderPanel) {
+      router.push('/provider-dashboard');
+    } else {
+      router.push('/dashboard');
+    }
+  }, [role, router]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (!role) return;
+    redirectToDashboard();
+  }, [isAuthenticated, role, redirectToDashboard]);
+
   const sleep = (ms: number) =>
     new Promise<void>((resolve) => {
       window.setTimeout(resolve, ms);
@@ -131,10 +161,24 @@ export default function BiometricAuth({
 
   const runBiometricAction = async (payload: User & { embedding: string }) => {
     if (action === 'login') {
-      await authenticate.mutateAsync({
-        username: payload.username,
-        password: payload.password,
+      console.log('payload', payload);
+      console.log('username', username);
+      if (!username) {
+        throw new Error('Username is required');
+      }
+      const parsed = JSON.parse(payload.embedding);
+      const embedding = parsed[0];
+      console.log('embedding', embedding);
+      const response = await verify.mutateAsync({
+        embedding: JSON.stringify(embedding),
+        username: username,
       });
+      console.log('response', response);
+      if (!response.verified || !response.jwt) {
+        throw new Error('Biometric verification failed');
+      }
+      queryClient.clear();
+      setJwt(response.jwt);
     } else if (action === 'change') {
       await changeEmbedding.mutateAsync({
         embedding: payload.embedding ?? '',
@@ -292,6 +336,15 @@ export default function BiometricAuth({
         <h2 className="text-xl font-semibold">
           Biometric {title.toLowerCase()}
         </h2>
+      )}
+      {action === 'login' && (
+        <Input
+          type="text"
+          placeholder="Enter your username"
+          className="w-full"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
       )}
       <div className="form w-full items-center">
         <div className="form-field items-center">

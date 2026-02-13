@@ -5,6 +5,7 @@ import { User } from "./types/user.ts";
 import { Token } from "./types/token.ts";
 import { Role } from "./types/role.ts";
 import { Shop } from "./types/shop.ts";
+import { Embedding } from "./types/model.ts";
 import {
   PrivacySettings,
   PrivacySettingRecord,
@@ -397,6 +398,28 @@ const addUserEmbedding = (userId: string, embedding: string) => {
   addUserEmbeddingQuery.run(userId, embedding);
 };
 
+const getUserEmbeddingsByUserIdQuery = db.prepare(
+  `SELECT embedding FROM user_embeddings WHERE userId = ?`,
+);
+
+const getUserEmbeddingsByUserId = (userId: string) => {
+  const embeddingsData = getUserEmbeddingsByUserIdQuery.all(userId);
+  return embeddingsData.map((embedding) => embedding.embedding);
+};
+
+const getAllEmbeddingsQuery = db.prepare(`SELECT * FROM user_embeddings`);
+
+const getAllEmbeddings = () => {
+  const embeddingsData = getAllEmbeddingsQuery.all();
+  // return [{userId: string, embedding: string}]
+  return embeddingsData
+    .map((userEmbedding) => ({
+      userId: userEmbedding.userId,
+      embedding: userEmbedding.embedding,
+    }))
+    .filter((userEmbedding) => userEmbedding !== null);
+};
+
 const updateRoleQuery = db.prepare(
   `UPDATE roles SET roleName = ?, canChangeUsersCredentials = ?, canChangeUsersRoles = ?, canReadUsers = ?, canReadUsersCredentials = ?, canReadUsersSettings = ?, canReadUsersRoles = ?, canAccessAdminPanel = ?, canAccessUserPanel = ?, canAccessProviderPanel = ?, hasGlobalAccessToAllShops = ? WHERE roleId = ?`,
 );
@@ -427,6 +450,15 @@ const addTransactionItemQuery = db.prepare(
 const linkUserTransactionQuery = db.prepare(
   `INSERT INTO user_transactions (userId, transactionId) VALUES (?, ?)`,
 );
+
+const getUserIdByUsernameQuery = db.prepare(
+  `SELECT userId FROM users WHERE username = ?`,
+);
+
+const getUserIdByUsername = (username: string) => {
+  const userId = getUserIdByUsernameQuery.get(username);
+  return userId?.userId as string;
+};
 
 const addPseudonymQuery = db.prepare(
   `INSERT INTO pseudonyms (pseudoId, userId, expiresAt) VALUES (?, ?, ?)`,
@@ -965,6 +997,8 @@ export {
   getRoleByUserId,
   updateUser,
   addUserEmbedding,
+  getUserEmbeddingsByUserId,
+  getUserIdByUsername,
   updateRole,
   deleteUser,
   addRole,
@@ -996,6 +1030,7 @@ export {
   addTransactionItem,
   linkUserTransaction,
   addPseudonym,
+  getAllEmbeddings,
   getLastInsertRowId,
   getTransactionsByUserId,
   getTransactionsByShopId,

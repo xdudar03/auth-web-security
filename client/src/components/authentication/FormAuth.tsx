@@ -151,11 +151,11 @@ export default function FormAuth({
 
   const handleBiometric = () => {
     setMessage({ message: '', type: '' });
-    const username = form.getValues('username');
-    if (!username) {
-      setMessage({ message: 'Username is required', type: 'error' });
-      return;
-    }
+    // const username = form.getValues('username');
+    // if (!username) {
+    //   setMessage({ message: 'Username is required', type: 'error' });
+    //   return;
+    // }
     setTab('multi-factor');
   };
   const loginAs = useCallback(

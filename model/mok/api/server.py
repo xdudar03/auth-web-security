@@ -10,6 +10,7 @@ Run with:
 import os
 from typing import List, Optional, Union
 from contextlib import asynccontextmanager
+import json
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
@@ -72,7 +73,7 @@ class HealthResponse(BaseModel):
 
 class EmbeddingRequest(BaseModel):
     """Request with face embedding for recognition."""
-    embedding: Union[List[float], List[List[float]]]
+    embedding: Union[List[float], List[List[float]], str]
     user_id: Optional[str] = None  # Optional: for verification mode
 
 
