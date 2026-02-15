@@ -21,6 +21,7 @@ const dbPath = isAbsolute(rawDbPath)
   ? rawDbPath
   : resolve(process.cwd(), rawDbPath);
 
+console.log("dbPath", dbPath);
 mkdirSync(dirname(dbPath), { recursive: true });
 
 const db = new DatabaseSync(dbPath);
@@ -517,7 +518,10 @@ const getUserByUsername = (username: string) => {
   return result.data;
 };
 
-const getUserById = (userId: string) => {
+const getUserById = (userId: string | null) => {
+  if (!userId) {
+    return null;
+  }
   const userData = getUserByIdQuery.get(userId);
   const result = User.safeParse(userData);
   if (!result.success) {

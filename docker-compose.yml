@@ -13,9 +13,9 @@ services:
       - "4000:4000"
     volumes:
       - sqlite_db:/app/data
-    # depends_on:
-    #   model:
-    #     condition: service_healthy
+    depends_on:
+      model:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -51,20 +51,27 @@ services:
       timeout: 5s
       retries: 5
 
-  # model:
-  #   build:
-  #     context: ./model
-  #   environment:
-  #     - EXPRESS_BASE_URL=http://server:4000
-  #   ports:
-  #     - "5000:5000"
-  #   volumes:
-  #     - model_data:/app/data
-  #   healthcheck:
-  #     test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/health').getcode()==200 else 1)"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
+  model:
+    build:
+      context: ./model
+    environment:
+      - EXPRESS_BASE_URL=http://server:4000
+    ports:
+      - "5000:5000"
+    volumes:
+      - model_data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/health').getcode()==200 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   sqlite_db:
+  model_data:

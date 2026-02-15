@@ -9,7 +9,7 @@ RUN npm ci
 # Copy application source
 COPY src ./src
 COPY config ./config
-COPY seedDb.sh ./seedDb.sh
+COPY seedDbGit.sh ./seedDb.sh
 
 ENV NODE_ENV=production \
     MODEL_BASE_URL=http://model:5000
