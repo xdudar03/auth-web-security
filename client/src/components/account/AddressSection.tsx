@@ -2,7 +2,7 @@
 import { FormInputField } from './FormInputField';
 import { Control } from 'react-hook-form';
 import { PrivacySettings } from '@/hooks/useUserContext';
-import { FormValues } from './anonymizationHandlers';
+import { FormValues } from '../../lib/anonymization/anonymizationHandlers';
 
 interface AddressSectionProps {
   control: Control<FormValues>;

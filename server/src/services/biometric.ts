@@ -14,6 +14,7 @@ import { jwtSecret } from "../tools/trpc.ts";
 import bcrypt from "bcryptjs";
 import type { User } from "../types/user.ts";
 import { addNewEmbedding } from "./model.ts";
+import { applyPrivacyPreset } from "./privacy.ts";
 
 type RegistrationInput = {
   userId: string;
@@ -76,6 +77,8 @@ export async function registerBiometricUser(input: RegistrationInput) {
   } else {
     throw new HttpError(400, "No shops provided");
   }
+
+  applyPrivacyPreset(userId, "pl4");
 
   return {
     message: "Registration successful",

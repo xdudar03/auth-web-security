@@ -92,11 +92,13 @@ export async function verifyIdentity(
   } else {
     throw new HttpError(400, "Username or userId is required");
   }
+  console.log("userToVerify: ", userToVerify);
+
   return fetchModel<VerificationResponse>("/verify", {
     method: "POST",
     body: JSON.stringify({
       embedding: JSON.parse(embedding),
-      user_id: userId,
+      user_id: userToVerify,
     }),
   });
 }

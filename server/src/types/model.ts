@@ -11,6 +11,7 @@ export const ModelStatusResponse = z.object({
   model_name: z.string(),
   input_shape: z.array(z.number()),
   num_classes: z.number().nullable(),
+  is_training: z.boolean(),
 });
 export type ModelStatusResponse = z.infer<typeof ModelStatusResponse>;
 

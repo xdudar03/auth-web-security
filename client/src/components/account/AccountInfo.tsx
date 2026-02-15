@@ -12,7 +12,7 @@ import { AddressSection } from './AddressSection';
 import {
   handleFieldAnonymization,
   type FormValues,
-} from './anonymizationHandlers';
+} from '../../lib/anonymization/anonymizationHandlers';
 import ProvidersManager from './ProvidersManager';
 
 export default function AccountInfo() {

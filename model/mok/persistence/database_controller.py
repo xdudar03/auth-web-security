@@ -3,6 +3,7 @@ import io
 import json
 import base64
 import sqlite3
+import time
 import numpy as np
 from PIL import Image
 
@@ -10,6 +11,11 @@ from PIL import Image
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 DEFAULT_DB_PATH = os.path.join(_REPO_ROOT, "server", "data", "users.db")
+SQLITE_TIMEOUT_SECONDS = float(os.environ.get("MODEL_SQLITE_TIMEOUT_SECONDS", "10"))
+SQLITE_LOCK_RETRY_ATTEMPTS = int(os.environ.get("MODEL_SQLITE_LOCK_RETRY_ATTEMPTS", "5"))
+SQLITE_LOCK_RETRY_BASE_DELAY_SECONDS = float(
+    os.environ.get("MODEL_SQLITE_LOCK_RETRY_BASE_DELAY_SECONDS", "0.1")
+)
 
 
 class DatabaseController:
@@ -30,8 +36,13 @@ class DatabaseController:
         self.path = os.path.abspath(resolved_path)
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         # Log in the database
-        self.conn = sqlite3.connect(self.path)
+        self.conn = sqlite3.connect(self.path, timeout=SQLITE_TIMEOUT_SECONDS)
         self.cursor = self.conn.cursor()
+        # Allow concurrent reads/writes across Node + model processes.
+        self.cursor.execute("PRAGMA journal_mode=WAL")
+        self.cursor.execute(
+            f"PRAGMA busy_timeout={int(SQLITE_TIMEOUT_SECONDS * 1000)}"
+        )
         self.cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS {self._embeddings_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,6 +51,7 @@ class DatabaseController:
                 createdAt TEXT DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        self.conn.commit()
     def __del__(self):
         # Close database connexions
         self.conn.commit()
@@ -56,12 +68,24 @@ class DatabaseController:
         else:
             serialized = str(embedding)
         print(f"Serialized embedding: {serialized}")
-        self.cursor.execute(
-            f"INSERT INTO {self._embeddings_table_name} ({self._embeddings_user_id}, {self._embeddings_data}) VALUES (?, ?)",
-            (user_id, serialized),
-        )
-        self.conn.commit()
-        return self.cursor.lastrowid
+        for attempt in range(1, SQLITE_LOCK_RETRY_ATTEMPTS + 1):
+            try:
+                self.cursor.execute(
+                    f"INSERT INTO {self._embeddings_table_name} ({self._embeddings_user_id}, {self._embeddings_data}) VALUES (?, ?)",
+                    (user_id, serialized),
+                )
+                self.conn.commit()
+                return self.cursor.lastrowid
+            except sqlite3.OperationalError as error:
+                message = str(error).lower()
+                is_locked = "database is locked" in message or "database is busy" in message
+                if not is_locked or attempt == SQLITE_LOCK_RETRY_ATTEMPTS:
+                    raise
+                delay = SQLITE_LOCK_RETRY_BASE_DELAY_SECONDS * attempt
+                print(
+                    f"SQLite locked while adding embedding; retry {attempt}/{SQLITE_LOCK_RETRY_ATTEMPTS} in {delay:.2f}s"
+                )
+                time.sleep(delay)
 
     def get_user_id_list(self):
         self.cursor.execute(f"""

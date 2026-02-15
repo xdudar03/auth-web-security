@@ -13,7 +13,7 @@ import {
   type DpSvdOptions,
 } from '@/lib/anonymization/dpSvd';
 import { useTRPC } from '@/hooks/TrpcContext';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input } from '../ui/input';
 import { useRouter } from 'next/navigation';
 import useJwt from '@/hooks/useJwt';
@@ -41,11 +41,21 @@ export default function BiometricAuth({
   );
   const [capturedImageUrl, setCapturedImageUrl] = useState<string>();
   const [reconstructedImageUrl, setReconstructedImageUrl] = useState<string>();
+  const [feedbackMessage, setFeedbackMessage] = useState<{
+    type: 'success' | 'error' | 'warning';
+    text: string;
+  } | null>(null);
   const { user, role, isAuthenticated } = useUser();
   const { setJwt } = useJwt();
   const router = useRouter();
   const queryClient = useQueryClient();
   const trpc = useTRPC();
+  const modelStatusQuery = useQuery({
+    ...trpc.model.status.queryOptions(),
+    enabled: action === 'login',
+    refetchInterval: (query) => (query.state.data?.is_training ? 2000 : false),
+  });
+  const isModelTraining = action === 'login' && modelStatusQuery.data?.is_training;
   const register = useMutation(
     trpc.biometric.register.mutationOptions({
       onError: (error) => {
@@ -162,6 +172,11 @@ export default function BiometricAuth({
 
   const runBiometricAction = async (payload: User & { embedding: string }) => {
     if (action === 'login') {
+      if (isModelTraining) {
+        throw new Error(
+          'Biometric model training is in progress. Please try again shortly.'
+        );
+      }
       console.log('payload', payload);
       console.log('username', username);
       if (!username) {
@@ -183,6 +198,10 @@ export default function BiometricAuth({
     } else if (action === 'change') {
       await changeEmbedding.mutateAsync({
         embedding: payload.embedding ?? '',
+      });
+      setFeedbackMessage({
+        type: 'success',
+        text: 'Biometric registered. Model training has started; biometric login will be available once training finishes.',
       });
     }
   };
@@ -252,8 +271,18 @@ export default function BiometricAuth({
 
       try {
         await runBiometricAction(userWithEmbedding);
+        if (action === 'login') {
+          setFeedbackMessage(null);
+        }
       } catch (error) {
         console.error('Biometric action failed', error);
+        setFeedbackMessage({
+          type: 'error',
+          text:
+            error instanceof Error
+              ? error.message
+              : 'Biometric authentication failed',
+        });
       }
     } else {
       await startCamera();
@@ -263,6 +292,7 @@ export default function BiometricAuth({
       setCapturedImageUrl(undefined);
       setIsCapturingStream(false);
       setReconstructedImageUrl(undefined);
+      setFeedbackMessage(null);
     }
   };
 
@@ -331,6 +361,18 @@ export default function BiometricAuth({
     return frames;
   };
 
+  const buttonLabel = isCameraActive
+    ? isCapturingStream
+      ? 'Capturing...'
+      : 'Capture Stream'
+    : modelStatusQuery.isLoading
+      ? 'Checking model...'
+      : isModelTraining
+        ? 'Model Training...'
+        : modelStatusQuery.isError
+          ? 'Model Unavailable'
+          : 'Start Camera';
+
   return (
     <div className="flex flex-col items-center justify-center p-6 bg-surface rounded gap-6">
       {title !== '' && (
@@ -346,6 +388,30 @@ export default function BiometricAuth({
           value={username}
           onChange={(e) => setUsername(e.target.value)}
         />
+      )}
+      {action === 'login' && isModelTraining && (
+        <div className="alert alert-warning w-full">
+          Your biometric model is training right now. Biometric sign-in is
+          temporarily unavailable.
+        </div>
+      )}
+      {action === 'login' && modelStatusQuery.isError && (
+        <div className="alert alert-warning w-full">
+          We could not confirm model status right now. Please retry in a moment.
+        </div>
+      )}
+      {feedbackMessage && (
+        <div
+          className={`w-full ${
+            feedbackMessage.type === 'success'
+              ? 'alert alert-success'
+              : feedbackMessage.type === 'warning'
+                ? 'alert alert-warning'
+                : 'alert alert-error'
+          }`}
+        >
+          {feedbackMessage.text}
+        </div>
       )}
       <div className="form w-full items-center">
         <div className="form-field items-center">
@@ -377,14 +443,13 @@ export default function BiometricAuth({
               register.isPending ||
               authenticate.isPending ||
               changeEmbedding.isPending ||
-              isCapturingStream
+              isCapturingStream ||
+              isModelTraining ||
+              modelStatusQuery.isLoading ||
+              modelStatusQuery.isError
             }
           >
-            {isCameraActive
-              ? isCapturingStream
-                ? 'Capturing...'
-                : 'Capture Stream'
-              : 'Start Camera'}
+            {buttonLabel}
           </Button>
         </div>
         {capturedImage && (

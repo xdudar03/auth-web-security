@@ -108,6 +108,7 @@ class ModelStatusResponse(BaseModel):
     model_name: str
     input_shape: List[int]
     num_classes: Optional[int] = None
+    is_training: bool
 
 
 # ============== Endpoints ==============
@@ -134,11 +135,13 @@ async def health():
 async def model_status():
     """Get model status and configuration."""
     controller = get_controller()
+    is_training = _training_lock.locked()
     return ModelStatusResponse(
-        status="ready",
+        status="training" if is_training else "ready",
         model_name=controller.MODEL_NAME,
         input_shape=list(controller.INPUT_SHAPE),
         num_classes=controller.num_classes,
+        is_training=is_training,
     )
 
 
@@ -203,6 +206,11 @@ async def verify_identity(request: EmbeddingRequest):
     import numpy as np
 
     controller = get_controller()
+    if _training_lock.locked():
+        raise HTTPException(
+            status_code=409,
+            detail="Model is training. Please try biometric authentication again in a moment.",
+        )
     raw_embedding = _decode_embedding_payload(request.embedding)
     if not raw_embedding:
         raise HTTPException(status_code=400, detail="Embedding is required for verification")
