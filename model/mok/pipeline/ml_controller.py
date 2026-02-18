@@ -32,10 +32,10 @@ def _get_env_float(name: str, default: float) -> float:
 
 
 PREDICTION_CONFIDENCE_THRESHOLD = _get_env_float(
-    "MODEL_PREDICTION_CONFIDENCE_THRESHOLD", 0.8
+    "MODEL_PREDICTION_CONFIDENCE_THRESHOLD", 0.65
 )
 PREDICTION_MARGIN_THRESHOLD = _get_env_float(
-    "MODEL_PREDICTION_MARGIN_THRESHOLD", 0.1
+    "MODEL_PREDICTION_MARGIN_THRESHOLD", 0.03
 )
 KNN_MAX_NEAREST_DISTANCE = _get_env_float(
     "MODEL_KNN_MAX_NEAREST_DISTANCE", 0.0
@@ -50,10 +50,54 @@ def _top_two_margin(probabilities: np.ndarray) -> float:
 
 
 def _is_low_confidence(confidence: float, margin: float) -> bool:
+    # Reject only when both indicators are weak to reduce false rejections
+    # caused by appearance/background drift.
     return (
         confidence < PREDICTION_CONFIDENCE_THRESHOLD
-        or margin < PREDICTION_MARGIN_THRESHOLD
+        and margin < PREDICTION_MARGIN_THRESHOLD
     )
+
+
+def _l2_normalize_rows(vectors: np.ndarray, eps: float = 1e-12) -> np.ndarray:
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    norms = np.maximum(norms, eps)
+    return vectors / norms
+
+
+def _distance_to_confidence(distance: float, metric: str) -> float:
+    metric_name = (metric or "").lower()
+    if metric_name == "cosine":
+        # cosine distance is in [0, 2] => map to [1, 0]
+        return float(np.clip(1.0 - (distance / 2.0), 0.0, 1.0))
+    return float(1.0 / (1.0 + max(distance, 0.0)))
+
+
+def _pairwise_distances_1_to_n(
+    query_vector: np.ndarray,
+    candidate_vectors: np.ndarray,
+    metric: str,
+) -> np.ndarray:
+    if candidate_vectors is None or candidate_vectors.size == 0:
+        return np.asarray([], dtype=np.float32)
+
+    query = np.asarray(query_vector, dtype=np.float32).reshape(-1)
+    candidates = np.asarray(candidate_vectors, dtype=np.float32)
+    metric_name = (metric or "").lower()
+
+    if metric_name == "cosine":
+        query_norm = max(float(np.linalg.norm(query)), 1e-12)
+        query = query / query_norm
+        candidates = _l2_normalize_rows(candidates)
+        similarities = np.clip(candidates @ query, -1.0, 1.0)
+        return 1.0 - similarities
+
+    return np.linalg.norm(candidates - query, axis=1)
+
+
+def _distance_separation_score(target_distance: float, other_distance: float) -> float:
+    if other_distance <= 1e-12:
+        return 0.0
+    return float(np.clip((other_distance - target_distance) / other_distance, 0.0, 1.0))
 
 
 class MLController:
@@ -84,7 +128,7 @@ class MLController:
     # for dp-svd anonymization
     LEARNING_RATE = 0.0005 
     BATCH_SIZE = 16
-    EPOCHS = 140
+    EPOCHS = 100
 
     # ArcFace settings
     ARC_EMBEDDING_DIM = 128
@@ -208,10 +252,13 @@ class MLController:
         self.INPUT_SHAPE = (self.vector_input_dim,)
 
     def create_model(self):
+        if self.vector_input_dim is None:
+            raise ValueError("vector_input_dim is not initialized. Call prepare_data() first.")
+        vector_input_dim = int(self.vector_input_dim)
         # Create model
         res = create_model(
             self.num_classes,
-            vector_input_dim=self.vector_input_dim,
+            vector_input_dim=vector_input_dim,
             model_save_dir=self._model_save_dir,
             log_dir=self._log_dir,
             model_name=self.MODEL_NAME,
@@ -244,8 +291,8 @@ class MLController:
         return self.output_train
 
 
-    def predict_image(self, vector: np.ndarray):
-        return predict_image(vector, self._model_save_dir, self.MODEL_NAME)
+    def predict_image(self, vector: np.ndarray, user_id: str = ""):
+        return predict_image(vector, self._model_save_dir, self.MODEL_NAME, user_id=user_id)
 
 
 def prepare_data_train_model(
@@ -301,6 +348,7 @@ def prepare_data_train_model(
         raise ValueError(f"Inconsistent vector lengths in embeddings: {sorted(dims)}")
     vector_input_dim = vectors[0].shape[0]
     X = np.vstack(vectors).astype(np.float32)
+    X = _l2_normalize_rows(X)
     if show_logs:
         print(f"Detected vector embeddings. input_dim={vector_input_dim}")
 
@@ -448,7 +496,10 @@ def create_model(
 
     # Capture model summary
     summary_io = io.StringIO()
-    model.summary(print_fn=lambda x: summary_io.write(x + "\n"))
+    def _write_summary_line(x: str) -> None:
+        summary_io.write(x + "\n")
+
+    model.summary(print_fn=_write_summary_line)
     summary_text = summary_io.getvalue()
 
     # --- ------------------------ ---
@@ -518,7 +569,7 @@ def text_to_image(text: str, font_size: int = 28, padding: int = 20):
         line_height = max(line_height, h)
     img_width = max_width + padding * 4
     img_height = line_height * len(lines) + padding * 4
-    img = Image.new("RGB", (img_width, img_height), color="white")
+    img = Image.new("RGB", (int(img_width), int(img_height)), color="white")
     draw = ImageDraw.Draw(img)
     y = padding
     for line in lines:
@@ -557,6 +608,7 @@ def train_knn_model(
     model_save_dir='ml_models/trained/',
     model_name='arcface_yale_anony_v1',
     n_neighbors=5,
+    metric="cosine",
     show_logs=False
     ):
     """
@@ -565,8 +617,15 @@ def train_knn_model(
     if X_train is None or y_train is None or len(X_train) == 0:
         raise Exception("KNN training requires non-empty training data.")
 
-    n_neighbors = max(1, min(int(n_neighbors), int(len(X_train))))
-    knn_model = KNeighborsClassifier(n_neighbors=n_neighbors, weights="distance")
+    train_size = int(len(X_train))
+    default_neighbors = int(np.clip(round(np.sqrt(train_size)), 3, 15))
+    n_neighbors = max(1, min(int(n_neighbors or default_neighbors), train_size))
+    knn_model = KNeighborsClassifier(
+        n_neighbors=n_neighbors,
+        weights="distance",
+        metric=metric,
+        algorithm="brute" if str(metric).lower() == "cosine" else "auto",
+    )
     knn_model.fit(X_train, y_train)
 
     os.makedirs(model_save_dir, exist_ok=True)
@@ -672,10 +731,10 @@ def train_model(
     eval_loss, eval_acc = eval_model.evaluate(eval_inputs, y_test)
     y_pred = np.argmax(eval_model.predict(eval_inputs), axis=1)
     cm = confusion_matrix(y_test, y_pred)
-    report = classification_report(y_test, y_pred, output_dict=False)
+    report_text = str(classification_report(y_test, y_pred, output_dict=False))
 
     # Capture report to image
-    report = pillow_image_to_bytes(text_to_image(report))
+    report = pillow_image_to_bytes(text_to_image(report_text))
 
     image_pil = None
     if history is not None:
@@ -727,7 +786,7 @@ def train_model(
 
 
 def preprocess_single_vector(
-    vector_array: np.array,
+    vector_array: np.ndarray,
     expected_dim: int,
     ):
     """
@@ -739,6 +798,10 @@ def preprocess_single_vector(
             raise ValueError(
                 f"Input vector length {vector.size} does not match expected {expected_dim}"
             )
+        norm = float(np.linalg.norm(vector))
+        if norm <= 1e-12:
+            raise ValueError("Input vector norm is zero")
+        vector = vector / norm
         vector = vector.reshape(1, expected_dim)
         print(f"Preprocessed vector, final shape: {vector.shape}")
         return vector
@@ -751,6 +814,7 @@ def predict_image(
     vector_array: np.ndarray,
     model_save_dir: str = 'ml_models/trained/',
     model_name: str = 'arcface_yale_anony_v1',
+    user_id: str = "",
     show_logs = False,
     ):
     """
@@ -786,25 +850,151 @@ def predict_image(
             if preprocessed_vector is None:
                 raise Exception("Vector preprocessing failed.")
 
+            neighbor_distances, _ = knn_model.kneighbors(
+                preprocessed_vector,
+                return_distance=True,
+            )
+            neighbor_distances = neighbor_distances[0]
+            nearest_distance = float(neighbor_distances[0]) if len(neighbor_distances) > 0 else 0.0
+
             predicted_index = int(knn_model.predict(preprocessed_vector)[0])
-            nearest_distance = None
+            metric_name = str(getattr(knn_model, "metric", ""))
+            distance_confidence = _distance_to_confidence(nearest_distance, metric_name)
+
             if hasattr(knn_model, "predict_proba"):
                 probabilities = knn_model.predict_proba(preprocessed_vector)[0]
-                prediction_confidence = float(np.max(probabilities))
-                prediction_margin = _top_two_margin(probabilities)
-            else:
-                distances = knn_model.kneighbors(
-                    preprocessed_vector, return_distance=True
-                )[0][0]
-                nearest_distance = float(distances[0]) if len(distances) > 0 else None
-                prediction_confidence = (
-                    float(1.0 / (1.0 + nearest_distance))
-                    if nearest_distance is not None
-                    else 0.0
-                )
-                prediction_margin = 1.0
+                if user_id:
+                    try:
+                        claimed_index = int(label_encoder.transform([str(user_id)])[0])
+                    except Exception:
+                        if show_logs:
+                            print(f"Unknown claimed user_id={user_id}")
+                        return "unknown", 0.0
 
-            predicted_label = label_encoder.inverse_transform([predicted_index])[0]
+                    fit_x = np.asarray(getattr(knn_model, "_fit_X", np.empty((0, 0))), dtype=np.float32)
+                    fit_y = np.asarray(getattr(knn_model, "_y", np.empty((0,))), dtype=np.int32)
+                    if fit_x.size == 0 or fit_y.size == 0:
+                        raise Exception("KNN model does not expose fitted vectors for verification.")
+
+                    claimed_mask = fit_y == claimed_index
+                    if not np.any(claimed_mask):
+                        if show_logs:
+                            print(f"No training vectors available for claimed user_id={user_id}")
+                        return "unknown", 0.0
+
+                    query_vector = preprocessed_vector.reshape(-1)
+                    claimed_vectors = fit_x[claimed_mask]
+                    other_vectors = fit_x[~claimed_mask]
+                    metric_name = str(getattr(knn_model, "metric", ""))
+
+                    claimed_distances = _pairwise_distances_1_to_n(
+                        query_vector,
+                        claimed_vectors,
+                        metric_name,
+                    )
+                    nearest_claimed_distance = float(
+                        np.min(claimed_distances) if claimed_distances.size > 0 else 2.0
+                    )
+
+                    claimed_confidence = float(probabilities[claimed_index])
+                    other_probabilities = np.delete(probabilities, claimed_index)
+                    best_other = float(np.max(other_probabilities)) if other_probabilities.size > 0 else 0.0
+
+                    # Binary verification signal: closeness to claimed identity, not multiclass winner.
+                    claimed_distance_confidence = _distance_to_confidence(
+                        nearest_claimed_distance,
+                        metric_name,
+                    )
+                    if metric_name.lower() == "cosine":
+                        claimed_centroid = np.mean(claimed_vectors, axis=0)
+                        claimed_centroid_norm = max(float(np.linalg.norm(claimed_centroid)), 1e-12)
+                        claimed_centroid = claimed_centroid / claimed_centroid_norm
+                    else:
+                        claimed_centroid = np.mean(claimed_vectors, axis=0)
+                    claimed_centroid_distance = float(
+                        _pairwise_distances_1_to_n(
+                            query_vector,
+                            claimed_centroid.reshape(1, -1),
+                            metric_name,
+                        )[0]
+                    )
+                    centroid_confidence = _distance_to_confidence(
+                        claimed_centroid_distance,
+                        metric_name,
+                    )
+
+                    prediction_confidence = float(
+                        np.clip(
+                            0.20 * claimed_confidence
+                            + 0.40 * claimed_distance_confidence
+                            + 0.40 * centroid_confidence,
+                            0.0,
+                            1.0,
+                        )
+                    )
+
+                    nearest_other_distance = None
+                    nearest_other_centroid_distance = None
+                    if other_vectors.size > 0:
+                        other_distances = _pairwise_distances_1_to_n(
+                            query_vector,
+                            other_vectors,
+                            metric_name,
+                        )
+                        if other_distances.size > 0:
+                            nearest_other_distance = float(np.min(other_distances))
+
+                        other_class_ids = np.unique(fit_y[~claimed_mask])
+                        other_centroid_distances = []
+                        for class_id in other_class_ids:
+                            class_vectors = fit_x[fit_y == class_id]
+                            if class_vectors.size == 0:
+                                continue
+                            class_centroid = np.mean(class_vectors, axis=0)
+                            if metric_name.lower() == "cosine":
+                                class_centroid_norm = max(float(np.linalg.norm(class_centroid)), 1e-12)
+                                class_centroid = class_centroid / class_centroid_norm
+                            dist_to_centroid = float(
+                                _pairwise_distances_1_to_n(
+                                    query_vector,
+                                    class_centroid.reshape(1, -1),
+                                    metric_name,
+                                )[0]
+                            )
+                            other_centroid_distances.append(dist_to_centroid)
+                        if other_centroid_distances:
+                            nearest_other_centroid_distance = float(min(other_centroid_distances))
+
+                    local_separation = (
+                        _distance_separation_score(nearest_claimed_distance, nearest_other_distance)
+                        if nearest_other_distance is not None
+                        else 1.0
+                    )
+                    centroid_separation = (
+                        _distance_separation_score(
+                            claimed_centroid_distance,
+                            nearest_other_centroid_distance,
+                        )
+                        if nearest_other_centroid_distance is not None
+                        else 1.0
+                    )
+                    prediction_margin = max(
+                        float(claimed_confidence - best_other),
+                        local_separation,
+                        centroid_separation,
+                    )
+                    predicted_label = str(user_id)
+                else:
+                    model_confidence = float(np.max(probabilities))
+                    prediction_confidence = float(
+                        np.clip(0.75 * model_confidence + 0.25 * distance_confidence, 0.0, 1.0)
+                    )
+                    prediction_margin = _top_two_margin(probabilities)
+                    predicted_label = label_encoder.inverse_transform([predicted_index])[0]
+            else:
+                prediction_confidence = distance_confidence
+                prediction_margin = 1.0
+                predicted_label = label_encoder.inverse_transform([predicted_index])[0]
             should_reject = _is_low_confidence(prediction_confidence, prediction_margin)
             if (
                 nearest_distance is not None
@@ -825,6 +1015,7 @@ def predict_image(
                     print("  - Rejected as unknown due to confidence/margin checks.")
                 return "unknown", 0.0
             return predicted_label, prediction_confidence
+        raise FileNotFoundError(f"KNN model not found at {knn_model_filepath}")
         
     except Exception as e:
         raise Exception(f"Error in prediction: {e}") from e

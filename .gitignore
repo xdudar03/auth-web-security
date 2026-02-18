@@ -93,4 +93,6 @@ build/
 
 /server/src/users.json
 /server/data/users.db
+/server/data/users.db-shm
+/server/data/users.db-wal
 /server/yalefaces/

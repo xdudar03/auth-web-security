@@ -24,13 +24,20 @@ from mok.pipeline.ml_controller import MLController
 _controller: Optional[MLController] = None
 _training_lock = Lock()
 VERIFY_CONFIDENCE_THRESHOLD = float(
-    os.environ.get("MODEL_VERIFY_CONFIDENCE_THRESHOLD", "0.85")
+    os.environ.get("MODEL_VERIFY_CONFIDENCE_THRESHOLD", "0.65")
 )
 VERIFY_MIN_ACCEPTED_FRAMES = int(
-    os.environ.get("MODEL_VERIFY_MIN_ACCEPTED_FRAMES", "3")
+    os.environ.get("MODEL_VERIFY_MIN_ACCEPTED_FRAMES", "2")
 )
 VERIFY_MIN_ACCEPTED_RATIO = float(
-    os.environ.get("MODEL_VERIFY_MIN_ACCEPTED_RATIO", "0.6")
+    os.environ.get("MODEL_VERIFY_MIN_ACCEPTED_RATIO", "0.5")
+)
+VERIFY_STRONG_CONFIDENCE_THRESHOLD = float(
+    os.environ.get("MODEL_VERIFY_STRONG_CONFIDENCE_THRESHOLD", "0.9")
+)
+VERIFY_ALLOW_SINGLE_GOOD_FRAME = (
+    os.environ.get("MODEL_VERIFY_ALLOW_SINGLE_GOOD_FRAME", "true").strip().lower()
+    in {"1", "true", "yes", "on"}
 )
 
 
@@ -170,7 +177,10 @@ async def predict_embedding(request: EmbeddingRequest):
         embedding = np.array(decoded_embedding, dtype=np.float32)
         
         # Run prediction
-        predicted_label, confidence = controller.predict_image(embedding)
+        predicted_label, confidence = controller.predict_image(
+            embedding,
+            user_id=request.user_id or "",
+        )
         
         # Build response
         response = PredictionResponse(
@@ -222,26 +232,66 @@ async def verify_identity(request: EmbeddingRequest):
     frame_results = []
     for embedding_item in embedding_batch:
         embedding = np.array(embedding_item, dtype=np.float32)
-        predicted_label, confidence = controller.predict_image(embedding)
+        predicted_label, confidence = controller.predict_image(
+            embedding,
+            user_id=request.user_id,
+        )
+        guessed_label, guessed_confidence = controller.predict_image(embedding)
         is_match = (
             str(predicted_label) == request.user_id
             and str(predicted_label) != "unknown"
             and float(confidence) >= VERIFY_CONFIDENCE_THRESHOLD
         )
-        frame_results.append((is_match, float(confidence)))
+        frame_results.append(
+            (
+                is_match,
+                float(confidence),
+                str(guessed_label),
+                float(guessed_confidence),
+            )
+        )
 
     total_frames = len(frame_results)
-    accepted_frames = sum(1 for is_match, _ in frame_results if is_match)
+    accepted_frames = sum(1 for is_match, _, _, _ in frame_results if is_match)
+    strong_matches = sum(
+        1
+        for is_match, conf, _, _ in frame_results
+        if is_match and conf >= VERIFY_STRONG_CONFIDENCE_THRESHOLD
+    )
     ratio_required = max(1, math.ceil(total_frames * VERIFY_MIN_ACCEPTED_RATIO))
     min_required = max(1, min(VERIFY_MIN_ACCEPTED_FRAMES, total_frames))
     required_votes = max(min_required, ratio_required)
-    verified = accepted_frames >= required_votes
-    confidence = max((conf for is_match, conf in frame_results if is_match), default=0.0)
+    best_claimed_confidence = max((conf for _, conf, _, _ in frame_results), default=0.0)
+    single_good_frame_verified = (
+        VERIFY_ALLOW_SINGLE_GOOD_FRAME
+        and accepted_frames >= 1
+        and best_claimed_confidence >= VERIFY_CONFIDENCE_THRESHOLD
+    )
+    verified = (
+        (accepted_frames >= required_votes)
+        or (strong_matches >= 1)
+        or single_good_frame_verified
+    )
+
+    confidence = best_claimed_confidence
+    guessed_scores = {}
+    for _, _, guessed_label, guessed_confidence in frame_results:
+        guessed_scores[guessed_label] = guessed_scores.get(guessed_label, 0.0) + guessed_confidence
+    if guessed_scores:
+        predicted_user_id = max(guessed_scores.items(), key=lambda item: item[1])[0]
+    else:
+        predicted_user_id = "unknown"
+    predicted_user_confidence = max(
+        (conf for _, _, label, conf in frame_results if label == predicted_user_id),
+        default=0.0,
+    )
 
     return {
         "verified": verified,
         "confidence": confidence,
         "user_id": request.user_id,
+        "predicted_user_id": predicted_user_id,
+        "predicted_user_confidence": predicted_user_confidence,
     }
 
 

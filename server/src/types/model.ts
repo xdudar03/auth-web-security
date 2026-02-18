@@ -27,6 +27,8 @@ export const VerificationResponse = z.object({
   confidence: z.number(),
   user_id: z.string(),
   jwt: z.string().optional(),
+  predicted_user_id: z.string().optional(),
+  predicted_user_confidence: z.number().optional(),
 });
 export type VerificationResponse = z.infer<typeof VerificationResponse>;
 

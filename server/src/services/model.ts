@@ -94,13 +94,18 @@ export async function verifyIdentity(
   }
   console.log("userToVerify: ", userToVerify);
 
-  return fetchModel<VerificationResponse>("/verify", {
+  const response = await fetchModel<VerificationResponse>("/verify", {
     method: "POST",
     body: JSON.stringify({
       embedding: JSON.parse(embedding),
       user_id: userToVerify,
     }),
   });
+  console.log("response from verify: ", response);
+  if (response.verified) {
+    await addNewEmbedding(userToVerify, embedding);
+  }
+  return response;
 }
 
 /**
