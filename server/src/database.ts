@@ -15,6 +15,7 @@ import { Transaction } from "./types/transaction.ts";
 import { TransactionItem } from "./types/transactionItem.ts";
 import { UserTransaction } from "./types/userTransaction.ts";
 import { Pseudonym } from "./types/pseudonym.ts";
+import { Customer } from "./types/customer.ts";
 
 const rawDbPath = process.env.SQLITE_DB_PATH?.trim() || "./data/users.db";
 const dbPath = isAbsolute(rawDbPath)
@@ -53,14 +54,26 @@ const initTable = () => {
     )
   `);
   db.exec(`
-    CREATE TABLE IF NOT EXISTS user_embeddings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId TEXT NOT NULL,
-      embedding TEXT NOT NULL,
-      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (userId) REFERENCES users(userId)
+    CREATE TABLE IF NOT EXISTS customers (
+      customerId TEXT NOT NULL UNIQUE,
+      isBiometric BOOLEAN NOT NULL
     )
   `);
+  db.exec(`
+      CREATE TABLE IF NOT EXISTS user_embeddings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId TEXT,
+        customerId TEXT,
+        embedding TEXT NOT NULL,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (userId) REFERENCES users(userId),
+        FOREIGN KEY (customerId) REFERENCES customers(customerId),
+        CHECK (
+          (userId IS NOT NULL AND customerId IS NULL) OR 
+          (userId IS NULL AND customerId IS NOT NULL)
+        )
+      )
+    `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
       roleId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,11 +102,17 @@ const initTable = () => {
   `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS user_shops (
-    userId TEXT NOT NULL,
-    shopId INTEGER NOT NULL,
-    FOREIGN KEY (userId) REFERENCES users(userId),
-    FOREIGN KEY (shopId) REFERENCES shops(shopId),
-    PRIMARY KEY (userId, shopId)
+      userId TEXT,
+      customerId TEXT,
+      shopId INTEGER NOT NULL,
+      FOREIGN KEY (userId) REFERENCES users(userId),
+      FOREIGN KEY (shopId) REFERENCES shops(shopId),
+      FOREIGN KEY (customerId) REFERENCES customers(customerId),
+      PRIMARY KEY (userId, customerId, shopId),
+      CHECK (
+        (userId IS NOT NULL AND customerId IS NULL) OR 
+        (userId IS NULL AND customerId IS NOT NULL)
+      )
     )
   `);
   db.exec(`
@@ -298,6 +317,14 @@ const addUserToShopQuery = db.prepare(
   `INSERT INTO user_shops (userId, shopId) VALUES (?, ?)`,
 );
 
+const addCustomerToShopQuery = db.prepare(
+  `INSERT INTO user_shops (customerId, shopId) VALUES (?, ?)`,
+);
+
+const addCustomerToShop = (customerId: string, shopId: number) => {
+  addCustomerToShopQuery.run(customerId, shopId);
+};
+
 const addShopOwnerToShopQuery = db.prepare(
   `UPDATE shops SET shopOwnerId = ? WHERE shopId = ?`,
 );
@@ -307,11 +334,59 @@ const getUserShopsQuery = db.prepare(
 );
 
 const getShopUsersQuery = db.prepare(
-  `SELECT users.*, roles.roleName 
-  FROM users 
-  INNER JOIN user_shops ON users.userId = user_shops.userId 
+  `SELECT
+    users.userId,
+    users.username,
+    users.password,
+    users.roleId,
+    users.credentials,
+    users.email,
+    users.firstName,
+    users.lastName,
+    users.isBiometric,
+    users.phoneNumber,
+    users.dateOfBirth,
+    users.gender,
+    users.address,
+    users.city,
+    users.state,
+    users.zip,
+    users.country,
+    users.spendings,
+    users.privacyPreset,
+    roles.roleName,
+    1 AS registered
+  FROM users
+  INNER JOIN user_shops ON users.userId = user_shops.userId
   INNER JOIN roles ON roles.roleId = users.roleId
-  INNER JOIN shops ON shops.shopId = user_shops.shopId
+  WHERE user_shops.shopId = ?
+
+  UNION ALL
+
+  SELECT
+    customers.customerId AS userId,
+    customers.customerId AS username,
+    '' AS password,
+    NULL AS roleId,
+    NULL AS credentials,
+    '' AS email,
+    NULL AS firstName,
+    NULL AS lastName,
+    customers.isBiometric AS isBiometric,
+    NULL AS phoneNumber,
+    NULL AS dateOfBirth,
+    NULL AS gender,
+    NULL AS address,
+    NULL AS city,
+    NULL AS state,
+    NULL AS zip,
+    NULL AS country,
+    NULL AS spendings,
+    NULL AS privacyPreset,
+    'customer' AS roleName,
+    0 AS registered
+  FROM customers
+  INNER JOIN user_shops ON customers.customerId = user_shops.customerId
   WHERE user_shops.shopId = ?`,
 );
 
@@ -506,6 +581,28 @@ const getUserPrivacyFieldByUserIdQuery = db.prepare(
 const getUserWithRoleQuery = db.prepare(
   `SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE users.userId = ?`,
 );
+
+const addCustomerQuery = db.prepare(
+  `INSERT INTO customers (customerId, isBiometric) VALUES (?, ?)`,
+);
+
+const addCustomer = (customer: Customer) => {
+  addCustomerQuery.run(customer.customerId, customer.isBiometric ? 1 : 0);
+};
+
+const getCustomerByCustomerIdQuery = db.prepare(
+  `SELECT * FROM customers WHERE customerId = ?`,
+);
+
+const getCustomerByCustomerId = (customerId: string) => {
+  const customerData = getCustomerByCustomerIdQuery.get(customerId);
+  const result = Customer.safeParse(customerData);
+  if (!result.success) {
+    console.error("Parse error in getCustomerByCustomerId:", result.error);
+    return null;
+  }
+  return result.data;
+};
 
 // User queries
 const getUserByUsername = (username: string) => {
@@ -728,7 +825,7 @@ const getUserShops = (userId: string) => {
 };
 
 const getShopUsers = (shopId: number) => {
-  const usersData = getShopUsersQuery.all(shopId);
+  const usersData = getShopUsersQuery.all(shopId, shopId);
   console.log("usersData: ", usersData);
   return usersData;
 };
@@ -1000,6 +1097,7 @@ export {
   getUserById,
   getRoleByUserId,
   updateUser,
+  addCustomerToShop,
   addUserEmbedding,
   getUserEmbeddingsByUserId,
   getUserIdByUsername,
@@ -1022,6 +1120,8 @@ export {
   deleteToken,
   addUserPrivacy,
   getUserPrivacyByUserId,
+  addCustomer,
+  getCustomerByCustomerId,
   getUserWithRoleQuery,
   getAllShops,
   getUserForAuthentication,

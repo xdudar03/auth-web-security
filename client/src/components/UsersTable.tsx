@@ -84,6 +84,14 @@ export default function UsersTable({
         accessorKey: 'role.roleName',
       },
       {
+        header: 'Registered',
+        cell: ({ row }: { row: Row<AdminUserRow> }) => {
+          const registered = row.original.user.registered;
+          const isRegistered = registered ? true : false;
+          return isRegistered ? 'Yes' : 'No';
+        },
+      },
+      {
         id: 'actions',
         header: 'Actions',
         cell: ({ row }: { row: Row<AdminUserRow> }) => (

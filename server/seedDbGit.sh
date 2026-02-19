@@ -13,3 +13,4 @@ npx tsx src/seed/addTestUsersWithPrivacy.ts
 npx tsx src/seed/addItems.ts
 npx tsx src/seed/addTransactions.ts
 npx tsx src/seed/addEmbeddings.ts
+npx tsx src/seed/addCustomers.ts

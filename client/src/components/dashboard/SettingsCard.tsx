@@ -19,7 +19,7 @@ export default function SettingsCard() {
         </CardHeader>
         <CardContent>
           <h3 className="text-lg font-semibold text-center">Settings</h3>
-          {user?.embedding ? (
+          {user?.isBiometric ? (
             <p className="settings-warning">Biometric data registered</p>
           ) : (
             <p className="settings-warning">
