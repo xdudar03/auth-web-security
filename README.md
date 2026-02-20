@@ -23,8 +23,7 @@ MODEL_BASE_URL=http://model:5000
 # Client
 SERVER_BASE_URL=http://server:4000
 
-# Model (Flask)
-FLASK_SECRET_KEY=replace-with-strong-random-secret
+# Model (FastAPI)
 EXPRESS_BASE_URL=http://server:4000
 ```
 
@@ -76,8 +75,7 @@ MODEL_BASE_URL=http://localhost:5000
 # Client
 SERVER_BASE_URL=http://localhost:4000
 
-# Model (Flask)
-FLASK_SECRET_KEY=replace-with-strong-random-secret
+# Model (FastAPI)
 EXPRESS_BASE_URL=http://localhost:4000
 ```
 

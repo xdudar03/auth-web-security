@@ -10,27 +10,56 @@ from typing import Tuple, List, Optional, Dict, Any
 
 # --- Utility Functions ---
 
+def _atomic_joblib_dump_with_backup(obj, filepath: str):
+    """
+    Atomically replace a joblib artifact while preserving the previous version.
+
+    Writes to '<filepath>.tmp', rotates current file to '<filepath>.prev', then
+    promotes tmp to final path via os.replace().
+    """
+    tmp_path = f"{filepath}.tmp"
+    prev_path = f"{filepath}.prev"
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    joblib.dump(obj, tmp_path)
+    if os.path.exists(filepath):
+        os.replace(filepath, prev_path)
+    os.replace(tmp_path, filepath)
+
 def save_label_encoder(encoder: LabelEncoder, filepath: str):
     """Save a LabelEncoder object to a file."""
     try:
-        os.makedirs(os.path.dirname(filepath), exist_ok=True) # Create parent folder if needed
-        joblib.dump(encoder, filepath)
+        _atomic_joblib_dump_with_backup(encoder, filepath)
         print(f"LabelEncoder saved to: {filepath}")
     except Exception as e:
         print(f"Error while saving LabelEncoder: {e}")
 
 def load_label_encoder(filepath: str) -> Optional[LabelEncoder]:
     """Load a LabelEncoder object from a file."""
+    prev_filepath = f"{filepath}.prev"
     try:
         if os.path.exists(filepath):
             encoder = joblib.load(filepath)
             print(f"LabelEncoder loaded from: {filepath}")
             return encoder
+        if os.path.exists(prev_filepath):
+            encoder = joblib.load(prev_filepath)
+            print(f"LabelEncoder loaded from backup: {prev_filepath}")
+            return encoder
         else:
-            print(f"Error: LabelEncoder file not found at: {filepath}")
+            print(
+                f"Error: LabelEncoder file not found at: {filepath} "
+                f"(or backup: {prev_filepath})"
+            )
             return None
     except Exception as e:
         print(f"Error while loading LabelEncoder: {e}")
+        if os.path.exists(prev_filepath):
+            try:
+                encoder = joblib.load(prev_filepath)
+                print(f"LabelEncoder loaded from backup after failure: {prev_filepath}")
+                return encoder
+            except Exception as backup_error:
+                print(f"Error while loading backup LabelEncoder: {backup_error}")
         return None
 
 # --- Main Loading Function ---

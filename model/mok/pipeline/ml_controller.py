@@ -630,7 +630,12 @@ def train_knn_model(
 
     os.makedirs(model_save_dir, exist_ok=True)
     knn_model_path = os.path.join(model_save_dir, f"{model_name}_knn.joblib")
-    data_loader.joblib.dump(knn_model, knn_model_path)
+    tmp_knn_model_path = f"{knn_model_path}.tmp"
+    prev_knn_model_path = f"{knn_model_path}.prev"
+    data_loader.joblib.dump(knn_model, tmp_knn_model_path)
+    if os.path.exists(knn_model_path):
+        os.replace(knn_model_path, prev_knn_model_path)
+    os.replace(tmp_knn_model_path, knn_model_path)
 
     knn_accuracy = None
     if X_test is not None and y_test is not None and len(X_test) > 0:
@@ -827,6 +832,7 @@ def predict_image(
 
         encoder_filepath = os.path.join(model_save_dir, f"{model_name}_label_encoder.joblib")
         knn_model_filepath = os.path.join(model_save_dir, f"{model_name}_knn.joblib")
+        knn_model_backup_filepath = f"{knn_model_filepath}.prev"
 
         # Load the label encoder (shared by ArcFace and KNN paths)
         label_encoder = data_loader.load_label_encoder(encoder_filepath)
@@ -834,10 +840,22 @@ def predict_image(
             raise Exception("Critical error: Unable to load label encoder.")
 
         # KNN model for prediction 
-        if os.path.exists(knn_model_filepath):
-            if show_logs:
-                print(f"Using KNN model: {knn_model_filepath}")
-            knn_model = data_loader.joblib.load(knn_model_filepath)
+        if os.path.exists(knn_model_filepath) or os.path.exists(knn_model_backup_filepath):
+            knn_model = None
+            if os.path.exists(knn_model_filepath):
+                try:
+                    if show_logs:
+                        print(f"Using KNN model: {knn_model_filepath}")
+                    knn_model = data_loader.joblib.load(knn_model_filepath)
+                except Exception as primary_knn_error:
+                    if show_logs:
+                        print(f"Primary KNN load failed: {primary_knn_error}")
+            if knn_model is None and os.path.exists(knn_model_backup_filepath):
+                if show_logs:
+                    print(f"Falling back to backup KNN model: {knn_model_backup_filepath}")
+                knn_model = data_loader.joblib.load(knn_model_backup_filepath)
+            if knn_model is None:
+                raise Exception("Unable to load KNN model (primary and backup failed).")
 
             if hasattr(knn_model, "n_features_in_"):
                 expected_dim = int(knn_model.n_features_in_)
@@ -1015,7 +1033,10 @@ def predict_image(
                     print("  - Rejected as unknown due to confidence/margin checks.")
                 return "unknown", 0.0
             return predicted_label, prediction_confidence
-        raise FileNotFoundError(f"KNN model not found at {knn_model_filepath}")
+        raise FileNotFoundError(
+            f"KNN model not found at {knn_model_filepath} "
+            f"(or backup {knn_model_backup_filepath})"
+        )
         
     except Exception as e:
         raise Exception(f"Error in prediction: {e}") from e

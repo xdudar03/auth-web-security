@@ -133,7 +133,8 @@ export async function changeBiometricEmbedding(
   console.log("response from addNewEmbedding: ", response);
 
   updateUser(existingUser.userId, { isBiometric: true });
-  if (response.message !== "Embedding added; retraining started") {
+  // addNewEmbedding throws on non-2xx; response message text can vary.
+  if (!response?.message) {
     throw new HttpError(500, "Failed to add embedding");
   }
 

@@ -9,13 +9,14 @@ Run with:
 
 import os
 import math
+import time
 from typing import List, Optional, Union
 from contextlib import asynccontextmanager
 import json
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from threading import Lock
+from threading import Lock, Thread
 
 from mok.pipeline.ml_controller import MLController
 
@@ -23,6 +24,23 @@ from mok.pipeline.ml_controller import MLController
 # Global model controller (loaded on startup)
 _controller: Optional[MLController] = None
 _training_lock = Lock()
+_retrain_state_lock = Lock()
+_retrain_dirty = False
+_retrain_worker_running = False
+_retrain_first_pending_at = 0.0
+_retrain_last_request_at = 0.0
+RETRAIN_DEBOUNCE_SECONDS = float(
+    os.environ.get("MODEL_RETRAIN_DEBOUNCE_SECONDS", "10")
+)
+RETRAIN_MAX_WAIT_SECONDS = float(
+    os.environ.get("MODEL_RETRAIN_MAX_WAIT_SECONDS", "60")
+)
+PREDICT_RETRY_ATTEMPTS = int(
+    os.environ.get("MODEL_PREDICT_RETRY_ATTEMPTS", "3")
+)
+PREDICT_RETRY_DELAY_SECONDS = float(
+    os.environ.get("MODEL_PREDICT_RETRY_DELAY_SECONDS", "0.1")
+)
 VERIFY_CONFIDENCE_THRESHOLD = float(
     os.environ.get("MODEL_VERIFY_CONFIDENCE_THRESHOLD", "0.65")
 )
@@ -50,12 +68,89 @@ def _decode_embedding_payload(embedding: Union[List[float], List[List[float]], s
     return embedding
 
 
-def retrain_model_task(controller: MLController):
+def _predict_with_retry(
+    controller: MLController,
+    embedding,
+    user_id: str = "",
+):
+    attempts = max(1, int(PREDICT_RETRY_ATTEMPTS))
+    delay_seconds = max(0.0, float(PREDICT_RETRY_DELAY_SECONDS))
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return controller.predict_image(embedding, user_id=user_id)
+        except Exception as error:
+            last_error = error
+            if attempt < attempts:
+                time.sleep(delay_seconds)
+    raise last_error
+
+
+def _run_single_retrain(controller: MLController):
     with _training_lock:
         try:
             controller.retrain_from_db()
         except Exception as e:
             print(f"Retraining failed: {e}")
+
+
+def _retrain_worker_loop(controller: MLController):
+    global _retrain_dirty, _retrain_worker_running
+    global _retrain_first_pending_at, _retrain_last_request_at
+    while True:
+        with _retrain_state_lock:
+            # Nothing pending: stop worker. A future request will start a new one.
+            if not _retrain_dirty:
+                _retrain_worker_running = False
+                return
+
+            first_pending_at = _retrain_first_pending_at
+            last_request_at = _retrain_last_request_at
+
+        # Batch short bursts, but enforce a hard upper bound on wait time.
+        now = time.monotonic()
+        until_debounce_ready = max(
+            0.0,
+            RETRAIN_DEBOUNCE_SECONDS - (now - last_request_at),
+        )
+        until_max_wait = max(
+            0.0,
+            RETRAIN_MAX_WAIT_SECONDS - (now - first_pending_at),
+        )
+        sleep_seconds = min(until_debounce_ready, until_max_wait)
+        if sleep_seconds > 0.0:
+            time.sleep(min(sleep_seconds, 1.0))
+            continue
+
+        with _retrain_state_lock:
+            if not _retrain_dirty:
+                continue
+            # Consume current pending signal and run exactly one retrain.
+            _retrain_dirty = False
+            _retrain_first_pending_at = 0.0
+            _retrain_last_request_at = 0.0
+        _run_single_retrain(controller)
+
+
+def request_retrain(controller: MLController):
+    global _retrain_dirty, _retrain_worker_running
+    global _retrain_first_pending_at, _retrain_last_request_at
+    now = time.monotonic()
+    should_start_worker = False
+    with _retrain_state_lock:
+        if not _retrain_dirty:
+            _retrain_first_pending_at = now
+        _retrain_last_request_at = now
+        _retrain_dirty = True
+        if not _retrain_worker_running:
+            _retrain_worker_running = True
+            should_start_worker = True
+    if should_start_worker:
+        Thread(
+            target=_retrain_worker_loop,
+            args=(controller,),
+            daemon=True,
+        ).start()
 
 
 def get_controller() -> MLController:
@@ -177,7 +272,8 @@ async def predict_embedding(request: EmbeddingRequest):
         embedding = np.array(decoded_embedding, dtype=np.float32)
         
         # Run prediction
-        predicted_label, confidence = controller.predict_image(
+        predicted_label, confidence = _predict_with_retry(
+            controller,
             embedding,
             user_id=request.user_id or "",
         )
@@ -216,11 +312,6 @@ async def verify_identity(request: EmbeddingRequest):
     import numpy as np
 
     controller = get_controller()
-    if _training_lock.locked():
-        raise HTTPException(
-            status_code=409,
-            detail="Model is training. Please try biometric authentication again in a moment.",
-        )
     raw_embedding = _decode_embedding_payload(request.embedding)
     if not raw_embedding:
         raise HTTPException(status_code=400, detail="Embedding is required for verification")
@@ -232,11 +323,12 @@ async def verify_identity(request: EmbeddingRequest):
     frame_results = []
     for embedding_item in embedding_batch:
         embedding = np.array(embedding_item, dtype=np.float32)
-        predicted_label, confidence = controller.predict_image(
+        predicted_label, confidence = _predict_with_retry(
+            controller,
             embedding,
             user_id=request.user_id,
         )
-        guessed_label, guessed_confidence = controller.predict_image(embedding)
+        guessed_label, guessed_confidence = _predict_with_retry(controller, embedding)
         is_match = (
             str(predicted_label) == request.user_id
             and str(predicted_label) != "unknown"
@@ -296,9 +388,9 @@ async def verify_identity(request: EmbeddingRequest):
 
 
 @app.post("/add_embedding")
-async def add_embedding(request: EmbeddingRequest, background_tasks: BackgroundTasks):
+async def add_embedding(request: EmbeddingRequest):
     """
-    Add a new embedding to the database and re-train the model.
+    Add a new embedding to the database and request model retraining.
     """
     controller = get_controller()
     if not request.user_id:
@@ -306,12 +398,12 @@ async def add_embedding(request: EmbeddingRequest, background_tasks: BackgroundT
     if request.embedding is None or len(request.embedding) == 0:
         raise HTTPException(status_code=400, detail="embedding is required for adding an embedding")
     controller.add_embedding(request.user_id, request.embedding)
-    background_tasks.add_task(retrain_model_task, controller)
-    return {"message": "Embedding added; retraining started"}
+    request_retrain(controller)
+    return {"message": "Embedding added; retraining scheduled"}
 
 
 @app.post("/initial_training")
-async def initial_training(background_tasks: BackgroundTasks):
+async def initial_training():
     """
     Initial model training using embeddings already in the DB.
     """
@@ -321,8 +413,8 @@ async def initial_training(background_tasks: BackgroundTasks):
     print(f"Database path: {controller._db_path}")
     if controller.get_embedding_count() == 0:
         raise HTTPException(status_code=400, detail="No embeddings found in DB for training")
-    background_tasks.add_task(retrain_model_task, controller)
-    return {"message": "Initial training started from DB embeddings"}
+    request_retrain(controller)
+    return {"message": "Initial training scheduled from DB embeddings"}
 
 # ============== Main ==============
 
