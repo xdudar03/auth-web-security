@@ -14,6 +14,9 @@ import {
   type FormValues,
 } from '../../lib/anonymization/anonymizationHandlers';
 import ProvidersManager from './ProvidersManager';
+import { generateDek, encryptWithDek, decryptWithDek } from '@/lib/encryption';
+
+// store wrappedDek + wrapIv + salt (+ params), never store password
 
 export default function AccountInfo() {
   const { user, shops, privacy } = useUser();
@@ -82,10 +85,23 @@ export default function AccountInfo() {
           ...values,
           roleId: user?.roleId,
         } as UserType;
+        console.log('original data', updates);
+        const key = await generateDek();
+        const encryptedData = await encryptWithDek(
+          key,
+          JSON.stringify(updates)
+        );
+        console.log('encryptedData', encryptedData);
         await updateUserMutation.mutateAsync({
           userId: user?.userId ?? '',
           updates: updates,
         });
+        const decryptedData = await decryptWithDek(
+          key,
+          encryptedData.ciphertextB64,
+          encryptedData.ivB64
+        );
+        console.log('decryptedData', decryptedData);
       } catch (error: unknown) {
         console.error('Error saving account info', error);
       }

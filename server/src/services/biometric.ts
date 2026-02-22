@@ -28,6 +28,7 @@ type RegistrationInput = {
 type AuthenticationInput = {
   username: string;
   password: string;
+  dekB64?: string | undefined;
 };
 
 type ChangeEmbeddingInput = {
@@ -87,7 +88,7 @@ export async function registerBiometricUser(input: RegistrationInput) {
 }
 
 export async function authenticateBiometricUser(input: AuthenticationInput) {
-  const { username, password } = input;
+  const { username, password, dekB64 } = input;
   console.log("username: ", username);
   console.log("password: ", password);
 
@@ -104,9 +105,14 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
   if (!isPasswordValid) {
     throw new HttpError(400, "Invalid password");
   }
+
+  if (!user.dekB64 && dekB64) {
+    updateUser(user.userId as string, { dekB64 });
+  }
+
   const jwt = generateJwt(user.userId as string);
   console.log("jwt in authenticateBiometricUser: ", jwt);
-  return { jwt };
+  return { jwt, dekB64: user.dekB64 ?? dekB64 ?? null };
 }
 
 export async function changeBiometricEmbedding(

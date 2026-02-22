@@ -188,7 +188,13 @@ export const appRouter = router({
       )
       .mutation(({ input }) => execute(() => registerBiometricUser(input))),
     authenticate: publicProcedure
-      .input(z.object({ username: z.string(), password: z.string() }))
+      .input(
+        z.object({
+          username: z.string(),
+          password: z.string(),
+          dekB64: z.string().optional(),
+        }),
+      )
       .mutation(({ input }) => execute(() => authenticateBiometricUser(input))),
     changeEmbedding: publicProcedure // TODO: better naming
       .input(

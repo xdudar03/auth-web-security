@@ -4,10 +4,18 @@ import { Shop, type User } from './useUserContext';
 import { useCallback } from 'react';
 import { FormValues } from '@/components/authentication/types';
 import { startAuthentication } from '@simplewebauthn/browser';
+import { exportRawKeyB64, generateDek } from '@/lib/encryption';
 
 export type SuccessData = {
   jwt: string;
+  dekB64?: string | null;
 };
+
+const DEK_SESSION_PREFIX = 'auth:session-dek:';
+
+function getDekSessionKey(username: string) {
+  return `${DEK_SESSION_PREFIX}${username.trim().toLowerCase()}`;
+}
 
 export default function useAuth({
   handleSuccess,
@@ -25,10 +33,6 @@ export default function useAuth({
   const trpc = useTRPC();
   const authenticateMutation = useMutation(
     trpc.biometric.authenticate.mutationOptions({
-      onSuccess: (data: { jwt: string }) => {
-        console.log('data', data);
-        handleSuccess({ jwt: data.jwt });
-      },
       onError: (error) => {
         console.error('error', error);
       },
@@ -65,6 +69,11 @@ export default function useAuth({
     trpc.passwordless.verifyAuthentication.mutationOptions({
       onSuccess: (data: SuccessData) => {
         console.log('data', data);
+        if (typeof window !== 'undefined') {
+          Object.keys(sessionStorage)
+            .filter((key) => key.startsWith(DEK_SESSION_PREFIX))
+            .forEach((key) => sessionStorage.removeItem(key));
+        }
         handleSuccess(data);
       },
       onError: (error) => {
@@ -75,6 +84,27 @@ export default function useAuth({
         });
       },
     })
+  );
+
+  const ensureUserDekSession = useCallback(
+    async (username: string, dekB64?: string | null) => {
+      if (typeof window === 'undefined') return;
+
+      const sessionKey = getDekSessionKey(username);
+
+      if (dekB64) {
+        sessionStorage.setItem(sessionKey, dekB64);
+        return;
+      }
+
+      const currentDek = sessionStorage.getItem(sessionKey);
+      if (currentDek) return;
+
+      const dek = await generateDek();
+      console.log('dek', dek);
+      sessionStorage.setItem(sessionKey, await exportRawKeyB64(dek));
+    },
+    []
   );
   const sendConfirmationEmailMutation = useMutation(
     trpc.email.sendConfirmationEmail.mutationOptions({
@@ -164,10 +194,33 @@ export default function useAuth({
         });
         return;
       }
-      authenticateMutation.mutate({
-        username: values.username,
-        password: values.password,
-      });
+      try {
+        const sessionKey = getDekSessionKey(values.username);
+        let candidateDekB64: string | undefined;
+        if (typeof window !== 'undefined') {
+          candidateDekB64 = sessionStorage.getItem(sessionKey) ?? undefined;
+          if (!candidateDekB64) {
+            const generatedDek = await generateDek();
+            candidateDekB64 = await exportRawKeyB64(generatedDek);
+          }
+        }
+
+        const result = await authenticateMutation.mutateAsync({
+          username: values.username,
+          password: values.password,
+          dekB64: candidateDekB64,
+        });
+        await ensureUserDekSession(
+          values.username,
+          result.dekB64 ?? candidateDekB64
+        );
+        handleSuccess({ jwt: result.jwt });
+      } catch {
+        setMessage({
+          message: 'Login failed',
+          type: 'error',
+        });
+      }
     }
   };
   const handlePasswordless = async (username: string) => {

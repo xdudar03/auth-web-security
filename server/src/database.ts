@@ -32,6 +32,7 @@ const initTable = () => {
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       userId TEXT NOT NULL UNIQUE,
+      dekB64 TEXT,
       username TEXT NOT NULL UNIQUE,
       email TEXT NOT NULL,
       firstName TEXT,
@@ -53,6 +54,20 @@ const initTable = () => {
       FOREIGN KEY (roleId) REFERENCES roles(roleId)
     )
   `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_private_data (
+    userId TEXT PRIMARY KEY,
+    original_cipher BLOB NOT NULL,
+    original_nonce BLOB NOT NULL,
+    original_aad TEXT,
+    original_version INTEGER NOT NULL DEFAULT 1,  
+  
+    anonymized_json TEXT,
+    anonymized_version INTEGER NOT NULL DEFAULT 1,
+  
+    updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (userId) REFERENCES users(userId)
+  )`);
   db.exec(`
     CREATE TABLE IF NOT EXISTS customers (
       customerId TEXT NOT NULL UNIQUE,
@@ -226,7 +241,7 @@ function mapUndefinedToNull<T extends Record<string, any>>(
 }
 
 const addUserQuery = db.prepare(
-  `INSERT INTO users (userId, username, email, firstName, lastName, password, roleId, isBiometric, phoneNumber, dateOfBirth, gender, address, city, state, zip, country, spendings, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, // credentials is a base64 string
+  `INSERT INTO users (userId, dekB64, username, email, firstName, lastName, password, roleId, isBiometric, phoneNumber, dateOfBirth, gender, address, city, state, zip, country, spendings, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, // credentials is a base64 string
 );
 
 const addUser = (user: User) => {
@@ -234,6 +249,7 @@ const addUser = (user: User) => {
   const biometricFlag = userWithoutUndefined.isBiometric ? 1 : 0;
   addUserQuery.run(
     userWithoutUndefined.userId,
+    userWithoutUndefined.dekB64,
     userWithoutUndefined.username,
     userWithoutUndefined.email,
     userWithoutUndefined.firstName,
@@ -337,6 +353,7 @@ const getShopUsersQuery = db.prepare(
   `SELECT
     users.userId,
     users.username,
+    users.dekB64,
     users.password,
     users.roleId,
     users.credentials,
@@ -366,6 +383,7 @@ const getShopUsersQuery = db.prepare(
   SELECT
     customers.customerId AS userId,
     customers.customerId AS username,
+    NULL AS dekB64,
     '' AS password,
     NULL AS roleId,
     NULL AS credentials,
@@ -418,6 +436,7 @@ function updateUserQuery(userId: string, updates: Record<string, any>) {
   const allowedFields = [
     "username",
     "email",
+    "dekB64",
     "password",
     "firstName",
     "lastName",

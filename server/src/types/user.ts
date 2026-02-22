@@ -3,6 +3,7 @@ import { PrivacySettings } from "./privacySetting.ts";
 
 export const User = z.object({
   userId: z.string(),
+  dekB64: z.optional(z.string().nullable()),
   username: z.string(),
   password: z.string(),
   roleId: z.optional(z.number().nullable()),
