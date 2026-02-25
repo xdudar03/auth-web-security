@@ -1,23 +1,45 @@
 import type { JwtPayload } from "jsonwebtoken";
 import {
-  db,
   getRoleByUserId,
   getUserById,
+  getUserPrivateDataByUserId,
   getUserPrivacyByUserId,
   getUserShops,
 } from "../database.ts";
 import { HttpError } from "../errors.ts";
-import type { User } from "../types/user.ts";
+import type { User, UserPrivateData as UserPrivateDataType } from "../types/user.ts";
 import type { Role } from "../types/role.ts";
 import type { Shop } from "../types/shop.ts";
 import type { PrivacySettings } from "../types/privacySetting.ts";
 
-export default function getUserInfo(user: JwtPayload | null): {
+function buildEncryptedOnlyBaseUser(user: User): User {
+  return {
+    ...user,
+    username: "",
+    email: "",
+    firstName: null,
+    lastName: null,
+    phoneNumber: null,
+    dateOfBirth: null,
+    gender: null,
+    address: null,
+    city: null,
+    state: null,
+    zip: null,
+    country: null,
+    spendings: null,
+    shoppingHistory: null,
+  };
+}
+
+export default async function getUserInfo(user: JwtPayload | null): Promise<{
   user: User;
   role: Role;
   shops: Shop[];
   privacy: PrivacySettings[];
-} {
+  hasPrivateData: boolean;
+  privateData: UserPrivateDataType | null;
+}> {
   if (!user) {
     throw new HttpError(401, "User not found");
   }
@@ -32,10 +54,18 @@ export default function getUserInfo(user: JwtPayload | null): {
   }
   const userShops = getUserShops(user.userId);
   const userPrivacy = getUserPrivacyByUserId(user.userId);
+  const userPrivateData = getUserPrivateDataByUserId(user.userId);
+  const originalCipher = userPrivateData?.original_cipher ?? null;
+  const originalIv = userPrivateData?.original_iv ?? null;
+  const hasPrivateData = Boolean(originalCipher && originalIv);
+  const resolvedUserInfo = buildEncryptedOnlyBaseUser(userInfo);
+
   return {
-    user: userInfo,
+    user: resolvedUserInfo,
     role: role,
     shops: userShops,
     privacy: userPrivacy,
+    hasPrivateData,
+    privateData: userPrivateData,
   };
 }

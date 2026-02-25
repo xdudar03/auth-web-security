@@ -20,6 +20,8 @@ import {
   getUserWithRoleById,
   listUsers,
   updateUserById,
+  addUserPrivateData,
+  updateUserPrivateData,
 } from "./services/admin.ts";
 import { checkHealth, pingHealth } from "./services/health.ts";
 import {
@@ -51,7 +53,11 @@ import {
   getTransactionsByShopIdService,
   addTestTransactionsService,
 } from "./services/transactions.ts";
-import type { User } from "./types/user.ts";
+import type {
+  User,
+  UserPrivateData as UserPrivateDataType,
+} from "./types/user.ts";
+import { UserPrivateData } from "./types/user.ts";
 
 function mapHttpStatusToTrpcCode(status: number): TRPCError["code"] {
   if (status >= 500) return "INTERNAL_SERVER_ERROR";
@@ -287,6 +293,62 @@ export const appRouter = router({
           });
         }
         return execute(() => updateUserById(input.userId, input.updates));
+      }),
+    addUserPrivateData: publicProcedure
+      .input(
+        z.object({
+          userId: z.string(),
+          privateData: UserPrivateData.omit({ userId: true }).passthrough(),
+        }),
+      )
+      .mutation(({ input, ctx }) => {
+        const currentUserId = (ctx.user as User)?.userId;
+        if (!currentUserId) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Not authenticated",
+          });
+        }
+        if (currentUserId !== input.userId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Users can only add their own private data",
+          });
+        }
+        return execute(() =>
+          addUserPrivateData(input.userId, {
+            userId: input.userId,
+            ...input.privateData,
+          } as UserPrivateDataType),
+        );
+      }),
+    updateUserPrivateData: publicProcedure
+      .input(
+        z.object({
+          userId: z.string(),
+          privateData: UserPrivateData.omit({ userId: true }).passthrough(),
+        }),
+      )
+      .mutation(({ input, ctx }) => {
+        const currentUserId = (ctx.user as User)?.userId;
+        if (!currentUserId) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Not authenticated",
+          });
+        }
+        if (currentUserId !== input.userId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Users can only update their own private data",
+          });
+        }
+        return execute(() =>
+          updateUserPrivateData(input.userId, {
+            userId: input.userId,
+            ...input.privateData,
+          } as UserPrivateDataType),
+        );
       }),
   }),
   shops: router({

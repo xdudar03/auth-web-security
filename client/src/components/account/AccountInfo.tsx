@@ -1,6 +1,6 @@
 'use client';
 import { Shop, useUser, type User as UserType } from '@/hooks/useUserContext';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Form } from '../ui/form';
 import { useForm } from 'react-hook-form';
 import { useTRPC } from '@/hooks/TrpcContext';
@@ -14,12 +14,16 @@ import {
   type FormValues,
 } from '../../lib/anonymization/anonymizationHandlers';
 import ProvidersManager from './ProvidersManager';
-import { generateDek, encryptWithDek, decryptWithDek } from '@/lib/encryption';
-
-// store wrappedDek + wrapIv + salt (+ params), never store password
+import {
+  decryptWithDek,
+  encryptWithDek,
+  exportRawKeyB64,
+  generateDek,
+  importRawAesKey,
+} from '@/lib/encryption';
 
 export default function AccountInfo() {
-  const { user, shops, privacy } = useUser();
+  const { user, shops, privacy, hasPrivateData, privateData } = useUser();
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [messages, setMessages] = useState<Record<string, string>>({});
   const trpc = useTRPC();
@@ -38,6 +42,32 @@ export default function AccountInfo() {
           'Error updating user',
           error instanceof Error ? error.message : 'Unknown error'
         );
+      },
+    })
+  );
+
+  const addUserPrivateDataMutation = useMutation(
+    trpc.user.addUserPrivateData.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: trpc.info.getUserInfo.queryOptions().queryKey,
+        });
+      },
+      onError: (error: unknown) => {
+        console.error('Error adding user private data', error);
+      },
+    })
+  );
+
+  const updateUserPrivateDataMutation = useMutation(
+    trpc.user.updateUserPrivateData.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: trpc.info.getUserInfo.queryOptions().queryKey,
+        });
+      },
+      onError: (error: unknown) => {
+        console.error('Error updating user private data', error);
       },
     })
   );
@@ -77,6 +107,59 @@ export default function AccountInfo() {
     reValidateMode: 'onChange',
   });
 
+  useEffect(() => {
+    const resetWithValues = (source: Partial<UserType> | null) => {
+      form.reset({
+        username: source?.username ?? '',
+        shops: shops?.map((shop: Shop) => shop.shopName) ?? [],
+        firstName: source?.firstName ?? '',
+        lastName: source?.lastName ?? '',
+        email: source?.email ?? '',
+        phoneNumber: source?.phoneNumber ?? '',
+        dateOfBirth: source?.dateOfBirth ?? '',
+        gender: source?.gender ?? '',
+        country: source?.country ?? '',
+        city: source?.city ?? '',
+        address: source?.address ?? '',
+        zip: source?.zip ?? '',
+        spendings: source?.spendings ?? '',
+        shoppingHistory: source?.shoppingHistory ?? '',
+      });
+    };
+
+    const loadDecryptedUser = async () => {
+      if (!user) {
+        resetWithValues(null);
+        return;
+      }
+
+      if (
+        hasPrivateData &&
+        user.dekB64 &&
+        privateData?.original_cipher &&
+        privateData?.original_iv
+      ) {
+        try {
+          const key = await importRawAesKey(user.dekB64);
+          const decrypted = await decryptWithDek(
+            key,
+            privateData.original_cipher,
+            privateData.original_iv
+          );
+          const parsed = JSON.parse(decrypted) as Partial<UserType>;
+          resetWithValues(parsed);
+          return;
+        } catch (error) {
+          console.error('Error decrypting account info', error);
+        }
+      }
+
+      resetWithValues(user);
+    };
+
+    loadDecryptedUser();
+  }, [form, hasPrivateData, privateData, shops, user]);
+
   const handleOnSave = async (values: FormValues) => {
     if (mode === 'edit') {
       try {
@@ -85,23 +168,41 @@ export default function AccountInfo() {
           ...values,
           roleId: user?.roleId,
         } as UserType;
-        console.log('original data', updates);
-        const key = await generateDek();
+
+        let dekB64 = user?.dekB64 ?? null;
+        if (!dekB64) {
+          const newDek = await generateDek();
+          dekB64 = await exportRawKeyB64(newDek);
+        }
+
+        const key = await importRawAesKey(dekB64);
         const encryptedData = await encryptWithDek(
           key,
           JSON.stringify(updates)
         );
-        console.log('encryptedData', encryptedData);
-        await updateUserMutation.mutateAsync({
+
+        if (!user?.dekB64) {
+          await updateUserMutation.mutateAsync({
+            userId: user?.userId ?? '',
+            updates: {
+              dekB64,
+            },
+          });
+        }
+
+        const privateDataPayload = {
           userId: user?.userId ?? '',
-          updates: updates,
-        });
-        const decryptedData = await decryptWithDek(
-          key,
-          encryptedData.ciphertextB64,
-          encryptedData.ivB64
-        );
-        console.log('decryptedData', decryptedData);
+          privateData: {
+            original_cipher: encryptedData.ciphertextB64,
+            original_iv: encryptedData.ivB64,
+          },
+        };
+
+        if (hasPrivateData) {
+          await updateUserPrivateDataMutation.mutateAsync(privateDataPayload);
+        } else {
+          await addUserPrivateDataMutation.mutateAsync(privateDataPayload);
+        }
       } catch (error: unknown) {
         console.error('Error saving account info', error);
       }
@@ -140,7 +241,7 @@ export default function AccountInfo() {
           className="flex flex-col gap-2"
         >
           <AccountHeader
-            username={user?.username}
+            username={form.watch('username')}
             shops={shops}
             isEditMode={mode === 'edit'}
             onModeToggle={() => setMode(mode === 'view' ? 'edit' : 'view')}

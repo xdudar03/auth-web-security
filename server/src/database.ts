@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { User } from "./types/user.ts";
+import { User, UserPrivateData } from "./types/user.ts";
 import { Token } from "./types/token.ts";
 import { Role } from "./types/role.ts";
 import { Shop } from "./types/shop.ts";
@@ -57,16 +57,20 @@ const initTable = () => {
   `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS user_private_data (
-    userId TEXT PRIMARY KEY,
-    original_cipher BLOB NOT NULL,
-    original_nonce BLOB NOT NULL,
-    original_aad TEXT,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId TEXT NOT NULL UNIQUE,
+    original_cipher BLOB ,
+    original_iv BLOB,
     original_version INTEGER NOT NULL DEFAULT 1,  
+    original_aad BLOB,
   
-    anonymized_json TEXT,
+    anonymized_cipher BLOB,
+    anonymized_iv BLOB,
+    anonymized_aad BLOB,
     anonymized_version INTEGER NOT NULL DEFAULT 1,
-  
-    updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+    
+    createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (userId) REFERENCES users(userId)
   )`);
   db.exec(`
@@ -449,6 +453,10 @@ const getUserPrivacyPresetById = (userId: string) => {
 
 const getUserByIdQuery = db.prepare(`SELECT * FROM users WHERE userId = ?`);
 
+const getUserPrivateDataByUserIdQuery = db.prepare(
+  `SELECT * FROM user_private_data WHERE userId = ?`,
+);
+
 function updateUserQuery(userId: string, updates: Record<string, any>) {
   const allowedFields = [
     "username",
@@ -670,6 +678,95 @@ const getUserById = (userId: string | null) => {
     return null;
   }
   return result.data;
+};
+
+const getUserPrivateDataByUserId = (userId: string) => {
+  const row = getUserPrivateDataByUserIdQuery.get(userId) as
+    | Record<string, unknown>
+    | undefined;
+  if (!row) {
+    return null;
+  }
+
+  const normalizeBlob = (value: unknown): unknown => {
+    if (value instanceof Uint8Array) {
+      return Buffer.from(value).toString("utf8");
+    }
+    return value;
+  };
+
+  const normalized = {
+    ...row,
+    original_cipher: normalizeBlob(row.original_cipher),
+    original_iv: normalizeBlob(row.original_iv),
+    original_aad: normalizeBlob(row.original_aad),
+    anonymized_cipher: normalizeBlob(row.anonymized_cipher),
+    anonymized_iv: normalizeBlob(row.anonymized_iv),
+    anonymized_aad: normalizeBlob(row.anonymized_aad),
+  };
+
+  const result = UserPrivateData.safeParse(normalized);
+  if (!result.success) {
+    console.error("Parse error in getUserPrivateDataByUserId:", result.error);
+    return null;
+  }
+  return result.data;
+};
+
+const addUserPrivateDataQuery = db.prepare(
+  `INSERT INTO user_private_data (userId, original_cipher, original_iv, original_aad, anonymized_cipher, anonymized_iv, anonymized_aad)
+   VALUES (?, ?, ?, ?, ?, ?, ?)
+   ON CONFLICT(userId) DO UPDATE SET
+     original_cipher = excluded.original_cipher,
+     original_iv = excluded.original_iv,
+     original_aad = excluded.original_aad,
+     anonymized_cipher = excluded.anonymized_cipher,
+     anonymized_iv = excluded.anonymized_iv,
+     anonymized_aad = excluded.anonymized_aad,
+     updatedAt = CURRENT_TIMESTAMP`,
+);
+
+const addUserPrivateData = (userId: string, privateData: UserPrivateData) => {
+  addUserPrivateDataQuery.run(
+    userId,
+    privateData.original_cipher ?? null,
+    privateData.original_iv ?? null,
+    privateData.original_aad ?? null,
+    privateData.anonymized_cipher ?? null,
+    privateData.anonymized_iv ?? null,
+    privateData.anonymized_aad ?? null,
+  );
+};
+
+function updateUserPrivateDataQuery(
+  userId: string,
+  privateData: UserPrivateData,
+) {
+  const allFields = Object.keys(privateData).filter(
+    (field) => field !== "userId",
+  );
+  const updateFields = allFields
+    .map((field) => {
+      return `${field} = ?`;
+    })
+    .join(", ");
+  const values = allFields.map((field) => {
+    const value = privateData[field as keyof UserPrivateData];
+    return value ?? null;
+  });
+  values.push(userId);
+  const stmt = db.prepare(
+    `UPDATE user_private_data SET ${updateFields} WHERE userId = ?`,
+  );
+  const result = stmt.run(...values);
+  return result;
+}
+
+const updateUserPrivateData = (
+  userId: string,
+  privateData: UserPrivateData,
+) => {
+  updateUserPrivateDataQuery(userId, privateData);
 };
 
 const deleteUser = (userId: string) => {
@@ -1154,6 +1251,7 @@ export {
   getAllUsers,
   getUserByUsername,
   getUserById,
+  getUserPrivateDataByUserId,
   getRoleByUserId,
   updateUser,
   addCustomerToShop,
@@ -1170,6 +1268,7 @@ export {
   addShop,
   getShopById,
   getShopByOwnerId,
+  addUserPrivateData,
   addUserToShop,
   getUserShops,
   getShopUsers,
@@ -1188,6 +1287,7 @@ export {
   updateUserPrivacy,
   insertUserPrivacy,
   getUserPrivacyByUserIdAndField,
+  updateUserPrivateData,
   addItem,
   getItemByNameAndShop,
   addTransaction,

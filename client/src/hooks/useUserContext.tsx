@@ -4,6 +4,7 @@ import { useTRPC } from './TrpcContext';
 import { useQuery } from '@tanstack/react-query';
 import useJwt from './useJwt';
 import type { User } from '../../../server/src/types/user.ts';
+import type { UserPrivateData } from '../../../server/src/types/user.ts';
 import type { Role } from '../../../server/src/types/role.ts';
 import type {
   PrivacySettings,
@@ -22,6 +23,8 @@ export const UserContext = createContext<
       privacy: PrivacySettings[] | null;
       isLoading: boolean;
       isPending: boolean;
+      hasPrivateData: boolean;
+      privateData: UserPrivateData | null;
       privacyPreset: Record<string, Visibility> | null;
       setPrivacyPreset: (preset: Record<string, Visibility>) => void;
     }
@@ -69,6 +72,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
   const isLoading = getUserInfoQuery.isLoading;
   const isPending = getUserInfoQuery.isPending;
+  const hasPrivateData = getUserInfoQuery.data?.hasPrivateData ?? false;
+  const privateData = getUserInfoQuery.data?.privateData ?? null;
 
   // console.log('user in context', user);
   return (
@@ -81,6 +86,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         privacy,
         isLoading,
         isPending,
+        hasPrivateData,
+        privateData,
         privacyPreset,
         setPrivacyPreset,
       }}
