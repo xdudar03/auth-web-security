@@ -1,9 +1,13 @@
-import { addUser, addUserEmbedding, getUserById } from "../database.ts";
+import {
+  addCustomer,
+  addCustomerEmbedding,
+  addUser,
+  addUserEmbedding,
+} from "../database.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { dpSvdEmbeddingFromMatrix } from "../lib/dpSvd.ts";
 import sharp from "sharp";
-import { initialModelTraining } from "../services/model.ts";
 
 const TARGET_SIZE = 100;
 const DP_SVD_OPTIONS = {
@@ -13,6 +17,29 @@ const DP_SVD_OPTIONS = {
   blockSize: 25,
 };
 
+const USER_IDS = [
+  "u101",
+  "u102",
+  "u103",
+  "u104",
+  "u105",
+  "u106",
+  "u107",
+  "u108",
+] as const;
+const CUSTOMER_IDS = [
+  "c109",
+  "c110",
+  "c111",
+  "c112",
+  "c113",
+  "c114",
+  "c115",
+] as const;
+
+const USER_ID_SET = new Set<string>(USER_IDS);
+const CUSTOMER_ID_SET = new Set<string>(CUSTOMER_IDS);
+
 addUser({
   userId: "u106",
   username: "u106",
@@ -20,6 +47,7 @@ addUser({
   email: "u106@example.com",
   isBiometric: false,
   roleId: 2,
+  privacyPreset: "pl4",
 });
 addUser({
   userId: "u107",
@@ -28,6 +56,7 @@ addUser({
   email: "u107@example.com",
   isBiometric: false,
   roleId: 2,
+  privacyPreset: "pl4",
 });
 addUser({
   userId: "u108",
@@ -36,62 +65,35 @@ addUser({
   email: "u108@example.com",
   isBiometric: false,
   roleId: 2,
+  privacyPreset: "pl4",
 });
-addUser({
-  userId: "u109",
-  username: "u109",
-  password: "u109",
-  email: "u109@example.com",
-  isBiometric: false,
-  roleId: 2,
+addCustomer({
+  customerId: "c109",
+  isBiometric: true,
 });
-addUser({
-  userId: "u110",
-  username: "u110",
-  password: "u110",
-  email: "u110@example.com",
-  isBiometric: false,
-  roleId: 2,
+addCustomer({
+  customerId: "c110",
+  isBiometric: true,
 });
-addUser({
-  userId: "u111",
-  username: "u111",
-  password: "u111",
-  email: "u111@example.com",
-  isBiometric: false,
-  roleId: 2,
+addCustomer({
+  customerId: "c111",
+  isBiometric: true,
 });
-addUser({
-  userId: "u112",
-  username: "u112",
-  password: "u112",
-  email: "u112@example.com",
-  isBiometric: false,
-  roleId: 2,
+addCustomer({
+  customerId: "c112",
+  isBiometric: true,
 });
-addUser({
-  userId: "u113",
-  username: "u113",
-  password: "u113",
-  email: "u113@example.com",
-  isBiometric: false,
-  roleId: 2,
+addCustomer({
+  customerId: "c113",
+  isBiometric: true,
 });
-addUser({
-  userId: "u114",
-  username: "u114",
-  password: "u114",
-  email: "u114@example.com",
-  isBiometric: false,
-  roleId: 2,
+addCustomer({
+  customerId: "c114",
+  isBiometric: true,
 });
-addUser({
-  userId: "u115",
-  username: "u115",
-  password: "u115",
-  email: "u115@example.com",
-  isBiometric: false,
-  roleId: 2,
+addCustomer({
+  customerId: "c115",
+  isBiometric: true,
 });
 
 const collectImages = (dirPath: string): string[] => {
@@ -151,7 +153,7 @@ const addEmbeddings = async () => {
   }
 
   const embeddingsByUser = new Map<string, number[][]>();
-
+  const embeddingsByCustomer = new Map<string, number[][]>();
   for (const imagePath of images) {
     const subjectId = parseSubjectId(imagePath);
     if (!subjectId) {
@@ -161,9 +163,9 @@ const addEmbeddings = async () => {
     if (Number.isNaN(numericSubjectId)) {
       continue;
     }
-    // subject01 -> u101, subject10 -> u110, subject15 -> u115
+    // subject01 -> u101/c101, subject10 -> u110/c110, subject15 -> u115/c115
     const uId = `u${100 + numericSubjectId}`;
-
+    const cId = `c${100 + numericSubjectId}`;
     try {
       const { data, info } = await sharp(imagePath)
         .resize(TARGET_SIZE, TARGET_SIZE, { fit: "fill" })
@@ -178,9 +180,17 @@ const addEmbeddings = async () => {
         info.channels,
       );
       const embedding = dpSvdEmbeddingFromMatrix(matrix, DP_SVD_OPTIONS);
-      const existing = embeddingsByUser.get(uId) ?? [];
-      existing.push(embedding);
-      embeddingsByUser.set(uId, existing);
+      if (USER_ID_SET.has(uId)) {
+        const existing = embeddingsByUser.get(uId) ?? [];
+        existing.push(embedding);
+        embeddingsByUser.set(uId, existing);
+      }
+
+      if (CUSTOMER_ID_SET.has(cId)) {
+        const existingCustomer = embeddingsByCustomer.get(cId) ?? [];
+        existingCustomer.push(embedding);
+        embeddingsByCustomer.set(cId, existingCustomer);
+      }
     } catch (error) {
       console.error(`Failed to process ${imagePath}`, error);
     }
@@ -190,11 +200,16 @@ const addEmbeddings = async () => {
     if (!embeddings.length) {
       continue;
     }
-    if (!getUserById(userId)) {
-      console.warn(`Skipping embeddings for unknown userId: ${userId}`);
+
+    addUserEmbedding(userId, JSON.stringify(embeddings));
+  }
+
+  for (const [customerId, embeddings] of embeddingsByCustomer.entries()) {
+    if (!embeddings.length) {
       continue;
     }
-    addUserEmbedding(userId, JSON.stringify(embeddings));
+
+    addCustomerEmbedding(customerId, JSON.stringify(embeddings));
   }
 };
 

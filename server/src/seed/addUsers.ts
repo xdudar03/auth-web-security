@@ -29,7 +29,9 @@ const addUsers = () => {
     password: bcrypt.hashSync("user", salt), // password
     roleId: 2, // roleId
     isBiometric: false,
+    privacyPreset: "pl4",
   });
+
   addPseudonym({
     pseudoId: "puser",
     userId: "2",

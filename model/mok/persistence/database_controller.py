@@ -22,6 +22,7 @@ class DatabaseController:
 
     _embeddings_table_name = "user_embeddings"
     _embeddings_user_id = "userId"
+    _embeddings_customer_id = "customerId"
     _embeddings_data = "embedding"
 
     # Dataset directories
@@ -46,9 +47,14 @@ class DatabaseController:
         self.cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS {self._embeddings_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                {self._embeddings_user_id} TEXT NOT NULL,
+                {self._embeddings_user_id} TEXT,
+                {self._embeddings_customer_id} TEXT,
                 {self._embeddings_data} TEXT NOT NULL,
-                createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+                createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+                CHECK (
+                    ({self._embeddings_user_id} IS NOT NULL AND {self._embeddings_customer_id} IS NULL) OR
+                    ({self._embeddings_user_id} IS NULL AND {self._embeddings_customer_id} IS NOT NULL)
+                )
             )
         ''')
         self.conn.commit()
@@ -68,10 +74,14 @@ class DatabaseController:
         else:
             serialized = str(embedding)
         print(f"Serialized embedding: {serialized}")
+        is_customer = isinstance(user_id, str) and user_id.startswith("c")
+        target_column = (
+            self._embeddings_customer_id if is_customer else self._embeddings_user_id
+        )
         for attempt in range(1, SQLITE_LOCK_RETRY_ATTEMPTS + 1):
             try:
                 self.cursor.execute(
-                    f"INSERT INTO {self._embeddings_table_name} ({self._embeddings_user_id}, {self._embeddings_data}) VALUES (?, ?)",
+                    f"INSERT INTO {self._embeddings_table_name} ({target_column}, {self._embeddings_data}) VALUES (?, ?)",
                     (user_id, serialized),
                 )
                 self.conn.commit()
@@ -89,11 +99,11 @@ class DatabaseController:
 
     def get_user_id_list(self):
         self.cursor.execute(f"""
-            SELECT DISTINCT {self._embeddings_user_id}
+            SELECT DISTINCT COALESCE({self._embeddings_user_id}, {self._embeddings_customer_id})
             FROM {self._embeddings_table_name}
         """)
         result = self.cursor.fetchall()
-        return [row[0] for row in result] # Send list of user IDs
+        return [row[0] for row in result if row[0] is not None] # Send IDs
 
     def get_user_vectors(self):
         self.cursor.execute(
@@ -104,7 +114,8 @@ class DatabaseController:
 
     def get_embeddings_table(self):
         self.cursor.execute(f"""
-            SELECT {self._embeddings_user_id}, {self._embeddings_data}
+            SELECT COALESCE({self._embeddings_user_id}, {self._embeddings_customer_id}) AS subjectId,
+                   {self._embeddings_data}
             FROM {self._embeddings_table_name}
         """)
         return self.cursor.fetchall()
@@ -119,24 +130,31 @@ class DatabaseController:
         self.cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS {self._embeddings_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                {self._embeddings_user_id} TEXT NOT NULL,
+                {self._embeddings_user_id} TEXT,
+                {self._embeddings_customer_id} TEXT,
                 {self._embeddings_data} TEXT NOT NULL,
-                createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+                createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+                CHECK (
+                    ({self._embeddings_user_id} IS NOT NULL AND {self._embeddings_customer_id} IS NULL) OR
+                    ({self._embeddings_user_id} IS NULL AND {self._embeddings_customer_id} IS NOT NULL)
+                )
             )
         ''')
         self.conn.commit()
         return
 
 
-    def process_dataset(self, user_to_images_b64: dict):
+    def process_dataset(self, user_to_images_b64: dict[str, list[str]]):
         """Reset the DB and insert one row per user with their images encoded in base64."""
         self.reset_database()
         for _user_id, images_b64 in user_to_images_b64.items():
+            if not _user_id:
+                continue
             images_b64 = np.array(images_b64)
             self.add_embedding(_user_id, images_b64)
 
 
-    def load_anonymized_dataset_from_folder(self, directory: str = None):
+    def load_anonymized_dataset_from_folder(self, directory: str | None = None):
         """
         Load anonymized images from a flat folder and populate the database.
 
@@ -169,9 +187,6 @@ class DatabaseController:
             raise RuntimeError(f"No valid anonymized images found in {target_dir}")
 
         self.process_dataset(user_to_images_b64)
-
-
-
 
 
 

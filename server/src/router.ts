@@ -45,6 +45,7 @@ import {
   applyPrivacyPreset,
   getUserPrivacyPreset,
 } from "./services/privacy.ts";
+import { getUserById, updateUser } from "./database.ts";
 import {
   getTransactionsById,
   getTransactionsByShopIdService,
@@ -116,6 +117,7 @@ export const appRouter = router({
           embedding: z.string(),
           username: z.string().optional(),
           userId: z.string().optional(),
+          dekB64: z.string().optional(),
         }),
       )
       .mutation(async ({ input }) =>
@@ -128,9 +130,23 @@ export const appRouter = router({
           if (!result.verified) {
             return result;
           }
+
+          const existingUser = getUserById(result.user_id);
+          if (!existingUser) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "User not found after biometric verification",
+            });
+          }
+
+          if (!existingUser.dekB64 && input.dekB64) {
+            updateUser(result.user_id, { dekB64: input.dekB64 });
+          }
+
           return {
             ...result,
             jwt: generateJwt(result.user_id),
+            dekB64: existingUser.dekB64 ?? input.dekB64 ?? null,
           };
         }),
       ),

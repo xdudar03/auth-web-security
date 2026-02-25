@@ -6,6 +6,7 @@ import { Token } from "./types/token.ts";
 import { Role } from "./types/role.ts";
 import { Shop } from "./types/shop.ts";
 import { Embedding } from "./types/model.ts";
+import { Statistic } from "./types/statistics.ts";
 import {
   PrivacySettings,
   PrivacySettingRecord,
@@ -88,6 +89,22 @@ const initTable = () => {
           (userId IS NULL AND customerId IS NOT NULL)
         )
       )
+    `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shop_visits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shopId INTEGER NOT NULL,
+    userId TEXT,
+    customerId TEXT,
+    visitAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (shopId) REFERENCES shops(shopId),
+    FOREIGN KEY (userId) REFERENCES users(userId),
+    FOREIGN KEY (customerId) REFERENCES customers(customerId),
+    CHECK (
+      (userId IS NOT NULL AND customerId IS NULL) OR
+      (userId IS NULL AND customerId IS NOT NULL)
+    )
+  )
     `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
@@ -485,6 +502,14 @@ function updateUserQuery(userId: string, updates: Record<string, any>) {
   return result;
 }
 
+const addCustomerEmbeddingQuery = db.prepare(
+  `INSERT INTO user_embeddings (customerId, embedding) VALUES (?, ?)`,
+);
+
+const addCustomerEmbedding = (customerId: string, embedding: string) => {
+  addCustomerEmbeddingQuery.run(customerId, embedding);
+};
+
 const addUserEmbeddingQuery = db.prepare(
   `INSERT INTO user_embeddings (userId, embedding) VALUES (?, ?)`,
 );
@@ -849,6 +874,21 @@ const getShopUsers = (shopId: number) => {
   return usersData;
 };
 
+// Statistics queries
+const addStatisticQuery = db.prepare(
+  `INSERT INTO shop_visits (userId, customerId, shopId, visitAt) VALUES (?, ?, ?, ?)`,
+);
+
+const addStatistic = (statistic: Statistic) => {
+  const statisticWithoutId = mapUndefinedToNull(statistic);
+  addStatisticQuery.run(
+    statisticWithoutId.userId,
+    statisticWithoutId.customerId,
+    statisticWithoutId.shopId,
+    statisticWithoutId.visitAt,
+  );
+};
+
 // Token queries
 const addToken = (token: Token) => {
   const tokenWithoutId = mapUndefinedToNull(token);
@@ -1144,6 +1184,7 @@ export {
   getUserWithRoleQuery,
   getAllShops,
   getUserForAuthentication,
+  addCustomerEmbedding,
   updateUserPrivacy,
   insertUserPrivacy,
   getUserPrivacyByUserIdAndField,
@@ -1154,6 +1195,7 @@ export {
   linkUserTransaction,
   addPseudonym,
   getAllEmbeddings,
+  addStatistic,
   getLastInsertRowId,
   getTransactionsByUserId,
   getTransactionsByShopId,
