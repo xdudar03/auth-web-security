@@ -164,17 +164,17 @@ export default function useBiometricCapture({
       const parsed = JSON.parse(payload.embedding);
       const embeddingBatch = Array.isArray(parsed[0]) ? parsed : [parsed];
 
-      let hpkeBundle = getUserHpkeBundle(username);
+      let hpkeBundle = await getUserHpkeBundle(username);
       if (!hpkeBundle) {
         const pair = await generateHpkeKeyPair();
         hpkeBundle = {
           privateKeyJwkB64: await exportHpkePrivateKeyJwkB64(pair.privateKey),
           publicKeyB64: await exportHpkePublicKeyB64(pair.publicKey),
         };
-        saveUserHpkeBundle(username, hpkeBundle);
+        await saveUserHpkeBundle(username, hpkeBundle);
       }
-      setActiveHpkePrivateKey(hpkeBundle.privateKeyJwkB64);
-      setActiveHpkePublicKey(hpkeBundle.publicKeyB64);
+      await setActiveHpkePrivateKey(hpkeBundle.privateKeyJwkB64);
+      await setActiveHpkePublicKey(hpkeBundle.publicKeyB64);
 
       const response = await verify.mutateAsync({
         embedding: JSON.stringify(embeddingBatch),

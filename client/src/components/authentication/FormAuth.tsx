@@ -4,7 +4,15 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
-import { Form } from '@/components/ui/form';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import useAuth from '@/hooks/useAuth';
@@ -14,6 +22,7 @@ import UsernameField from './UsernameField';
 import PasswordField from './PasswordField';
 import RegistrationFields from './RegistrationFields';
 import TestAccountsDialog from './TestAccountsDialog';
+import { Input } from '@/components/ui/input';
 
 export default function FormAuth({
   setTab,
@@ -81,6 +90,7 @@ export default function FormAuth({
       password: user?.password ?? '',
       email: user?.emailHash ?? '',
       shopIds: [],
+      recoveryPassphrase: '',
     },
     mode: 'onTouched',
     reValidateMode: 'onChange',
@@ -125,7 +135,8 @@ export default function FormAuth({
         (!values.username ||
           !values.password ||
           !values.email ||
-          !values.shopIds.length))
+          !values.shopIds.length ||
+          !values.recoveryPassphrase))
     ) {
       setMessage({
         message: 'Please fill in all fields',
@@ -171,7 +182,13 @@ export default function FormAuth({
         shouldTouch: true,
         shouldValidate: false,
       });
-      handleAuthenticate({ username, password, email: '', shopIds: [] });
+      handleAuthenticate({
+        username,
+        password,
+        email: '',
+        shopIds: [],
+        recoveryPassphrase: '',
+      });
     },
     [form, handleAuthenticate]
   );
@@ -192,6 +209,31 @@ export default function FormAuth({
           )}
 
           <PasswordField form={form} title={title} />
+
+          {title === 'Login' && (
+            <FormField
+              control={form.control}
+              name="recoveryPassphrase"
+              render={({ field }) => (
+                <FormItem className="form-field">
+                  <FormLabel>Recovery Passphrase</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      placeholder="Optional: unlock encrypted profile on this device"
+                      autoComplete="current-password"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Required only on a new device if your key is not available in
+                    this browser session.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           {message.message && (
             <div

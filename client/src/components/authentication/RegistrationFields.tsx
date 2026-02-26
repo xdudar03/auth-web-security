@@ -2,6 +2,7 @@ import { Input } from '@/components/ui/input';
 import {
   FormControl,
   FormField,
+  FormDescription,
   FormItem,
   FormLabel,
   FormMessage,
@@ -75,6 +76,28 @@ export default function RegistrationFields({
                 searchable
               />
             </FormControl>
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="recoveryPassphrase"
+        render={({ field }) => (
+          <FormItem className="form-field">
+            <FormLabel>Recovery Passphrase *</FormLabel>
+            <FormControl>
+              <Input
+                type="password"
+                placeholder="Enter your recovery passphrase"
+                autoComplete="new-recovery-phrase"
+                {...field}
+              />
+            </FormControl>
+            <FormDescription>
+              This passphrase will be used to recover your account if you forget
+              your password or lose your device.
+            </FormDescription>
+            <FormMessage />
           </FormItem>
         )}
       />

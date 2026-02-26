@@ -43,7 +43,7 @@ export default function AccountInfoCard() {
       }
 
       try {
-        const privateKeyJwkB64 = getActiveHpkePrivateKeyJwkB64();
+        const privateKeyJwkB64 = await getActiveHpkePrivateKeyJwkB64();
         if (!privateKeyJwkB64) {
           throw new Error('Missing active HPKE private key in session');
         }

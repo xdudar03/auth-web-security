@@ -4,7 +4,9 @@ import { PrivacySettings } from "./privacySetting.ts";
 export const User = z.object({
   userId: z.string(),
   hpkePublicKeyB64: z.optional(z.string().nullable()),
-  dekB64: z.optional(z.string().nullable()),
+  recoverySaltB64: z.optional(z.string().nullable()),
+  encryptedPrivateKey: z.optional(z.string().nullable()),
+  encryptedPrivateKeyIv: z.optional(z.string().nullable()),
   emailHash: z.optional(z.string().nullable()),
   username: z.string(),
   password: z.string(),

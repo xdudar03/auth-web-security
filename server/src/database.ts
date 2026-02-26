@@ -34,7 +34,9 @@ const initTable = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       userId TEXT NOT NULL UNIQUE,
       hpkePublicKeyB64 TEXT,
-      dekB64 TEXT,
+      recoverySaltB64 TEXT,
+      encryptedPrivateKey TEXT,
+      encryptedPrivateKeyIv TEXT,
       emailHash TEXT UNIQUE,
       username TEXT NOT NULL UNIQUE,
       password TEXT NOT NULL,
@@ -220,12 +222,21 @@ const initTable = () => {
 initTable();
 
 const ensureUsersColumns = () => {
-  const columns = db
-    .prepare("PRAGMA table_info(users)")
-    .all() as Array<{ name: string }>;
+  const columns = db.prepare("PRAGMA table_info(users)").all() as Array<{
+    name: string;
+  }>;
   const columnNames = new Set(columns.map((column) => column.name));
   if (!columnNames.has("hpkePublicKeyB64")) {
     db.exec("ALTER TABLE users ADD COLUMN hpkePublicKeyB64 TEXT");
+  }
+  if (!columnNames.has("recoverySaltB64")) {
+    db.exec("ALTER TABLE users ADD COLUMN recoverySaltB64 TEXT");
+  }
+  if (!columnNames.has("encryptedPrivateKey")) {
+    db.exec("ALTER TABLE users ADD COLUMN encryptedPrivateKey TEXT");
+  }
+  if (!columnNames.has("encryptedPrivateKeyIv")) {
+    db.exec("ALTER TABLE users ADD COLUMN encryptedPrivateKeyIv TEXT");
   }
 };
 
@@ -264,7 +275,7 @@ function mapUndefinedToNull<T extends Record<string, any>>(
 }
 
 const addUserQuery = db.prepare(
-  `INSERT INTO users (userId, hpkePublicKeyB64, dekB64, emailHash, username, password, roleId, isBiometric, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  `INSERT INTO users (userId, hpkePublicKeyB64, recoverySaltB64, encryptedPrivateKey, encryptedPrivateKeyIv, emailHash, username, password, roleId, isBiometric, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 );
 
 const addUser = (user: User) => {
@@ -273,7 +284,9 @@ const addUser = (user: User) => {
   addUserQuery.run(
     userWithoutUndefined.userId,
     userWithoutUndefined.hpkePublicKeyB64,
-    userWithoutUndefined.dekB64,
+    userWithoutUndefined.recoverySaltB64,
+    userWithoutUndefined.encryptedPrivateKey,
+    userWithoutUndefined.encryptedPrivateKeyIv,
     userWithoutUndefined.emailHash,
     userWithoutUndefined.username,
     userWithoutUndefined.password,
@@ -367,7 +380,6 @@ const getShopUsersQuery = db.prepare(
     users.userId,
     users.username,
     users.hpkePublicKeyB64,
-    users.dekB64,
     users.password,
     users.roleId,
     users.credentials,
@@ -398,7 +410,6 @@ const getShopUsersQuery = db.prepare(
     customers.customerId AS userId,
     customers.customerId AS username,
     NULL AS hpkePublicKeyB64,
-    NULL AS dekB64,
     '' AS password,
     NULL AS roleId,
     NULL AS credentials,
@@ -459,8 +470,10 @@ function updateUserQuery(userId: string, updates: Record<string, any>) {
   const allowedFields = [
     "username",
     "hpkePublicKeyB64",
+    "recoverySaltB64",
+    "encryptedPrivateKey",
+    "encryptedPrivateKeyIv",
     "emailHash",
-    "dekB64",
     "password",
     "firstName",
     "lastName",

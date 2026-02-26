@@ -3,4 +3,5 @@ export type FormValues = {
   password: string;
   email: string;
   shopIds: number[];
+  recoveryPassphrase: string;
 };

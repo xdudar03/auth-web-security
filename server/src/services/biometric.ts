@@ -22,6 +22,9 @@ type RegistrationInput = {
   userId: string;
   privateData: UserPrivateData;
   hpkePublicKeyB64: string;
+  recoverySaltB64: string;
+  encryptedPrivateKey: string;
+  encryptedPrivateKeyIv: string;
   username: string;
   emailHash: string;
   password: string;
@@ -58,6 +61,9 @@ export async function registerBiometricUser(input: RegistrationInput) {
     userId,
     privateData,
     hpkePublicKeyB64,
+    recoverySaltB64,
+    encryptedPrivateKey,
+    encryptedPrivateKeyIv,
     username,
     emailHash,
     password,
@@ -82,6 +88,9 @@ export async function registerBiometricUser(input: RegistrationInput) {
   addUser({
     userId,
     hpkePublicKeyB64,
+    recoverySaltB64,
+    encryptedPrivateKey,
+    encryptedPrivateKeyIv,
     emailHash,
     username,
     password: hashedPassword,
@@ -133,7 +142,13 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
 
   const jwt = generateJwt(user.userId as string);
   console.log("jwt in authenticateBiometricUser: ", jwt);
-  return { jwt, hpkePublicKeyB64: user.hpkePublicKeyB64 ?? null };
+  return {
+    jwt,
+    hpkePublicKeyB64: user.hpkePublicKeyB64 ?? null,
+    recoverySaltB64: user.recoverySaltB64 ?? null,
+    encryptedPrivateKey: user.encryptedPrivateKey ?? null,
+    encryptedPrivateKeyIv: user.encryptedPrivateKeyIv ?? null,
+  };
 }
 
 export async function changeBiometricEmbedding(

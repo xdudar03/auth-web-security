@@ -4,6 +4,13 @@ const dec = new TextDecoder();
 const ACTIVE_HPKE_PRIVATE_KEY = 'auth:active-hpke-private-jwk';
 const ACTIVE_HPKE_PUBLIC_KEY = 'auth:active-hpke-public-key';
 const USER_HPKE_PREFIX = 'auth:user-hpke:';
+const HPKE_DB_NAME = 'auth-web-security-crypto';
+const HPKE_DB_VERSION = 1;
+const HPKE_BUNDLES_STORE = 'hpke-bundles';
+const HPKE_ACTIVE_STORE = 'hpke-active';
+const HPKE_ACTIVE_KEY = 'active';
+const RECOVERY_KEY_ITERATIONS = 310000;
+const HPKE_INFO = 'auth-web-security:hpke-v1';
 
 export function bytesToBase64(bytes: Uint8Array): string {
   let bin = '';
@@ -22,12 +29,119 @@ function userHpkeKey(username: string): string {
   return `${USER_HPKE_PREFIX}${username.trim().toLowerCase()}`;
 }
 
+type HpkeBundle = { privateKeyJwkB64: string; publicKeyB64: string };
+
+function openHpkeDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(HPKE_DB_NAME, HPKE_DB_VERSION);
+    request.onerror = () => reject(request.error);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(HPKE_BUNDLES_STORE)) {
+        db.createObjectStore(HPKE_BUNDLES_STORE);
+      }
+      if (!db.objectStoreNames.contains(HPKE_ACTIVE_STORE)) {
+        db.createObjectStore(HPKE_ACTIVE_STORE);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+  });
+}
+
+function getFromStore<T>(
+  db: IDBDatabase,
+  storeName: string,
+  key: string
+): Promise<T | null> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readonly');
+    const store = tx.objectStore(storeName);
+    const request = store.get(key);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve((request.result as T | undefined) ?? null);
+  });
+}
+
+function putInStore(
+  db: IDBDatabase,
+  storeName: string,
+  key: string,
+  value: unknown
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    const request = store.put(value, key);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve();
+  });
+}
+
 export async function generateHpkeKeyPair(): Promise<CryptoKeyPair> {
   return crypto.subtle.generateKey(
     { name: 'ECDH', namedCurve: 'P-256' },
     true,
+    ['deriveKey', 'deriveBits']
+  );
+}
+
+export async function deriveRecoveryKey(
+  passphrase: string,
+  saltB64: string,
+  iterations = RECOVERY_KEY_ITERATIONS
+): Promise<CryptoKey> {
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(passphrase),
+    'PBKDF2',
+    false,
     ['deriveKey']
   );
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: base64ToBytes(saltB64) as BufferSource,
+      iterations,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+export function newRecoverySaltB64(): string {
+  return bytesToBase64(crypto.getRandomValues(new Uint8Array(16)));
+}
+
+export async function encryptPrivateKeyWithRecoveryKey(
+  privateKeyJwkB64: string,
+  recoveryKey: CryptoKey
+): Promise<{ ciphertextB64: string; ivB64: string }> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    recoveryKey,
+    enc.encode(privateKeyJwkB64)
+  );
+  return {
+    ciphertextB64: bytesToBase64(new Uint8Array(ciphertext)),
+    ivB64: bytesToBase64(iv),
+  };
+}
+
+export async function decryptPrivateKeyWithRecoveryKey(
+  ciphertextB64: string,
+  ivB64: string,
+  recoveryKey: CryptoKey
+): Promise<string> {
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToBytes(ivB64) as BufferSource },
+    recoveryKey,
+    base64ToBytes(ciphertextB64) as BufferSource
+  );
+  return dec.decode(plaintext);
 }
 
 export async function exportHpkePublicKeyB64(
@@ -55,7 +169,38 @@ export async function importHpkePrivateKeyJwkB64(
     jwk,
     { name: 'ECDH', namedCurve: 'P-256' },
     true,
+    ['deriveKey', 'deriveBits']
+  );
+}
+
+async function deriveContentKeyFromEcdh(
+  privateKey: CryptoKey,
+  publicKey: CryptoKey,
+  salt: Uint8Array
+): Promise<CryptoKey> {
+  const sharedBits = await crypto.subtle.deriveBits(
+    { name: 'ECDH', public: publicKey },
+    privateKey,
+    256
+  );
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    sharedBits,
+    'HKDF',
+    false,
     ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: salt as BufferSource,
+      info: enc.encode(HPKE_INFO),
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
   );
 }
 
@@ -75,14 +220,12 @@ export async function encryptWithHpkePublicKey(
     []
   );
   const ephemeral = await generateHpkeKeyPair();
-  const aesKey = await crypto.subtle.deriveKey(
-    { name: 'ECDH', public: recipientPublicKey },
-    ephemeral.privateKey,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt']
-  );
   const iv = crypto.getRandomValues(new Uint8Array(12));
+  const aesKey = await deriveContentKeyFromEcdh(
+    ephemeral.privateKey,
+    recipientPublicKey,
+    iv
+  );
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     aesKey,
@@ -112,12 +255,10 @@ export async function decryptWithHpkePrivateKey(
     false,
     []
   );
-  const aesKey = await crypto.subtle.deriveKey(
-    { name: 'ECDH', public: encapPublicKey },
+  const aesKey = await deriveContentKeyFromEcdh(
     recipientPrivateKey,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['decrypt']
+    encapPublicKey,
+    iv
   );
 
   const plaintextBuf = await crypto.subtle.decrypt(
@@ -129,52 +270,76 @@ export async function decryptWithHpkePrivateKey(
   return dec.decode(plaintextBuf);
 }
 
-export function saveUserHpkeBundle(
+export async function saveUserHpkeBundle(
   username: string,
-  bundle: { privateKeyJwkB64: string; publicKeyB64: string }
-) {
+  bundle: HpkeBundle
+): Promise<void> {
   if (typeof window === 'undefined') return;
-  sessionStorage.setItem(userHpkeKey(username), JSON.stringify(bundle));
+  const db = await openHpkeDb();
+  await putInStore(db, HPKE_BUNDLES_STORE, userHpkeKey(username), bundle);
 }
 
-export function getUserHpkeBundle(username: string): {
-  privateKeyJwkB64: string;
-  publicKeyB64: string;
-} | null {
+export async function getUserHpkeBundle(
+  username: string
+): Promise<HpkeBundle | null> {
   if (typeof window === 'undefined') return null;
-  const raw = sessionStorage.getItem(userHpkeKey(username));
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as {
-      privateKeyJwkB64?: string;
-      publicKeyB64?: string;
-    };
-    if (!parsed.privateKeyJwkB64 || !parsed.publicKeyB64) return null;
-    return {
-      privateKeyJwkB64: parsed.privateKeyJwkB64,
-      publicKeyB64: parsed.publicKeyB64,
-    };
-  } catch {
+  const db = await openHpkeDb();
+  const stored = await getFromStore<Partial<HpkeBundle>>(
+    db,
+    HPKE_BUNDLES_STORE,
+    userHpkeKey(username)
+  );
+  if (!stored?.privateKeyJwkB64 || !stored.publicKeyB64) {
     return null;
   }
+  return {
+    privateKeyJwkB64: stored.privateKeyJwkB64,
+    publicKeyB64: stored.publicKeyB64,
+  };
 }
 
-export function setActiveHpkePrivateKey(privateKeyJwkB64: string) {
+export async function setActiveHpkePrivateKey(
+  privateKeyJwkB64: string
+): Promise<void> {
   if (typeof window === 'undefined') return;
-  sessionStorage.setItem(ACTIVE_HPKE_PRIVATE_KEY, privateKeyJwkB64);
+  const db = await openHpkeDb();
+  const active =
+    (await getFromStore<Record<string, string>>(db, HPKE_ACTIVE_STORE, HPKE_ACTIVE_KEY)) ??
+    {};
+  active[ACTIVE_HPKE_PRIVATE_KEY] = privateKeyJwkB64;
+  await putInStore(db, HPKE_ACTIVE_STORE, HPKE_ACTIVE_KEY, active);
 }
 
-export function setActiveHpkePublicKey(publicKeyB64: string) {
+export async function setActiveHpkePublicKey(
+  publicKeyB64: string
+): Promise<void> {
   if (typeof window === 'undefined') return;
-  sessionStorage.setItem(ACTIVE_HPKE_PUBLIC_KEY, publicKeyB64);
+  const db = await openHpkeDb();
+  const active =
+    (await getFromStore<Record<string, string>>(db, HPKE_ACTIVE_STORE, HPKE_ACTIVE_KEY)) ??
+    {};
+  active[ACTIVE_HPKE_PUBLIC_KEY] = publicKeyB64;
+  await putInStore(db, HPKE_ACTIVE_STORE, HPKE_ACTIVE_KEY, active);
 }
 
-export function getActiveHpkePrivateKeyJwkB64(): string | null {
+export async function getActiveHpkePrivateKeyJwkB64(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
-  return sessionStorage.getItem(ACTIVE_HPKE_PRIVATE_KEY);
+  const db = await openHpkeDb();
+  const active = await getFromStore<Record<string, string>>(
+    db,
+    HPKE_ACTIVE_STORE,
+    HPKE_ACTIVE_KEY
+  );
+  return active?.[ACTIVE_HPKE_PRIVATE_KEY] ?? null;
 }
 
-export function getActiveHpkePublicKeyB64(): string | null {
+export async function getActiveHpkePublicKeyB64(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
-  return sessionStorage.getItem(ACTIVE_HPKE_PUBLIC_KEY);
+  const db = await openHpkeDb();
+  const active = await getFromStore<Record<string, string>>(
+    db,
+    HPKE_ACTIVE_STORE,
+    HPKE_ACTIVE_KEY
+  );
+  return active?.[ACTIVE_HPKE_PUBLIC_KEY] ?? null;
 }

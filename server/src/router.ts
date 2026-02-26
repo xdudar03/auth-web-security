@@ -211,6 +211,9 @@ export const appRouter = router({
           roleId: z.union([z.string(), z.number()]),
           shopIds: z.array(z.number()),
           hpkePublicKeyB64: z.string(),
+          recoverySaltB64: z.string(),
+          encryptedPrivateKey: z.string(),
+          encryptedPrivateKeyIv: z.string(),
         }),
       )
       .mutation(({ input }) =>
