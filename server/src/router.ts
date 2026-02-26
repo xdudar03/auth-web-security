@@ -123,7 +123,7 @@ export const appRouter = router({
           embedding: z.string(),
           username: z.string().optional(),
           userId: z.string().optional(),
-          dekB64: z.string().optional(),
+          hpkePublicKeyB64: z.string().optional(),
         }),
       )
       .mutation(async ({ input }) =>
@@ -145,14 +145,17 @@ export const appRouter = router({
             });
           }
 
-          if (!existingUser.dekB64 && input.dekB64) {
-            updateUser(result.user_id, { dekB64: input.dekB64 });
+          if (!existingUser.hpkePublicKeyB64 && input.hpkePublicKeyB64) {
+            updateUser(result.user_id, {
+              hpkePublicKeyB64: input.hpkePublicKeyB64,
+            });
           }
 
           return {
             ...result,
             jwt: generateJwt(result.user_id),
-            dekB64: existingUser.dekB64 ?? input.dekB64 ?? null,
+            hpkePublicKeyB64:
+              existingUser.hpkePublicKeyB64 ?? input.hpkePublicKeyB64 ?? null,
           };
         }),
       ),
@@ -207,14 +210,14 @@ export const appRouter = router({
           password: z.string(),
           roleId: z.union([z.string(), z.number()]),
           shopIds: z.array(z.number()),
-          dekB64: z.string(),
+          hpkePublicKeyB64: z.string(),
         }),
       )
       .mutation(({ input }) =>
         execute(() =>
           registerBiometricUser({
             ...input,
-            dekB64: input.dekB64,
+            hpkePublicKeyB64: input.hpkePublicKeyB64,
             privateData: { ...input.privateData, userId: input.userId },
           }),
         ),
@@ -224,7 +227,7 @@ export const appRouter = router({
         z.object({
           username: z.string(),
           password: z.string(),
-          dekB64: z.string().optional(),
+          hpkePublicKeyB64: z.string().optional(),
         }),
       )
       .mutation(({ input }) => execute(() => authenticateBiometricUser(input))),

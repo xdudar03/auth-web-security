@@ -13,7 +13,15 @@ import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import useJwt from '@/hooks/useJwt';
 import type { FeedbackMessage } from '../components/authentication/BiometricAlerts';
-import { exportRawKeyB64, generateDek } from '@/lib/encryption';
+import {
+  exportHpkePrivateKeyJwkB64,
+  exportHpkePublicKeyB64,
+  generateHpkeKeyPair,
+  getUserHpkeBundle,
+  saveUserHpkeBundle,
+  setActiveHpkePrivateKey,
+  setActiveHpkePublicKey,
+} from '@/lib/encryption';
 
 type CapturedFrame = {
   data: Uint8ClampedArray;
@@ -37,12 +45,6 @@ const DP_SVD_OPTIONS: DpSvdOptions = {
   imageSize: [TARGET_SIZE, TARGET_SIZE],
   blockSize: 25,
 };
-const DEK_SESSION_PREFIX = 'auth:session-dek:';
-
-function getDekSessionKey(username: string) {
-  return `${DEK_SESSION_PREFIX}${username.trim().toLowerCase()}`;
-}
-
 const createImageUrlFromPixels = (
   pixels: number[],
   size: number
@@ -162,30 +164,25 @@ export default function useBiometricCapture({
       const parsed = JSON.parse(payload.embedding);
       const embeddingBatch = Array.isArray(parsed[0]) ? parsed : [parsed];
 
-      const sessionKey = getDekSessionKey(username);
-      let candidateDekB64: string | undefined;
-      if (typeof window !== 'undefined') {
-        candidateDekB64 = sessionStorage.getItem(sessionKey) ?? undefined;
-        if (!candidateDekB64) {
-          const generatedDek = await generateDek();
-          candidateDekB64 = await exportRawKeyB64(generatedDek);
-        }
+      let hpkeBundle = getUserHpkeBundle(username);
+      if (!hpkeBundle) {
+        const pair = await generateHpkeKeyPair();
+        hpkeBundle = {
+          privateKeyJwkB64: await exportHpkePrivateKeyJwkB64(pair.privateKey),
+          publicKeyB64: await exportHpkePublicKeyB64(pair.publicKey),
+        };
+        saveUserHpkeBundle(username, hpkeBundle);
       }
+      setActiveHpkePrivateKey(hpkeBundle.privateKeyJwkB64);
+      setActiveHpkePublicKey(hpkeBundle.publicKeyB64);
 
       const response = await verify.mutateAsync({
         embedding: JSON.stringify(embeddingBatch),
         username,
-        dekB64: candidateDekB64,
+        hpkePublicKeyB64: hpkeBundle.publicKeyB64,
       });
       if (!response.verified || !response.jwt) {
         throw new Error('Biometric verification failed');
-      }
-
-      if (typeof window !== 'undefined') {
-        const resolvedDekB64 = response.dekB64 ?? candidateDekB64;
-        if (resolvedDekB64) {
-          sessionStorage.setItem(sessionKey, resolvedDekB64);
-        }
       }
 
       queryClient.clear();

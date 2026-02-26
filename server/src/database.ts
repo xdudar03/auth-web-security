@@ -33,6 +33,7 @@ const initTable = () => {
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       userId TEXT NOT NULL UNIQUE,
+      hpkePublicKeyB64 TEXT,
       dekB64 TEXT,
       emailHash TEXT UNIQUE,
       username TEXT NOT NULL UNIQUE,
@@ -218,6 +219,18 @@ const initTable = () => {
 
 initTable();
 
+const ensureUsersColumns = () => {
+  const columns = db
+    .prepare("PRAGMA table_info(users)")
+    .all() as Array<{ name: string }>;
+  const columnNames = new Set(columns.map((column) => column.name));
+  if (!columnNames.has("hpkePublicKeyB64")) {
+    db.exec("ALTER TABLE users ADD COLUMN hpkePublicKeyB64 TEXT");
+  }
+};
+
+ensureUsersColumns();
+
 type ReplaceUndefinedWithNull<T> = {
   [K in keyof Required<T>]:
     | Exclude<T[K], undefined>
@@ -251,7 +264,7 @@ function mapUndefinedToNull<T extends Record<string, any>>(
 }
 
 const addUserQuery = db.prepare(
-  `INSERT INTO users (userId, dekB64, emailHash, username, password, roleId, isBiometric, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  `INSERT INTO users (userId, hpkePublicKeyB64, dekB64, emailHash, username, password, roleId, isBiometric, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 );
 
 const addUser = (user: User) => {
@@ -259,6 +272,7 @@ const addUser = (user: User) => {
   const biometricFlag = userWithoutUndefined.isBiometric ? 1 : 0;
   addUserQuery.run(
     userWithoutUndefined.userId,
+    userWithoutUndefined.hpkePublicKeyB64,
     userWithoutUndefined.dekB64,
     userWithoutUndefined.emailHash,
     userWithoutUndefined.username,
@@ -352,6 +366,7 @@ const getShopUsersQuery = db.prepare(
   `SELECT
     users.userId,
     users.username,
+    users.hpkePublicKeyB64,
     users.dekB64,
     users.password,
     users.roleId,
@@ -382,6 +397,7 @@ const getShopUsersQuery = db.prepare(
   SELECT
     customers.customerId AS userId,
     customers.customerId AS username,
+    NULL AS hpkePublicKeyB64,
     NULL AS dekB64,
     '' AS password,
     NULL AS roleId,
@@ -442,6 +458,7 @@ const getUserPrivateDataByUserIdQuery = db.prepare(
 function updateUserQuery(userId: string, updates: Record<string, any>) {
   const allowedFields = [
     "username",
+    "hpkePublicKeyB64",
     "emailHash",
     "dekB64",
     "password",

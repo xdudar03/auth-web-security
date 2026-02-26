@@ -4,19 +4,21 @@ import { Shop, type User } from './useUserContext';
 import { useCallback } from 'react';
 import { FormValues } from '@/components/authentication/types';
 import { startAuthentication } from '@simplewebauthn/browser';
-import { encryptWithDek, exportRawKeyB64, generateDek } from '@/lib/encryption';
+import {
+  encryptWithHpkePublicKey,
+  exportHpkePrivateKeyJwkB64,
+  exportHpkePublicKeyB64,
+  generateHpkeKeyPair,
+  getUserHpkeBundle,
+  saveUserHpkeBundle,
+  setActiveHpkePrivateKey,
+  setActiveHpkePublicKey,
+} from '@/lib/encryption';
 import { hashEmail } from '@/lib/emailHash';
 
 export type SuccessData = {
   jwt: string;
-  dekB64?: string | null;
 };
-
-const DEK_SESSION_PREFIX = 'auth:session-dek:';
-
-function getDekSessionKey(username: string) {
-  return `${DEK_SESSION_PREFIX}${username.trim().toLowerCase()}`;
-}
 
 export default function useAuth({
   handleSuccess,
@@ -70,11 +72,6 @@ export default function useAuth({
     trpc.passwordless.verifyAuthentication.mutationOptions({
       onSuccess: (data: SuccessData) => {
         console.log('data', data);
-        if (typeof window !== 'undefined') {
-          Object.keys(sessionStorage)
-            .filter((key) => key.startsWith(DEK_SESSION_PREFIX))
-            .forEach((key) => sessionStorage.removeItem(key));
-        }
         handleSuccess(data);
       },
       onError: (error) => {
@@ -87,26 +84,23 @@ export default function useAuth({
     })
   );
 
-  const ensureUserDekSession = useCallback(
-    async (username: string, dekB64?: string | null) => {
-      if (typeof window === 'undefined') return;
+  const ensureHpkeBundle = useCallback(async (username: string) => {
+    const existing = getUserHpkeBundle(username);
+    if (existing) {
+      setActiveHpkePrivateKey(existing.privateKeyJwkB64);
+      setActiveHpkePublicKey(existing.publicKeyB64);
+      return existing;
+    }
 
-      const sessionKey = getDekSessionKey(username);
-
-      if (dekB64) {
-        sessionStorage.setItem(sessionKey, dekB64);
-        return;
-      }
-
-      const currentDek = sessionStorage.getItem(sessionKey);
-      if (currentDek) return;
-
-      const dek = await generateDek();
-      console.log('dek', dek);
-      sessionStorage.setItem(sessionKey, await exportRawKeyB64(dek));
-    },
-    []
-  );
+    const pair = await generateHpkeKeyPair();
+    const publicKeyB64 = await exportHpkePublicKeyB64(pair.publicKey);
+    const privateKeyJwkB64 = await exportHpkePrivateKeyJwkB64(pair.privateKey);
+    const bundle = { privateKeyJwkB64, publicKeyB64 };
+    saveUserHpkeBundle(username, bundle);
+    setActiveHpkePrivateKey(bundle.privateKeyJwkB64);
+    setActiveHpkePublicKey(bundle.publicKeyB64);
+    return bundle;
+  }, []);
   const sendConfirmationEmailMutation = useMutation(
     trpc.email.sendConfirmationEmail.mutationOptions({
       onSuccess: (data) => {
@@ -159,11 +153,20 @@ export default function useAuth({
       }
       const id = crypto.randomUUID(); // TODO: generate id from server
 
-      const generatedDek = await generateDek();
-      const dekB64 = await exportRawKeyB64(generatedDek);
+      const hpkePair = await generateHpkeKeyPair();
+      const hpkePublicKeyB64 = await exportHpkePublicKeyB64(hpkePair.publicKey);
+      const hpkePrivateKeyJwkB64 = await exportHpkePrivateKeyJwkB64(
+        hpkePair.privateKey
+      );
+      saveUserHpkeBundle(values.username, {
+        privateKeyJwkB64: hpkePrivateKeyJwkB64,
+        publicKeyB64: hpkePublicKeyB64,
+      });
+      setActiveHpkePrivateKey(hpkePrivateKeyJwkB64);
+      setActiveHpkePublicKey(hpkePublicKeyB64);
 
-      const encryptedData = await encryptWithDek(
-        generatedDek,
+      const encryptedData = await encryptWithHpkePublicKey(
+        hpkePublicKeyB64,
         JSON.stringify({
           email: values.email,
           username: values.username,
@@ -174,7 +177,7 @@ export default function useAuth({
       const result = await registerMutation.mutateAsync({
         username: values.username,
         emailHash,
-        dekB64: dekB64,
+        hpkePublicKeyB64,
         password: values.password,
         userId: id,
         roleId: 2,
@@ -182,6 +185,7 @@ export default function useAuth({
         privateData: {
           original_cipher: encryptedData.ciphertextB64,
           original_iv: encryptedData.ivB64,
+          original_aad: encryptedData.encapPublicKeyB64,
         },
       });
       console.log('result', result);
@@ -213,25 +217,13 @@ export default function useAuth({
         return;
       }
       try {
-        const sessionKey = getDekSessionKey(values.username);
-        let candidateDekB64: string | undefined;
-        if (typeof window !== 'undefined') {
-          candidateDekB64 = sessionStorage.getItem(sessionKey) ?? undefined;
-          if (!candidateDekB64) {
-            const generatedDek = await generateDek();
-            candidateDekB64 = await exportRawKeyB64(generatedDek);
-          }
-        }
+        const hpkeBundle = await ensureHpkeBundle(values.username);
 
         const result = await authenticateMutation.mutateAsync({
           username: values.username,
           password: values.password,
-          dekB64: candidateDekB64,
+          hpkePublicKeyB64: hpkeBundle.publicKeyB64,
         });
-        await ensureUserDekSession(
-          values.username,
-          result.dekB64 ?? candidateDekB64
-        );
         handleSuccess({ jwt: result.jwt });
       } catch {
         setMessage({

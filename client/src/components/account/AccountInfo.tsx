@@ -15,11 +15,10 @@ import {
 } from '../../lib/anonymization/anonymizationHandlers';
 import ProvidersManager from './ProvidersManager';
 import {
-  decryptWithDek,
-  encryptWithDek,
-  exportRawKeyB64,
-  generateDek,
-  importRawAesKey,
+  decryptWithHpkePrivateKey,
+  encryptWithHpkePublicKey,
+  getActiveHpkePrivateKeyJwkB64,
+  importHpkePrivateKeyJwkB64,
 } from '@/lib/encryption';
 
 export default function AccountInfo() {
@@ -92,7 +91,7 @@ export default function AccountInfo() {
       shops: shops?.map((shop: Shop) => shop.shopName) ?? [],
       firstName: user?.firstName ?? '',
       lastName: user?.lastName ?? '',
-      email: user?.email ?? '',
+      email: user?.emailHash ?? '',
       phoneNumber: user?.phoneNumber ?? '',
       dateOfBirth: user?.dateOfBirth ?? '',
       gender: user?.gender ?? '',
@@ -114,7 +113,7 @@ export default function AccountInfo() {
         shops: shops?.map((shop: Shop) => shop.shopName) ?? [],
         firstName: source?.firstName ?? '',
         lastName: source?.lastName ?? '',
-        email: source?.email ?? '',
+        email: source?.email ?? '', // TODO:change to DecrytedData type
         phoneNumber: source?.phoneNumber ?? '',
         dateOfBirth: source?.dateOfBirth ?? '',
         gender: source?.gender ?? '',
@@ -135,16 +134,22 @@ export default function AccountInfo() {
 
       if (
         hasPrivateData &&
-        user.dekB64 &&
+        user.hpkePublicKeyB64 &&
         privateData?.original_cipher &&
-        privateData?.original_iv
+        privateData?.original_iv &&
+        privateData?.original_aad
       ) {
         try {
-          const key = await importRawAesKey(user.dekB64);
-          const decrypted = await decryptWithDek(
-            key,
+          const privateKeyJwkB64 = getActiveHpkePrivateKeyJwkB64();
+          if (!privateKeyJwkB64) {
+            throw new Error('Missing active HPKE private key in session');
+          }
+          const privateKey = await importHpkePrivateKeyJwkB64(privateKeyJwkB64);
+          const decrypted = await decryptWithHpkePrivateKey(
+            privateKey,
             privateData.original_cipher,
-            privateData.original_iv
+            privateData.original_iv,
+            privateData.original_aad
           );
           const parsed = (() => {
             try {
@@ -153,6 +158,7 @@ export default function AccountInfo() {
               return { email: decrypted } as Partial<UserType>;
             }
           })();
+          console.log('parsed', parsed);
           resetWithValues(parsed);
           return;
         } catch (error) {
@@ -174,33 +180,22 @@ export default function AccountInfo() {
           ...values,
           roleId: user?.roleId,
         } as UserType;
-
-        let dekB64 = user?.dekB64 ?? null;
-        if (!dekB64) {
-          const newDek = await generateDek();
-          dekB64 = await exportRawKeyB64(newDek);
+        const hpkePublicKeyB64 = user?.hpkePublicKeyB64;
+        if (!hpkePublicKeyB64) {
+          throw new Error('Missing HPKE public key for current user');
         }
 
-        const key = await importRawAesKey(dekB64);
-        const encryptedData = await encryptWithDek(
-          key,
+        const encryptedData = await encryptWithHpkePublicKey(
+          hpkePublicKeyB64,
           JSON.stringify(updates)
         );
-
-        if (!user?.dekB64) {
-          await updateUserMutation.mutateAsync({
-            userId: user?.userId ?? '',
-            updates: {
-              dekB64,
-            },
-          });
-        }
 
         const privateDataPayload = {
           userId: user?.userId ?? '',
           privateData: {
             original_cipher: encryptedData.ciphertextB64,
             original_iv: encryptedData.ivB64,
+            original_aad: encryptedData.encapPublicKeyB64,
           },
         };
 

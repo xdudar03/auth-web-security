@@ -3,7 +3,11 @@ import { User } from 'lucide-react';
 import { useUser } from '@/hooks/useUserContext';
 import Link from 'next/link';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
-import { decryptWithDek, importRawAesKey } from '@/lib/encryption';
+import {
+  decryptWithHpkePrivateKey,
+  getActiveHpkePrivateKeyJwkB64,
+  importHpkePrivateKeyJwkB64,
+} from '@/lib/encryption';
 import { useEffect, useState } from 'react';
 
 type DecryptedPrivateProfile = {
@@ -24,22 +28,31 @@ export default function AccountInfoCard() {
 
   useEffect(() => {
     const loadDecryptedData = async () => {
-      if (!privateData || !user?.dekB64) {
+      if (!privateData || !user?.hpkePublicKeyB64) {
         setDecryptedData({ username: '', email: '' });
         return;
       }
 
-      if (!privateData.original_cipher || !privateData.original_iv) {
+      if (
+        !privateData.original_cipher ||
+        !privateData.original_iv ||
+        !privateData.original_aad
+      ) {
         setDecryptedData({ username: '', email: '' });
         return;
       }
 
       try {
-        const key = await importRawAesKey(user.dekB64);
-        const decrypted = await decryptWithDek(
-          key,
+        const privateKeyJwkB64 = getActiveHpkePrivateKeyJwkB64();
+        if (!privateKeyJwkB64) {
+          throw new Error('Missing active HPKE private key in session');
+        }
+        const privateKey = await importHpkePrivateKeyJwkB64(privateKeyJwkB64);
+        const decrypted = await decryptWithHpkePrivateKey(
+          privateKey,
           privateData.original_cipher,
-          privateData.original_iv
+          privateData.original_iv,
+          privateData.original_aad
         );
 
         try {
@@ -55,7 +68,7 @@ export default function AccountInfoCard() {
     };
 
     void loadDecryptedData();
-  }, [privateData, user?.dekB64]);
+  }, [privateData, user?.hpkePublicKeyB64]);
 
   console.log('decryptedData', decryptedData);
   return (

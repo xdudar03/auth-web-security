@@ -21,7 +21,7 @@ import { applyPrivacyPreset } from "./privacy.ts";
 type RegistrationInput = {
   userId: string;
   privateData: UserPrivateData;
-  dekB64: string;
+  hpkePublicKeyB64: string;
   username: string;
   emailHash: string;
   password: string;
@@ -32,7 +32,7 @@ type RegistrationInput = {
 type AuthenticationInput = {
   username: string;
   password: string;
-  dekB64?: string | undefined;
+  hpkePublicKeyB64?: string | undefined;
 };
 
 type ChangeEmbeddingInput = {
@@ -57,7 +57,7 @@ export async function registerBiometricUser(input: RegistrationInput) {
   const {
     userId,
     privateData,
-    dekB64,
+    hpkePublicKeyB64,
     username,
     emailHash,
     password,
@@ -81,7 +81,7 @@ export async function registerBiometricUser(input: RegistrationInput) {
 
   addUser({
     userId,
-    dekB64,
+    hpkePublicKeyB64,
     emailHash,
     username,
     password: hashedPassword,
@@ -109,7 +109,7 @@ export async function registerBiometricUser(input: RegistrationInput) {
 }
 
 export async function authenticateBiometricUser(input: AuthenticationInput) {
-  const { username, password, dekB64 } = input;
+  const { username, password, hpkePublicKeyB64 } = input;
   console.log("username: ", username);
   console.log("password: ", password);
 
@@ -127,13 +127,13 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
     throw new HttpError(400, "Invalid password");
   }
 
-  if (!user.dekB64 && dekB64) {
-    updateUser(user.userId as string, { dekB64 });
+  if (!user.hpkePublicKeyB64 && hpkePublicKeyB64) {
+    updateUser(user.userId as string, { hpkePublicKeyB64 });
   }
 
   const jwt = generateJwt(user.userId as string);
   console.log("jwt in authenticateBiometricUser: ", jwt);
-  return { jwt, dekB64: user.dekB64 ?? dekB64 ?? null };
+  return { jwt, hpkePublicKeyB64: user.hpkePublicKeyB64 ?? null };
 }
 
 export async function changeBiometricEmbedding(
