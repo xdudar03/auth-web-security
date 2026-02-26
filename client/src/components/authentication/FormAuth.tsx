@@ -79,7 +79,7 @@ export default function FormAuth({
     defaultValues: {
       username: user?.username ?? '',
       password: user?.password ?? '',
-      email: user?.email ?? '',
+      email: user?.emailHash ?? '',
       shopIds: [],
     },
     mode: 'onTouched',

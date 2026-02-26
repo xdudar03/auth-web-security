@@ -7,7 +7,10 @@ import {
   getUserShops,
 } from "../database.ts";
 import { HttpError } from "../errors.ts";
-import type { User, UserPrivateData as UserPrivateDataType } from "../types/user.ts";
+import type {
+  User,
+  UserPrivateData as UserPrivateDataType,
+} from "../types/user.ts";
 import type { Role } from "../types/role.ts";
 import type { Shop } from "../types/shop.ts";
 import type { PrivacySettings } from "../types/privacySetting.ts";
@@ -16,18 +19,6 @@ function buildEncryptedOnlyBaseUser(user: User): User {
   return {
     ...user,
     username: "",
-    email: "",
-    firstName: null,
-    lastName: null,
-    phoneNumber: null,
-    dateOfBirth: null,
-    gender: null,
-    address: null,
-    city: null,
-    state: null,
-    zip: null,
-    country: null,
-    spendings: null,
     shoppingHistory: null,
   };
 }

@@ -1,25 +1,29 @@
 import {
   addUser,
   addUserToShop,
-  getAllUsers,
   updateUser,
   addUserEmbedding,
   getUserById,
+  getUserByUsername,
+  getUserByEmailHash,
   getUserWithRoleQuery,
   getUserForAuthentication,
+  addUserPrivateData,
 } from "../database.ts";
 import { HttpError } from "../errors.ts";
 import jwt from "jsonwebtoken";
 import { jwtSecret } from "../tools/trpc.ts";
 import bcrypt from "bcryptjs";
-import type { User } from "../types/user.ts";
+import type { User, UserPrivateData } from "../types/user.ts";
 import { addNewEmbedding } from "./model.ts";
 import { applyPrivacyPreset } from "./privacy.ts";
 
 type RegistrationInput = {
   userId: string;
+  privateData: UserPrivateData;
+  dekB64: string;
   username: string;
-  email: string;
+  emailHash: string;
   password: string;
   roleId: number | string;
   shopIds: number[];
@@ -50,11 +54,25 @@ export function generateJwt(userId: string) {
 
 export async function registerBiometricUser(input: RegistrationInput) {
   console.log("registerBiometricUser input: ", input);
-  const { userId, username, email, password, roleId, shopIds } = input;
+  const {
+    userId,
+    privateData,
+    dekB64,
+    username,
+    emailHash,
+    password,
+    roleId,
+    shopIds,
+  } = input;
   console.log("shopIds: ", shopIds.length);
-  const usersFromDB = getAllUsers();
+  const existingUserByUsername = getUserByUsername(username);
 
-  if (usersFromDB.find((user: User) => user.username === username)) {
+  if (existingUserByUsername) {
+    throw new HttpError(400, "User already exists");
+  }
+
+  const existingUserByEmail = getUserByEmailHash(emailHash);
+  if (existingUserByEmail) {
     throw new HttpError(400, "User already exists");
   }
 
@@ -63,12 +81,15 @@ export async function registerBiometricUser(input: RegistrationInput) {
 
   addUser({
     userId,
+    dekB64,
+    emailHash,
     username,
-    email,
     password: hashedPassword,
     roleId: typeof roleId === "string" ? Number(roleId) : roleId,
     isBiometric: false,
   });
+
+  addUserPrivateData(userId, privateData);
 
   // const user = getUserWithRoleQuery.get(userId);
   if (shopIds.length > 0) {
@@ -92,7 +113,7 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
   console.log("username: ", username);
   console.log("password: ", password);
 
-  const user = getUserForAuthentication(username, username, username);
+  const user = getUserForAuthentication(username);
 
   if (!user) {
     throw new HttpError(400, "User not found");

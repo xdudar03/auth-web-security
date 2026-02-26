@@ -201,14 +201,24 @@ export const appRouter = router({
       .input(
         z.object({
           userId: z.string(),
+          privateData: UserPrivateData.omit({ userId: true }).passthrough(),
           username: z.string(),
-          email: z.string().email(),
+          emailHash: z.string().min(32),
           password: z.string(),
           roleId: z.union([z.string(), z.number()]),
           shopIds: z.array(z.number()),
+          dekB64: z.string(),
         }),
       )
-      .mutation(({ input }) => execute(() => registerBiometricUser(input))),
+      .mutation(({ input }) =>
+        execute(() =>
+          registerBiometricUser({
+            ...input,
+            dekB64: input.dekB64,
+            privateData: { ...input.privateData, userId: input.userId },
+          }),
+        ),
+      ),
     authenticate: publicProcedure
       .input(
         z.object({

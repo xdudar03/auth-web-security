@@ -30,7 +30,6 @@ export default function RegistrationPage() {
             <ArrowLeft className="w-6 h-6" />
           </Button>
           <FormAuth title="Registration" setTab={setTab} />
-          {/* <BiometricAuth title="Registration" action="registration" /> */}
         </div>
       </div>
     </div>

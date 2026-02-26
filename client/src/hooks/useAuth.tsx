@@ -4,7 +4,8 @@ import { Shop, type User } from './useUserContext';
 import { useCallback } from 'react';
 import { FormValues } from '@/components/authentication/types';
 import { startAuthentication } from '@simplewebauthn/browser';
-import { exportRawKeyB64, generateDek } from '@/lib/encryption';
+import { encryptWithDek, exportRawKeyB64, generateDek } from '@/lib/encryption';
+import { hashEmail } from '@/lib/emailHash';
 
 export type SuccessData = {
   jwt: string;
@@ -157,14 +158,31 @@ export default function useAuth({
         return;
       }
       const id = crypto.randomUUID(); // TODO: generate id from server
-      console.log('id', id);
+
+      const generatedDek = await generateDek();
+      const dekB64 = await exportRawKeyB64(generatedDek);
+
+      const encryptedData = await encryptWithDek(
+        generatedDek,
+        JSON.stringify({
+          email: values.email,
+          username: values.username,
+        })
+      );
+      const emailHash = await hashEmail(values.email);
+
       const result = await registerMutation.mutateAsync({
         username: values.username,
-        email: values.email,
+        emailHash,
+        dekB64: dekB64,
         password: values.password,
         userId: id,
         roleId: 2,
         shopIds: values.shopIds,
+        privateData: {
+          original_cipher: encryptedData.ciphertextB64,
+          original_iv: encryptedData.ivB64,
+        },
       });
       console.log('result', result);
       if (!result) {

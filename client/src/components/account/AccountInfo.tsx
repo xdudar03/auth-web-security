@@ -146,7 +146,13 @@ export default function AccountInfo() {
             privateData.original_cipher,
             privateData.original_iv
           );
-          const parsed = JSON.parse(decrypted) as Partial<UserType>;
+          const parsed = (() => {
+            try {
+              return JSON.parse(decrypted) as Partial<UserType>;
+            } catch {
+              return { email: decrypted } as Partial<UserType>;
+            }
+          })();
           resetWithValues(parsed);
           return;
         } catch (error) {

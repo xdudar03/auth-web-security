@@ -34,22 +34,11 @@ const initTable = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       userId TEXT NOT NULL UNIQUE,
       dekB64 TEXT,
+      emailHash TEXT UNIQUE,
       username TEXT NOT NULL UNIQUE,
-      email TEXT NOT NULL,
-      firstName TEXT,
-      lastName TEXT,
       password TEXT NOT NULL,
       roleId INTEGER NOT NULL,
       isBiometric BOOLEAN NOT NULL DEFAULT FALSE,
-      phoneNumber TEXT,
-      dateOfBirth TEXT,
-      gender TEXT,
-      address TEXT,
-      city TEXT,
-      state TEXT,
-      zip TEXT,
-      country TEXT,
-      spendings TEXT,
       credentials TEXT,
       privacyPreset TEXT,
       FOREIGN KEY (roleId) REFERENCES roles(roleId)
@@ -262,7 +251,7 @@ function mapUndefinedToNull<T extends Record<string, any>>(
 }
 
 const addUserQuery = db.prepare(
-  `INSERT INTO users (userId, dekB64, username, email, firstName, lastName, password, roleId, isBiometric, phoneNumber, dateOfBirth, gender, address, city, state, zip, country, spendings, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, // credentials is a base64 string
+  `INSERT INTO users (userId, dekB64, emailHash, username, password, roleId, isBiometric, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 );
 
 const addUser = (user: User) => {
@@ -271,22 +260,11 @@ const addUser = (user: User) => {
   addUserQuery.run(
     userWithoutUndefined.userId,
     userWithoutUndefined.dekB64,
+    userWithoutUndefined.emailHash,
     userWithoutUndefined.username,
-    userWithoutUndefined.email,
-    userWithoutUndefined.firstName,
-    userWithoutUndefined.lastName,
     userWithoutUndefined.password,
     userWithoutUndefined.roleId,
     biometricFlag,
-    userWithoutUndefined.phoneNumber,
-    userWithoutUndefined.dateOfBirth,
-    userWithoutUndefined.gender,
-    userWithoutUndefined.address,
-    userWithoutUndefined.city,
-    userWithoutUndefined.state,
-    userWithoutUndefined.zip,
-    userWithoutUndefined.country,
-    userWithoutUndefined.spendings,
     userWithoutUndefined.credentials,
     userWithoutUndefined.privacyPreset,
   );
@@ -378,19 +356,19 @@ const getShopUsersQuery = db.prepare(
     users.password,
     users.roleId,
     users.credentials,
-    users.email,
-    users.firstName,
-    users.lastName,
+    NULL AS email,
+    NULL AS firstName,
+    NULL AS lastName,
     users.isBiometric,
-    users.phoneNumber,
-    users.dateOfBirth,
-    users.gender,
-    users.address,
-    users.city,
-    users.state,
-    users.zip,
-    users.country,
-    users.spendings,
+    NULL AS phoneNumber,
+    NULL AS dateOfBirth,
+    NULL AS gender,
+    NULL AS address,
+    NULL AS city,
+    NULL AS state,
+    NULL AS zip,
+    NULL AS country,
+    NULL AS spendings,
     users.privacyPreset,
     roles.roleName,
     1 AS registered
@@ -453,6 +431,10 @@ const getUserPrivacyPresetById = (userId: string) => {
 
 const getUserByIdQuery = db.prepare(`SELECT * FROM users WHERE userId = ?`);
 
+const getUserByEmailHashQuery = db.prepare(
+  `SELECT * FROM users WHERE emailHash = ?`,
+);
+
 const getUserPrivateDataByUserIdQuery = db.prepare(
   `SELECT * FROM user_private_data WHERE userId = ?`,
 );
@@ -460,7 +442,7 @@ const getUserPrivateDataByUserIdQuery = db.prepare(
 function updateUserQuery(userId: string, updates: Record<string, any>) {
   const allowedFields = [
     "username",
-    "email",
+    "emailHash",
     "dekB64",
     "password",
     "firstName",
@@ -680,6 +662,16 @@ const getUserById = (userId: string | null) => {
   return result.data;
 };
 
+const getUserByEmailHash = (emailHash: string) => {
+  const userData = getUserByEmailHashQuery.get(emailHash);
+  const result = User.safeParse(userData);
+  if (!result.success) {
+    console.error("Parse error in getUserByEmailHash:", result.error);
+    return null;
+  }
+  return result.data;
+};
+
 const getUserPrivateDataByUserId = (userId: string) => {
   const row = getUserPrivateDataByUserIdQuery.get(userId) as
     | Record<string, unknown>
@@ -794,19 +786,11 @@ const getAllUsers = () => {
 };
 
 const getUserForAuthenticationQuery = db.prepare(
-  `SELECT * FROM users WHERE username = ? OR email = ? OR phoneNumber = ?`,
+  `SELECT * FROM users WHERE username = ?`,
 );
 
-const getUserForAuthentication = (
-  username: string,
-  email: string,
-  phoneNumber: string,
-) => {
-  const userData = getUserForAuthenticationQuery.get(
-    username,
-    email,
-    phoneNumber,
-  );
+const getUserForAuthentication = (username: string) => {
+  const userData = getUserForAuthenticationQuery.get(username);
   const result = User.safeParse(userData);
   if (!result.success) {
     console.error("Parse error in getUserForAuthentication:", result.error);
@@ -1251,6 +1235,7 @@ export {
   getAllUsers,
   getUserByUsername,
   getUserById,
+  getUserByEmailHash,
   getUserPrivateDataByUserId,
   getRoleByUserId,
   updateUser,

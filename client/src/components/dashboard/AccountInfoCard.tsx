@@ -3,9 +3,61 @@ import { User } from 'lucide-react';
 import { useUser } from '@/hooks/useUserContext';
 import Link from 'next/link';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { decryptWithDek, importRawAesKey } from '@/lib/encryption';
+import { useEffect, useState } from 'react';
+
+type DecryptedPrivateProfile = {
+  username: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  [key: string]: unknown;
+};
 
 export default function AccountInfoCard() {
-  const { user } = useUser();
+  const { user, privateData } = useUser();
+  const [decryptedData, setDecryptedData] = useState<DecryptedPrivateProfile>({
+    username: '',
+    email: '',
+  });
+
+  useEffect(() => {
+    const loadDecryptedData = async () => {
+      if (!privateData || !user?.dekB64) {
+        setDecryptedData({ username: '', email: '' });
+        return;
+      }
+
+      if (!privateData.original_cipher || !privateData.original_iv) {
+        setDecryptedData({ username: '', email: '' });
+        return;
+      }
+
+      try {
+        const key = await importRawAesKey(user.dekB64);
+        const decrypted = await decryptWithDek(
+          key,
+          privateData.original_cipher,
+          privateData.original_iv
+        );
+
+        try {
+          const parsed = JSON.parse(decrypted) as DecryptedPrivateProfile;
+          setDecryptedData(parsed);
+        } catch {
+          setDecryptedData({ username: '', email: decrypted });
+        }
+      } catch (error) {
+        console.error('Failed to decrypt account data', error);
+        setDecryptedData({ username: '', email: '' });
+      }
+    };
+
+    void loadDecryptedData();
+  }, [privateData, user?.dekB64]);
+
+  console.log('decryptedData', decryptedData);
   return (
     <div className="col-span-1 h-full overflow-hidden">
       <Card className="h-full">
@@ -20,12 +72,15 @@ export default function AccountInfoCard() {
         <CardContent>
           <h3 className="text-lg font-semibold text-center">Account Info</h3>
           <p className="text-sm text-muted-foreground">
-            Username: {user?.username}
+            Username: {decryptedData.username}
           </p>
           <p className="text-sm text-muted-foreground">
-            Full name: {user?.firstName} {user?.lastName}
+            Full name: {decryptedData?.firstName ?? '-'}{' '}
+            {decryptedData?.lastName ?? ''}
           </p>
-          <p className="text-sm text-muted-foreground">Email: {user?.email}</p>
+          <p className="text-sm text-muted-foreground">
+            Email: {decryptedData?.email ?? '-'}
+          </p>
         </CardContent>
       </Card>
     </div>
