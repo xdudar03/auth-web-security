@@ -137,7 +137,7 @@ export default function AccountInfo() {
         user.hpkePublicKeyB64 &&
         privateData?.original_cipher &&
         privateData?.original_iv &&
-        privateData?.original_aad
+        privateData?.original_encap_pubkey
       ) {
         try {
           const privateKeyJwkB64 = await getActiveHpkePrivateKeyJwkB64();
@@ -149,7 +149,7 @@ export default function AccountInfo() {
             privateKey,
             privateData.original_cipher,
             privateData.original_iv,
-            privateData.original_aad
+            privateData.original_encap_pubkey
           );
           const parsed = (() => {
             try {
@@ -195,7 +195,7 @@ export default function AccountInfo() {
           privateData: {
             original_cipher: encryptedData.ciphertextB64,
             original_iv: encryptedData.ivB64,
-            original_aad: encryptedData.encapPublicKeyB64,
+            original_encap_pubkey: encryptedData.encapPublicKeyB64,
           },
         };
 

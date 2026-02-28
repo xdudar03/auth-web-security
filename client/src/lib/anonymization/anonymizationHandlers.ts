@@ -43,6 +43,7 @@ export async function handleFieldAnonymization(
         ...prev,
         [fieldName]: 'Anonymized value: ' + anonFirstName,
       }));
+      formSetValue('firstName', anonFirstName);
       break;
     case 'lastName':
       const anonLastName = namePseudonymization().lastName;
@@ -50,6 +51,7 @@ export async function handleFieldAnonymization(
         ...prev,
         [fieldName]: 'Anonymized value: ' + anonLastName,
       }));
+      formSetValue('lastName', anonLastName);
       break;
     case 'email':
       const anonEmail = masking(formGetValues('email') ?? '');
@@ -57,6 +59,7 @@ export async function handleFieldAnonymization(
         ...prev,
         [fieldName]: 'Anonymized value: ' + anonEmail,
       }));
+      formSetValue('email', anonEmail);
       break;
     case 'phoneNumber':
       const anonPhone = masking(formGetValues('phoneNumber') ?? '');
@@ -64,6 +67,7 @@ export async function handleFieldAnonymization(
         ...prev,
         [fieldName]: 'Anonymized value: ' + anonPhone,
       }));
+      formSetValue('phoneNumber', anonPhone);
       break;
     case 'dateOfBirth':
       const dateOfBirth = formGetValues('dateOfBirth') ?? '';
@@ -72,6 +76,7 @@ export async function handleFieldAnonymization(
         ...prev,
         [fieldName]: 'Anonymized value: ' + anonDOB,
       }));
+      formSetValue('dateOfBirth', anonDOB);
       break;
     case 'gender':
       const anonGender = suppression();
@@ -79,6 +84,7 @@ export async function handleFieldAnonymization(
         ...prev,
         [fieldName]: 'Anonymized value: ' + anonGender,
       }));
+      formSetValue('gender', anonGender);
       break;
     case 'zip':
       const anonZip = masking(formGetValues('zip') ?? '');
@@ -86,6 +92,7 @@ export async function handleFieldAnonymization(
         ...prev,
         [fieldName]: 'Anonymized value: ' + anonZip,
       }));
+      formSetValue('zip', anonZip);
       break;
     case 'country':
       const country = formGetValues('country') ?? '';
@@ -99,6 +106,7 @@ export async function handleFieldAnonymization(
       } else {
         setMessages((prev) => ({ ...prev, [fieldName]: 'No country found' }));
       }
+      formSetValue('country', anonymizedCountry ?? null);
       break;
     case 'city':
       const city = formGetValues('city') ?? '';
@@ -112,6 +120,7 @@ export async function handleFieldAnonymization(
       } else {
         setMessages((prev) => ({ ...prev, [fieldName]: 'No city found' }));
       }
+      formSetValue('city', anonymizedCity[0].country);
       break;
     case 'address':
       const street = formGetValues('address') ?? '';
@@ -126,6 +135,7 @@ export async function handleFieldAnonymization(
       } else {
         setMessages((prev) => ({ ...prev, [fieldName]: 'No street found' }));
       }
+      formSetValue('address', anonymizedStreet[0].city);
       break;
   }
 }

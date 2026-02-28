@@ -36,7 +36,7 @@ export default function AccountInfoCard() {
       if (
         !privateData.original_cipher ||
         !privateData.original_iv ||
-        !privateData.original_aad
+        !privateData.original_encap_pubkey
       ) {
         setDecryptedData({ username: '', email: '' });
         return;
@@ -52,7 +52,7 @@ export default function AccountInfoCard() {
           privateKey,
           privateData.original_cipher,
           privateData.original_iv,
-          privateData.original_aad
+          privateData.original_encap_pubkey
         );
 
         try {

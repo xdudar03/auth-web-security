@@ -53,12 +53,12 @@ const initTable = () => {
     userId TEXT NOT NULL UNIQUE,
     original_cipher BLOB ,
     original_iv BLOB,
+    original_encap_pubkey BLOB,
     original_version INTEGER NOT NULL DEFAULT 1,  
-    original_aad BLOB,
   
     anonymized_cipher BLOB,
     anonymized_iv BLOB,
-    anonymized_aad BLOB,
+    anonymized_encap_pubkey BLOB,
     anonymized_version INTEGER NOT NULL DEFAULT 1,
     
     createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -220,27 +220,6 @@ const initTable = () => {
 };
 
 initTable();
-
-const ensureUsersColumns = () => {
-  const columns = db.prepare("PRAGMA table_info(users)").all() as Array<{
-    name: string;
-  }>;
-  const columnNames = new Set(columns.map((column) => column.name));
-  if (!columnNames.has("hpkePublicKeyB64")) {
-    db.exec("ALTER TABLE users ADD COLUMN hpkePublicKeyB64 TEXT");
-  }
-  if (!columnNames.has("recoverySaltB64")) {
-    db.exec("ALTER TABLE users ADD COLUMN recoverySaltB64 TEXT");
-  }
-  if (!columnNames.has("encryptedPrivateKey")) {
-    db.exec("ALTER TABLE users ADD COLUMN encryptedPrivateKey TEXT");
-  }
-  if (!columnNames.has("encryptedPrivateKeyIv")) {
-    db.exec("ALTER TABLE users ADD COLUMN encryptedPrivateKeyIv TEXT");
-  }
-};
-
-ensureUsersColumns();
 
 type ReplaceUndefinedWithNull<T> = {
   [K in keyof Required<T>]:
@@ -721,10 +700,10 @@ const getUserPrivateDataByUserId = (userId: string) => {
     ...row,
     original_cipher: normalizeBlob(row.original_cipher),
     original_iv: normalizeBlob(row.original_iv),
-    original_aad: normalizeBlob(row.original_aad),
+    original_encap_pubkey: normalizeBlob(row.original_encap_pubkey),
     anonymized_cipher: normalizeBlob(row.anonymized_cipher),
     anonymized_iv: normalizeBlob(row.anonymized_iv),
-    anonymized_aad: normalizeBlob(row.anonymized_aad),
+    anonymized_encap_pubkey: normalizeBlob(row.anonymized_encap_pubkey),
   };
 
   const result = UserPrivateData.safeParse(normalized);
@@ -735,28 +714,59 @@ const getUserPrivateDataByUserId = (userId: string) => {
   return result.data;
 };
 
+const PRIVATE_DATA_FIELDS = new Set([
+  "original_cipher",
+  "original_iv",
+  "original_encap_pubkey",
+  "anonymized_cipher",
+  "anonymized_iv",
+  "anonymized_encap_pubkey",
+]);
+
+function normalizePrivateDataForStorage(privateData: UserPrivateData) {
+  const normalized: Record<string, string | null | undefined> = {
+    original_cipher: privateData.original_cipher,
+    original_iv: privateData.original_iv,
+    original_encap_pubkey: privateData.original_encap_pubkey,
+    anonymized_cipher: privateData.anonymized_cipher,
+    anonymized_iv: privateData.anonymized_iv,
+    anonymized_encap_pubkey: privateData.anonymized_encap_pubkey,
+  };
+
+  return normalized;
+}
+
 const addUserPrivateDataQuery = db.prepare(
-  `INSERT INTO user_private_data (userId, original_cipher, original_iv, original_aad, anonymized_cipher, anonymized_iv, anonymized_aad)
+  `INSERT INTO user_private_data (
+     userId,
+     original_cipher,
+     original_iv,
+     original_encap_pubkey,
+     anonymized_cipher,
+     anonymized_iv,
+     anonymized_encap_pubkey
+   )
    VALUES (?, ?, ?, ?, ?, ?, ?)
    ON CONFLICT(userId) DO UPDATE SET
      original_cipher = excluded.original_cipher,
      original_iv = excluded.original_iv,
-     original_aad = excluded.original_aad,
+     original_encap_pubkey = excluded.original_encap_pubkey,
      anonymized_cipher = excluded.anonymized_cipher,
      anonymized_iv = excluded.anonymized_iv,
-     anonymized_aad = excluded.anonymized_aad,
+     anonymized_encap_pubkey = excluded.anonymized_encap_pubkey,
      updatedAt = CURRENT_TIMESTAMP`,
 );
 
 const addUserPrivateData = (userId: string, privateData: UserPrivateData) => {
+  const normalizedPrivateData = normalizePrivateDataForStorage(privateData);
   addUserPrivateDataQuery.run(
     userId,
-    privateData.original_cipher ?? null,
-    privateData.original_iv ?? null,
-    privateData.original_aad ?? null,
-    privateData.anonymized_cipher ?? null,
-    privateData.anonymized_iv ?? null,
-    privateData.anonymized_aad ?? null,
+    normalizedPrivateData.original_cipher ?? null,
+    normalizedPrivateData.original_iv ?? null,
+    normalizedPrivateData.original_encap_pubkey ?? null,
+    normalizedPrivateData.anonymized_cipher ?? null,
+    normalizedPrivateData.anonymized_iv ?? null,
+    normalizedPrivateData.anonymized_encap_pubkey ?? null,
   );
 };
 
@@ -764,16 +774,23 @@ function updateUserPrivateDataQuery(
   userId: string,
   privateData: UserPrivateData,
 ) {
-  const allFields = Object.keys(privateData).filter(
-    (field) => field !== "userId",
+  const normalizedPrivateData = normalizePrivateDataForStorage(privateData);
+  const allFields = Object.keys(normalizedPrivateData).filter(
+    (field) =>
+      PRIVATE_DATA_FIELDS.has(field) &&
+      normalizedPrivateData[field] !== undefined,
   );
+  if (allFields.length === 0) {
+    throw new Error("No valid private-data fields provided for update");
+  }
   const updateFields = allFields
     .map((field) => {
       return `${field} = ?`;
     })
     .join(", ");
   const values = allFields.map((field) => {
-    const value = privateData[field as keyof UserPrivateData];
+    const value =
+      normalizedPrivateData[field as keyof typeof normalizedPrivateData];
     return value ?? null;
   });
   values.push(userId);
@@ -1043,6 +1060,9 @@ const getUserPrivacyByUserId = (userId: string) => {
 
 const getUserPrivacyByUserIdAndField = (userId: string, field: string) => {
   const privacyData = getUserPrivacyByUserIdAndFieldQuery.get(userId, field);
+  if (!privacyData) {
+    return null;
+  }
   const result = PrivacySettings.safeParse(privacyData);
   if (!result.success) {
     console.error(

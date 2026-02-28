@@ -48,7 +48,8 @@ export default async function getUserInfo(user: JwtPayload | null): Promise<{
   const userPrivateData = getUserPrivateDataByUserId(user.userId);
   const originalCipher = userPrivateData?.original_cipher ?? null;
   const originalIv = userPrivateData?.original_iv ?? null;
-  const hasPrivateData = Boolean(originalCipher && originalIv);
+  const originalEncapPubKey = userPrivateData?.original_encap_pubkey ?? null;
+  const hasPrivateData = Boolean(originalCipher && originalIv && originalEncapPubKey);
   const resolvedUserInfo = buildEncryptedOnlyBaseUser(userInfo);
 
   return {

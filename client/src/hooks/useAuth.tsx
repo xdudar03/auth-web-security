@@ -5,6 +5,8 @@ import { useCallback } from 'react';
 import { FormValues } from '@/components/authentication/types';
 import { startAuthentication } from '@simplewebauthn/browser';
 import {
+  deleteActiveHpkeKey,
+  deleteUserHpkeBundle,
   decryptPrivateKeyWithRecoveryKey,
   deriveRecoveryKey,
   encryptPrivateKeyWithRecoveryKey,
@@ -12,6 +14,8 @@ import {
   exportHpkePrivateKeyJwkB64,
   exportHpkePublicKeyB64,
   generateHpkeKeyPair,
+  getActiveHpkePrivateKeyJwkB64,
+  getActiveHpkePublicKeyB64,
   getUserHpkeBundle,
   newRecoverySaltB64,
   saveUserHpkeBundle,
@@ -91,11 +95,36 @@ export default function useAuth({
   const ensureActiveHpkeBundle = useCallback(async (username: string) => {
     const existing = await getUserHpkeBundle(username);
     if (existing) {
-      await setActiveHpkePrivateKey(existing.privateKeyJwkB64);
-      await setActiveHpkePublicKey(existing.publicKeyB64);
-      return existing;
+      const activePrivate = await getActiveHpkePrivateKeyJwkB64();
+      const activePublic = await getActiveHpkePublicKeyB64();
+      if (
+        !activePrivate ||
+        !activePublic ||
+        activePrivate !== existing.privateKeyJwkB64 ||
+        activePublic !== existing.publicKeyB64
+      ) {
+        await setActiveHpkePrivateKey(existing.privateKeyJwkB64);
+        await setActiveHpkePublicKey(existing.publicKeyB64);
+      }
+      return {
+        bundle: existing,
+        hadStoredBundle: true,
+      };
     }
-    return null;
+
+    const pair = await generateHpkeKeyPair();
+    const regeneratedBundle = {
+      privateKeyJwkB64: await exportHpkePrivateKeyJwkB64(pair.privateKey),
+      publicKeyB64: await exportHpkePublicKeyB64(pair.publicKey),
+    };
+    await saveUserHpkeBundle(username, regeneratedBundle);
+    await setActiveHpkePrivateKey(regeneratedBundle.privateKeyJwkB64);
+    await setActiveHpkePublicKey(regeneratedBundle.publicKeyB64);
+
+    return {
+      bundle: regeneratedBundle,
+      hadStoredBundle: false,
+    };
   }, []);
   const sendConfirmationEmailMutation = useMutation(
     trpc.email.sendConfirmationEmail.mutationOptions({
@@ -193,7 +222,7 @@ export default function useAuth({
         privateData: {
           original_cipher: encryptedData.ciphertextB64,
           original_iv: encryptedData.ivB64,
-          original_aad: encryptedData.encapPublicKeyB64,
+          original_encap_pubkey: encryptedData.encapPublicKeyB64,
         },
       });
       console.log('result', result);
@@ -225,38 +254,64 @@ export default function useAuth({
         return;
       }
       try {
-        const hpkeBundle = await ensureActiveHpkeBundle(values.username);
+        const { bundle: hpkeBundle, hadStoredBundle } =
+          await ensureActiveHpkeBundle(values.username);
 
         const result = await authenticateMutation.mutateAsync({
           username: values.username,
           password: values.password,
-          hpkePublicKeyB64: hpkeBundle?.publicKeyB64,
+          hpkePublicKeyB64: hpkeBundle.publicKeyB64,
         });
 
-        if (!hpkeBundle) {
+        const serverHpkePublicKeyB64 = result.hpkePublicKeyB64 ?? null;
+        const bundleMismatch = Boolean(
+          serverHpkePublicKeyB64 &&
+            hpkeBundle.publicKeyB64 !== serverHpkePublicKeyB64
+        );
+        const shouldRestoreFromRecovery = !hadStoredBundle || bundleMismatch;
+
+        if (shouldRestoreFromRecovery) {
+          const recoveryPassphraseToTry =
+            values.recoveryPassphrase || values.password;
           if (
-            values.recoveryPassphrase &&
+            recoveryPassphraseToTry &&
             result.recoverySaltB64 &&
             result.encryptedPrivateKey &&
             result.encryptedPrivateKeyIv &&
-            result.hpkePublicKeyB64
+            serverHpkePublicKeyB64
           ) {
-            const recoveryKey = await deriveRecoveryKey(
-              values.recoveryPassphrase,
-              result.recoverySaltB64
-            );
-            const privateKeyJwkB64 = await decryptPrivateKeyWithRecoveryKey(
-              result.encryptedPrivateKey,
-              result.encryptedPrivateKeyIv,
-              recoveryKey
-            );
-            await saveUserHpkeBundle(values.username, {
-              privateKeyJwkB64,
-              publicKeyB64: result.hpkePublicKeyB64,
-            });
-            await setActiveHpkePrivateKey(privateKeyJwkB64);
-            await setActiveHpkePublicKey(result.hpkePublicKeyB64);
+            try {
+              const recoveryKey = await deriveRecoveryKey(
+                recoveryPassphraseToTry,
+                result.recoverySaltB64
+              );
+              const privateKeyJwkB64 = await decryptPrivateKeyWithRecoveryKey(
+                result.encryptedPrivateKey,
+                result.encryptedPrivateKeyIv,
+                recoveryKey
+              );
+              await saveUserHpkeBundle(values.username, {
+                privateKeyJwkB64,
+                publicKeyB64: serverHpkePublicKeyB64,
+              });
+              await setActiveHpkePrivateKey(privateKeyJwkB64);
+              await setActiveHpkePublicKey(serverHpkePublicKeyB64);
+            } catch {
+              if (bundleMismatch) {
+                await deleteUserHpkeBundle(values.username);
+                await deleteActiveHpkeKey();
+              }
+              setMessage({
+                message:
+                  'Login succeeded, but encrypted profile data is still locked on this device. Enter your recovery passphrase to restore your key.',
+                type: 'error',
+              });
+            }
           } else {
+            if (bundleMismatch) {
+              await deleteUserHpkeBundle(values.username);
+              await deleteActiveHpkeKey();
+            }
             setMessage({
               message:
                 'Login succeeded, but private profile data is locked on this device. Enter recovery passphrase to restore your key.',

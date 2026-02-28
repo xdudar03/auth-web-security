@@ -58,7 +58,8 @@ function getFromStore<T>(
     const store = tx.objectStore(storeName);
     const request = store.get(key);
     request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve((request.result as T | undefined) ?? null);
+    request.onsuccess = () =>
+      resolve((request.result as T | undefined) ?? null);
   });
 }
 
@@ -304,8 +305,11 @@ export async function setActiveHpkePrivateKey(
   if (typeof window === 'undefined') return;
   const db = await openHpkeDb();
   const active =
-    (await getFromStore<Record<string, string>>(db, HPKE_ACTIVE_STORE, HPKE_ACTIVE_KEY)) ??
-    {};
+    (await getFromStore<Record<string, string>>(
+      db,
+      HPKE_ACTIVE_STORE,
+      HPKE_ACTIVE_KEY
+    )) ?? {};
   active[ACTIVE_HPKE_PRIVATE_KEY] = privateKeyJwkB64;
   await putInStore(db, HPKE_ACTIVE_STORE, HPKE_ACTIVE_KEY, active);
 }
@@ -316,8 +320,11 @@ export async function setActiveHpkePublicKey(
   if (typeof window === 'undefined') return;
   const db = await openHpkeDb();
   const active =
-    (await getFromStore<Record<string, string>>(db, HPKE_ACTIVE_STORE, HPKE_ACTIVE_KEY)) ??
-    {};
+    (await getFromStore<Record<string, string>>(
+      db,
+      HPKE_ACTIVE_STORE,
+      HPKE_ACTIVE_KEY
+    )) ?? {};
   active[ACTIVE_HPKE_PUBLIC_KEY] = publicKeyB64;
   await putInStore(db, HPKE_ACTIVE_STORE, HPKE_ACTIVE_KEY, active);
 }
@@ -342,4 +349,49 @@ export async function getActiveHpkePublicKeyB64(): Promise<string | null> {
     HPKE_ACTIVE_KEY
   );
   return active?.[ACTIVE_HPKE_PUBLIC_KEY] ?? null;
+}
+
+function deleteFromStore(
+  db: IDBDatabase,
+  storeName: string,
+  key: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    const request = store.delete(key);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve();
+  });
+}
+
+function clearStore(db: IDBDatabase, storeName: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    const request = store.clear();
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve();
+  });
+}
+
+export async function deleteUserHpkeBundle(username: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const db = await openHpkeDb();
+  await deleteFromStore(db, HPKE_BUNDLES_STORE, userHpkeKey(username));
+}
+
+export async function deleteActiveHpkeKey(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const db = await openHpkeDb();
+  await deleteFromStore(db, HPKE_ACTIVE_STORE, HPKE_ACTIVE_KEY);
+}
+
+export async function clearAllHpkeState(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const db = await openHpkeDb();
+  await Promise.all([
+    clearStore(db, HPKE_BUNDLES_STORE),
+    clearStore(db, HPKE_ACTIVE_STORE),
+  ]);
 }

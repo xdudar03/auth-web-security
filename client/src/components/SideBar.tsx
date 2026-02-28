@@ -15,6 +15,7 @@ import { useUser } from '@/hooks/useUserContext';
 import MobileBottomBar from './MobileBottomBar';
 import useJwt from '@/hooks/useJwt';
 import { useQueryClient } from '@tanstack/react-query';
+import { clearAllHpkeState } from '@/lib/encryption';
 
 export default function SideBar() {
   // get current path
@@ -22,10 +23,11 @@ export default function SideBar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const { user, role } = useUser();
+  const { role } = useUser();
   const { removeJwt } = useJwt();
   const queryClient = useQueryClient();
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await clearAllHpkeState();
     // Clear all cached queries to prevent showing stale user from previous session
     queryClient.clear();
     removeJwt();
@@ -63,8 +65,8 @@ export default function SideBar() {
                   role?.canAccessAdminPanel
                     ? '/admin-dashboard'
                     : role?.canAccessProviderPanel
-                    ? '/provider-dashboard'
-                    : '/dashboard'
+                      ? '/provider-dashboard'
+                      : '/dashboard'
                 }
                 aria-label="Dashboard"
               >

@@ -17,6 +17,7 @@ test.describe('User Registration', () => {
       page.getByRole('textbox', { name: /username/i })
     ).toBeVisible();
     await expect(page.getByRole('textbox', { name: /email/i })).toBeVisible();
+    await expect(page.getByLabel(/recovery passphrase/i)).toBeVisible();
     await expect(
       page.getByRole('textbox', { name: /password/i })
     ).toBeVisible();
@@ -49,6 +50,9 @@ test.describe('User Registration', () => {
       .getByRole('textbox', { name: /email/i })
       .fill(`${username}@test.com`);
     await page.getByRole('textbox', { name: /password/i }).fill('short');
+    await page
+      .getByRole('textbox', { name: /recovery passphrase/i })
+      .fill('short');
 
     // Submit - use exact match for submit button
     await page
@@ -74,7 +78,9 @@ test.describe('User Registration', () => {
     await page
       .getByRole('textbox', { name: /password/i })
       .fill('longenoughpassword');
-
+    await page
+      .getByRole('textbox', { name: /recovery passphrase/i })
+      .fill('longenoughpassword');
     // Submit - use exact match for submit button
     await page
       .getByRole('button', { name: 'Registration', exact: true })

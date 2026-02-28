@@ -187,7 +187,7 @@ export default function FormAuth({
         password,
         email: '',
         shopIds: [],
-        recoveryPassphrase: '',
+        recoveryPassphrase: password,
       });
     },
     [form, handleAuthenticate]

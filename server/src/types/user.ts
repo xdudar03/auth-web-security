@@ -49,10 +49,10 @@ export const UserPrivateData = z.object({
   userId: z.string(),
   original_cipher: z.optional(z.string().nullable()),
   original_iv: z.optional(z.string().nullable()),
-  original_aad: z.optional(z.string().nullable()),
+  original_encap_pubkey: z.optional(z.string().nullable()),
   anonymized_cipher: z.optional(z.string().nullable()),
   anonymized_iv: z.optional(z.string().nullable()),
-  anonymized_aad: z.optional(z.string().nullable()),
+  anonymized_encap_pubkey: z.optional(z.string().nullable()),
 });
 
 export type UserPrivateData = z.infer<typeof UserPrivateData>;

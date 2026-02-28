@@ -2,31 +2,11 @@ import {
   addPseudonym,
   addUser,
   addUserPrivacy,
+  addUserPrivateData,
   addUserToShop,
 } from "../database.ts";
-import bcrypt from "bcryptjs";
+import { buildEncryptedSeedUser } from "./encryption.ts";
 import type { Visibility } from "../types/privacySetting.ts";
-
-type UserRecord = {
-  userId: string;
-  username: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  password: string;
-  roleId: number;
-  phoneNumber: string;
-  dateOfBirth: string;
-  gender: string;
-  address: string;
-  city: string;
-  state: string;
-  zip: string;
-  country: string;
-  spendings: string;
-  // embedding: excluded per request
-  // credentials: excluded per request
-};
 
 const FIELDS = [
   "firstName",
@@ -45,28 +25,46 @@ const FIELDS = [
   "shops",
 ] as const;
 
-function setPrivacy(
-  userId: string,
-  map: Record<(typeof FIELDS)[number], Visibility>,
-) {
-  for (const field of FIELDS) {
-    const visibility = map[field] ?? "visible";
-    addUserPrivacy({ userId, field, visibility });
-  }
-}
+type Field = (typeof FIELDS)[number];
 
-function seedUsersWithPrivacy() {
-  const salt = bcrypt.genSaltSync(10);
-  // 1) All hidden
-  addUser({
+type UserRecord = {
+  userId: string;
+  username: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  password: string;
+  roleId: number;
+  phoneNumber: string;
+  dateOfBirth: string;
+  gender: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+  spendings: string;
+  shops: number[];
+  pseudoId?: string;
+  privacyMap: Partial<Record<Field, Visibility>>;
+};
+
+const visibilityForAllFields = (
+  visibility: Visibility,
+): Partial<Record<Field, Visibility>> =>
+  Object.fromEntries(FIELDS.map((field) => [field, visibility])) as Partial<
+    Record<Field, Visibility>
+  >;
+
+const usersWithPrivacy: UserRecord[] = [
+  {
     userId: "u101",
     username: "hidden_all",
     email: "hidden_all@example.com",
     firstName: "Hidden",
     lastName: "All",
-    password: bcrypt.hashSync("password1", salt),
+    password: "password1",
     roleId: 2,
-    isBiometric: false,
     phoneNumber: "+1-202-555-0101",
     dateOfBirth: "1990-01-01",
     gender: "non-binary",
@@ -76,27 +74,17 @@ function seedUsersWithPrivacy() {
     zip: "00000",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 0 }),
-  });
-  setPrivacy(
-    "u101",
-    Object.fromEntries(FIELDS.map((f) => [f, "hidden"])) as any,
-  );
-  addUserToShop("u101", 3);
-  addPseudonym({
+    shops: [3],
     pseudoId: "p101",
-    userId: "u101",
-    createdAt: new Date().toISOString(),
-    expiresAt: null,
-  });
-
-  // 2) All anonymized
-  addUser({
+    privacyMap: visibilityForAllFields("hidden"),
+  },
+  {
     userId: "u102",
     username: "anon_all",
     email: "anon_all@example.com",
     firstName: "Anon",
     lastName: "All",
-    password: bcrypt.hashSync("password2", salt),
+    password: "password2",
     roleId: 2,
     phoneNumber: "+1-202-555-0102",
     dateOfBirth: "1988-02-02",
@@ -107,28 +95,17 @@ function seedUsersWithPrivacy() {
     zip: "11111",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 1500 }),
-    isBiometric: false,
-  });
-  setPrivacy(
-    "u102",
-    Object.fromEntries(FIELDS.map((f) => [f, "anonymized"])) as any,
-  );
-  addUserToShop("u102", 1);
-  addPseudonym({
+    shops: [1],
     pseudoId: "p102",
-    userId: "u102",
-    createdAt: new Date().toISOString(),
-    expiresAt: null,
-  });
-
-  // 3) All visible
-  addUser({
+    privacyMap: visibilityForAllFields("anonymized"),
+  },
+  {
     userId: "u103",
     username: "visible_all",
     email: "visible_all@example.com",
     firstName: "Visible",
     lastName: "All",
-    password: bcrypt.hashSync("password3", salt),
+    password: "password3",
     roleId: 2,
     phoneNumber: "+1-202-555-0103",
     dateOfBirth: "1995-03-03",
@@ -139,23 +116,16 @@ function seedUsersWithPrivacy() {
     zip: "90210",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 3200 }),
-    isBiometric: false,
-  });
-  setPrivacy(
-    "u103",
-    Object.fromEntries(FIELDS.map((f) => [f, "visible"])) as any,
-  );
-  addUserToShop("u103", 2);
-  addUserToShop("u103", 3);
-
-  // 4) Mixed A: contact visible, demographics anonymized, finances hidden
-  addUser({
+    shops: [2, 3],
+    privacyMap: visibilityForAllFields("visible"),
+  },
+  {
     userId: "u104",
     username: "mixed_a",
     email: "mixed_a@example.com",
     firstName: "Mixed",
     lastName: "Alpha",
-    password: bcrypt.hashSync("password4", salt),
+    password: "password4",
     roleId: 2,
     phoneNumber: "+1-202-555-0104",
     dateOfBirth: "1992-04-04",
@@ -166,35 +136,31 @@ function seedUsersWithPrivacy() {
     zip: "10001",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 640 }),
-    isBiometric: false,
-  });
-  setPrivacy("u104", {
-    firstName: "visible",
-    lastName: "visible",
-    email: "visible",
-    phoneNumber: "visible",
-    dateOfBirth: "anonymized",
-    gender: "anonymized",
-    address: "anonymized",
-    city: "anonymized",
-    state: "anonymized",
-    zip: "anonymized",
-    country: "anonymized",
-    spendings: "hidden",
-    shoppingHistory: "hidden",
-    shops: "hidden",
-  });
-  addUserToShop("u104", 1);
-  addUserToShop("u104", 2);
-
-  // 5) Mixed B: profile hidden, location visible, purchase anonymized
-  addUser({
+    shops: [1, 2],
+    privacyMap: {
+      firstName: "visible",
+      lastName: "visible",
+      email: "visible",
+      phoneNumber: "visible",
+      dateOfBirth: "anonymized",
+      gender: "anonymized",
+      address: "anonymized",
+      city: "anonymized",
+      state: "anonymized",
+      zip: "anonymized",
+      country: "anonymized",
+      spendings: "hidden",
+      shoppingHistory: "hidden",
+      shops: "hidden",
+    },
+  },
+  {
     userId: "u105",
     username: "mixed_b",
     email: "mixed_b@example.com",
     firstName: "Mixed",
     lastName: "Beta",
-    password: bcrypt.hashSync("password5", salt),
+    password: "password5",
     roleId: 2,
     phoneNumber: "+1-202-555-0105",
     dateOfBirth: "1998-05-05",
@@ -205,27 +171,80 @@ function seedUsersWithPrivacy() {
     zip: "73301",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 9800 }),
-    isBiometric: false,
-  });
-  setPrivacy("u105", {
-    firstName: "hidden",
-    lastName: "hidden",
-    email: "hidden",
-    phoneNumber: "hidden",
-    dateOfBirth: "hidden",
-    gender: "hidden",
-    address: "visible",
-    city: "visible",
-    state: "visible",
-    zip: "visible",
-    country: "visible",
-    spendings: "anonymized",
-    shoppingHistory: "anonymized",
-    shops: "anonymized",
-  });
-  addUserToShop("u105", 1);
-  addUserToShop("u105", 2);
-  addUserToShop("u105", 3);
+    shops: [1, 2, 3],
+    privacyMap: {
+      firstName: "hidden",
+      lastName: "hidden",
+      email: "hidden",
+      phoneNumber: "hidden",
+      dateOfBirth: "hidden",
+      gender: "hidden",
+      address: "visible",
+      city: "visible",
+      state: "visible",
+      zip: "visible",
+      country: "visible",
+      spendings: "anonymized",
+      shoppingHistory: "anonymized",
+      shops: "anonymized",
+    },
+  },
+];
+
+function setPrivacy(userId: string, map: Partial<Record<Field, Visibility>>) {
+  for (const field of FIELDS) {
+    const visibility = map[field] ?? "visible";
+    addUserPrivacy({ userId, field, visibility });
+  }
 }
 
-seedUsersWithPrivacy();
+async function seedUsersWithPrivacy() {
+  for (const userRecord of usersWithPrivacy) {
+    const encryptedSeedUser = await buildEncryptedSeedUser({
+      userId: userRecord.userId,
+      username: userRecord.username,
+      email: userRecord.email,
+      password: userRecord.password,
+      recoveryPassphrase: userRecord.password,
+      roleId: userRecord.roleId,
+      privateProfile: {
+        username: userRecord.username,
+        email: userRecord.email,
+        firstName: userRecord.firstName,
+        lastName: userRecord.lastName,
+        phoneNumber: userRecord.phoneNumber,
+        dateOfBirth: userRecord.dateOfBirth,
+        gender: userRecord.gender,
+        address: userRecord.address,
+        city: userRecord.city,
+        state: userRecord.state,
+        zip: userRecord.zip,
+        country: userRecord.country,
+        spendings: userRecord.spendings,
+        shops: userRecord.shops,
+      },
+    });
+
+    addUser(encryptedSeedUser.user);
+    addUserPrivateData(userRecord.userId, encryptedSeedUser.privateData);
+    setPrivacy(userRecord.userId, userRecord.privacyMap);
+
+    for (const shopId of userRecord.shops) {
+      addUserToShop(userRecord.userId, shopId);
+    }
+
+    if (userRecord.pseudoId) {
+      addPseudonym({
+        pseudoId: userRecord.pseudoId,
+        userId: userRecord.userId,
+        createdAt: new Date().toISOString(),
+        expiresAt: null,
+      });
+    }
+  }
+}
+
+seedUsersWithPrivacy().catch((error) => {
+  console.error("Failed to seed privacy test users", error);
+  process.exit(1);
+});

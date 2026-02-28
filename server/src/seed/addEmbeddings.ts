@@ -2,12 +2,14 @@ import {
   addCustomer,
   addCustomerEmbedding,
   addUser,
+  addUserPrivateData,
   addUserEmbedding,
 } from "../database.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { dpSvdEmbeddingFromMatrix } from "../lib/dpSvd.ts";
 import sharp from "sharp";
+import { buildEncryptedSeedUser } from "./encryption.ts";
 
 const TARGET_SIZE = 100;
 const DP_SVD_OPTIONS = {
@@ -40,61 +42,64 @@ const CUSTOMER_IDS = [
 const USER_ID_SET = new Set<string>(USER_IDS);
 const CUSTOMER_ID_SET = new Set<string>(CUSTOMER_IDS);
 
-addUser({
-  userId: "u106",
-  username: "u106",
-  password: "u106",
-  email: "u106@example.com",
-  isBiometric: false,
-  roleId: 2,
-  privacyPreset: "pl4",
-});
-addUser({
-  userId: "u107",
-  username: "u107",
-  password: "u107",
-  email: "u107@example.com",
-  isBiometric: false,
-  roleId: 2,
-  privacyPreset: "pl4",
-});
-addUser({
-  userId: "u108",
-  username: "u108",
-  password: "u108",
-  email: "u108@example.com",
-  isBiometric: false,
-  roleId: 2,
-  privacyPreset: "pl4",
-});
-addCustomer({
-  customerId: "c109",
-  isBiometric: true,
-});
-addCustomer({
-  customerId: "c110",
-  isBiometric: true,
-});
-addCustomer({
-  customerId: "c111",
-  isBiometric: true,
-});
-addCustomer({
-  customerId: "c112",
-  isBiometric: true,
-});
-addCustomer({
-  customerId: "c113",
-  isBiometric: true,
-});
-addCustomer({
-  customerId: "c114",
-  isBiometric: true,
-});
-addCustomer({
-  customerId: "c115",
-  isBiometric: true,
-});
+const EMBEDDING_USERS = [
+  {
+    userId: "u106",
+    username: "u106",
+    password: "u106",
+    email: "u106@example.com",
+  },
+  {
+    userId: "u107",
+    username: "u107",
+    password: "u107",
+    email: "u107@example.com",
+  },
+  {
+    userId: "u108",
+    username: "u108",
+    password: "u108",
+    email: "u108@example.com",
+  },
+] as const;
+
+const EMBEDDING_CUSTOMERS = [
+  "c109",
+  "c110",
+  "c111",
+  "c112",
+  "c113",
+  "c114",
+  "c115",
+] as const;
+
+async function seedEmbeddingUsersAndCustomers() {
+  for (const user of EMBEDDING_USERS) {
+    const encryptedSeedUser = await buildEncryptedSeedUser({
+      userId: user.userId,
+      username: user.username,
+      email: user.email,
+      password: user.password,
+      recoveryPassphrase: user.password,
+      roleId: 2,
+      privacyPreset: "pl4",
+      privateProfile: {
+        username: user.username,
+        email: user.email,
+      },
+    });
+
+    addUser(encryptedSeedUser.user);
+    addUserPrivateData(user.userId, encryptedSeedUser.privateData);
+  }
+
+  for (const customerId of EMBEDDING_CUSTOMERS) {
+    addCustomer({
+      customerId,
+      isBiometric: true,
+    });
+  }
+}
 
 const collectImages = (dirPath: string): string[] => {
   if (!fs.existsSync(dirPath)) {
@@ -213,4 +218,12 @@ const addEmbeddings = async () => {
   }
 };
 
-addEmbeddings();
+async function runSeedEmbeddings() {
+  await seedEmbeddingUsersAndCustomers();
+  await addEmbeddings();
+}
+
+runSeedEmbeddings().catch((error) => {
+  console.error("Failed to seed embeddings", error);
+  process.exit(1);
+});

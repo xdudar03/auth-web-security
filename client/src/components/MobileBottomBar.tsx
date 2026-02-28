@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import useJwt from '@/hooks/useJwt';
+import { clearAllHpkeState } from '@/lib/encryption';
 
 export default function MobileBottomBar() {
   const [isActive, setIsActive] = useState('');
@@ -22,7 +23,8 @@ export default function MobileBottomBar() {
   const { role } = useUser();
   const queryClient = useQueryClient();
   const { removeJwt } = useJwt();
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await clearAllHpkeState();
     // Clear cache and token to avoid stale flashes
     queryClient.clear();
     removeJwt();
