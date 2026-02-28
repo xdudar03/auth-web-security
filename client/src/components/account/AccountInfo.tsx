@@ -1,6 +1,6 @@
 'use client';
-import { Shop, useUser, type User as UserType } from '@/hooks/useUserContext';
-import { useEffect, useState } from 'react';
+import { useUser, type User as UserType } from '@/hooks/useUserContext';
+import { useEffect, useRef, useState } from 'react';
 import { Form } from '../ui/form';
 import { useForm } from 'react-hook-form';
 import { useTRPC } from '@/hooks/TrpcContext';
@@ -12,7 +12,7 @@ import { AddressSection } from './AddressSection';
 import {
   handleFieldAnonymization,
   type FormValues,
-} from '../../lib/anonymization/anonymizationHandlers';
+} from '@/lib/anonymization/anonymizationHandlers';
 import ProvidersManager from './ProvidersManager';
 import {
   decryptWithHpkePrivateKey,
@@ -20,30 +20,20 @@ import {
   getActiveHpkePrivateKeyJwkB64,
   importHpkePrivateKeyJwkB64,
 } from '@/lib/encryption';
+import {
+  buildAccountFormValues,
+  parseDecryptedAnonymizedPayload,
+  parseDecryptedUserPayload,
+} from '@/lib/accountInfoFormUtils';
+import { useAnonymizedBatchSync } from '@/hooks/useAnonymizedBatchSync';
 
 export default function AccountInfo() {
   const { user, shops, privacy, hasPrivateData, privateData } = useUser();
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [messages, setMessages] = useState<Record<string, string>>({});
+  const lastHydrationSignatureRef = useRef<string>('');
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-
-  const updateUserMutation = useMutation(
-    trpc.user.updateProfile.mutationOptions({
-      onSuccess: () => {
-        setMode('view');
-        queryClient.invalidateQueries({
-          queryKey: trpc.info.getUserInfo.queryOptions().queryKey,
-        });
-      },
-      onError: (error: unknown) => {
-        console.error(
-          'Error updating user',
-          error instanceof Error ? error.message : 'Unknown error'
-        );
-      },
-    })
-  );
 
   const addUserPrivateDataMutation = useMutation(
     trpc.user.addUserPrivateData.mutationOptions({
@@ -86,100 +76,148 @@ export default function AccountInfo() {
   );
 
   const form = useForm<FormValues>({
-    defaultValues: {
-      username: user?.username ?? '',
-      shops: shops?.map((shop: Shop) => shop.shopName) ?? [],
-      firstName: user?.firstName ?? '',
-      lastName: user?.lastName ?? '',
-      email: user?.emailHash ?? '',
-      phoneNumber: user?.phoneNumber ?? '',
-      dateOfBirth: user?.dateOfBirth ?? '',
-      gender: user?.gender ?? '',
-      country: user?.country ?? '',
-      city: user?.city ?? '',
-      address: user?.address ?? '',
-      zip: user?.zip ?? '',
-      spendings: user?.spendings ?? '',
-      shoppingHistory: user?.shoppingHistory ?? '',
-    },
+    defaultValues: buildAccountFormValues(user, shops),
     mode: 'onTouched',
     reValidateMode: 'onChange',
   });
 
+  const {
+    upsertAnonymizedField,
+    removeAnonymizedField,
+    setAnonymizedSnapshot,
+    clearAnonymizedSnapshot,
+    flushAnonymizedNow,
+  } = useAnonymizedBatchSync({
+    userId: user?.userId,
+    hpkePublicKeyB64: user?.hpkePublicKeyB64,
+    hasPrivateData,
+    addPrivateData: addUserPrivateDataMutation.mutateAsync,
+    updatePrivateData: updateUserPrivateDataMutation.mutateAsync,
+  });
+
+  const shopsSignature = shops?.map((shop) => shop.shopName).join('|') ?? '';
+  const hydrationSignature = [
+    user?.userId ?? '',
+    user?.hpkePublicKeyB64 ?? '',
+    user?.username ?? '',
+    user?.firstName ?? '',
+    user?.lastName ?? '',
+    user?.emailHash ?? '',
+    user?.phoneNumber ?? '',
+    user?.dateOfBirth ?? '',
+    user?.gender ?? '',
+    user?.country ?? '',
+    user?.city ?? '',
+    user?.address ?? '',
+    user?.zip ?? '',
+    user?.spendings ?? '',
+    user?.shoppingHistory ?? '',
+    hasPrivateData ? '1' : '0',
+    privateData?.original_cipher ?? '',
+    privateData?.original_iv ?? '',
+    privateData?.original_encap_pubkey ?? '',
+    privateData?.anonymized_cipher ?? '',
+    privateData?.anonymized_iv ?? '',
+    privateData?.anonymized_encap_pubkey ?? '',
+    shopsSignature,
+  ].join('|');
+
   useEffect(() => {
+    if (lastHydrationSignatureRef.current === hydrationSignature) {
+      return;
+    }
+    lastHydrationSignatureRef.current = hydrationSignature;
+
     const resetWithValues = (source: Partial<UserType> | null) => {
-      form.reset({
-        username: source?.username ?? '',
-        shops: shops?.map((shop: Shop) => shop.shopName) ?? [],
-        firstName: source?.firstName ?? '',
-        lastName: source?.lastName ?? '',
-        email: source?.email ?? '', // TODO:change to DecrytedData type
-        phoneNumber: source?.phoneNumber ?? '',
-        dateOfBirth: source?.dateOfBirth ?? '',
-        gender: source?.gender ?? '',
-        country: source?.country ?? '',
-        city: source?.city ?? '',
-        address: source?.address ?? '',
-        zip: source?.zip ?? '',
-        spendings: source?.spendings ?? '',
-        shoppingHistory: source?.shoppingHistory ?? '',
-      });
+      form.reset(buildAccountFormValues(source, shops));
     };
 
     const loadDecryptedUser = async () => {
       if (!user) {
+        clearAnonymizedSnapshot();
         resetWithValues(null);
         return;
       }
 
-      if (
-        hasPrivateData &&
-        user.hpkePublicKeyB64 &&
-        privateData?.original_cipher &&
-        privateData?.original_iv &&
-        privateData?.original_encap_pubkey
-      ) {
+      if (hasPrivateData && user.hpkePublicKeyB64) {
         try {
           const privateKeyJwkB64 = await getActiveHpkePrivateKeyJwkB64();
           if (!privateKeyJwkB64) {
             throw new Error('Missing active HPKE private key in session');
           }
+
           const privateKey = await importHpkePrivateKeyJwkB64(privateKeyJwkB64);
-          const decrypted = await decryptWithHpkePrivateKey(
-            privateKey,
-            privateData.original_cipher,
-            privateData.original_iv,
-            privateData.original_encap_pubkey
-          );
-          const parsed = (() => {
+
+          if (
+            privateData?.anonymized_cipher &&
+            privateData?.anonymized_iv &&
+            privateData?.anonymized_encap_pubkey
+          ) {
             try {
-              return JSON.parse(decrypted) as Partial<UserType>;
+              const decryptedAnonymized = await decryptWithHpkePrivateKey(
+                privateKey,
+                privateData.anonymized_cipher,
+                privateData.anonymized_iv,
+                privateData.anonymized_encap_pubkey
+              );
+
+              setAnonymizedSnapshot(
+                parseDecryptedAnonymizedPayload(decryptedAnonymized)
+              );
             } catch {
-              return { email: decrypted } as Partial<UserType>;
+              clearAnonymizedSnapshot();
             }
-          })();
-          console.log('parsed', parsed);
-          resetWithValues(parsed);
-          return;
+          } else {
+            clearAnonymizedSnapshot();
+          }
+
+          if (
+            privateData?.original_cipher &&
+            privateData?.original_iv &&
+            privateData?.original_encap_pubkey
+          ) {
+            const decryptedOriginal = await decryptWithHpkePrivateKey(
+              privateKey,
+              privateData.original_cipher,
+              privateData.original_iv,
+              privateData.original_encap_pubkey
+            );
+
+            resetWithValues(parseDecryptedUserPayload(decryptedOriginal));
+            return;
+          }
         } catch (error) {
           console.error('Error decrypting account info', error);
         }
       }
 
+      clearAnonymizedSnapshot();
       resetWithValues(user);
     };
 
     loadDecryptedUser();
-  }, [form, hasPrivateData, privateData, shops, user]);
+  }, [
+    clearAnonymizedSnapshot,
+    form,
+    hasPrivateData,
+    hydrationSignature,
+    privateData,
+    setAnonymizedSnapshot,
+    shops,
+    user,
+  ]);
 
   const handleOnSave = async (values: FormValues) => {
     if (mode === 'edit') {
       try {
+        await flushAnonymizedNow();
+
         const updates: UserType = {
           ...user,
           ...values,
           roleId: user?.roleId,
         } as UserType;
+
         const hpkePublicKeyB64 = user?.hpkePublicKeyB64;
         if (!hpkePublicKeyB64) {
           throw new Error('Missing HPKE public key for current user');
@@ -208,7 +246,8 @@ export default function AccountInfo() {
         console.error('Error saving account info', error);
       }
     }
-    setMode(mode === 'view' ? 'edit' : 'view');
+
+    setMode((previousMode) => (previousMode === 'view' ? 'edit' : 'view'));
   };
 
   const handleToggleVisibility = async (
@@ -218,11 +257,13 @@ export default function AccountInfo() {
     try {
       await toggleUserPrivacyMutation.mutateAsync({
         field: name,
-        visibility: visibility,
+        visibility,
       });
     } catch (error: unknown) {
       console.error('Error toggling user privacy', error);
     }
+
+    const fieldName = name as keyof FormValues;
     if (visibility === 'anonymized') {
       await handleFieldAnonymization(
         name,
@@ -230,7 +271,12 @@ export default function AccountInfo() {
         form.setValue,
         setMessages
       );
+
+      upsertAnonymizedField(fieldName, form.getValues(fieldName));
+      return;
     }
+
+    removeAnonymizedField(fieldName);
   };
 
   return (

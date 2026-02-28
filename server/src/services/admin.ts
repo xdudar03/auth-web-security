@@ -93,56 +93,7 @@ type UpdateUserInput = {
   roleId?: number | string | null;
 };
 
-export function updateUserById(userId: string, updates: UpdateUserInput) {
-  const existing = getUserById(userId);
-
-  console.log("existing: ", existing);
-
-  if (!existing) {
-    throw new HttpError(404, "User not found");
-  }
-
-  const preparedUpdates = { ...updates };
-
-  console.log("preparedUpdates: ", preparedUpdates);
-
-  if (preparedUpdates.roleId !== undefined && preparedUpdates.roleId !== null) {
-    preparedUpdates.roleId = Number(preparedUpdates.roleId);
-  }
-
-  const updatesToSave = Object.fromEntries(
-    Object.entries(preparedUpdates).filter(([key, value]) => {
-      if (value === undefined) return false;
-      return existing[key as keyof typeof existing] !== value;
-    }),
-  );
-
-  console.log("updatesToSave: ", updatesToSave);
-
-  if (Object.keys(updatesToSave).length === 0) {
-    throw new HttpError(400, "No updates to save");
-  }
-
-  updateUser(existing.userId as string, updatesToSave);
-  const updatedRow = getUserWithRoleQuery.get(userId);
-
-  if (!updatedRow) {
-    throw new HttpError(500, "Failed to load updated user");
-  }
-
-  const shops = getUserShops(updatedRow?.userId as string);
-
-  const response = mapResponseQuery({
-    ...updatedRow,
-    shops,
-  });
-
-  return {
-    message: "User updated successfully",
-    user: response.user,
-    role: response.role,
-  };
-}
+// TODO: everything below should be moved to user service
 
 export function addUserPrivateData(
   userId: string,
