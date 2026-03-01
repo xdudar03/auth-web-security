@@ -10,6 +10,7 @@ import path from "node:path";
 import { dpSvdEmbeddingFromMatrix } from "../lib/dpSvd.ts";
 import sharp from "sharp";
 import { buildEncryptedSeedUser } from "./encryption.ts";
+import { applyPrivacyPreset } from "../services/privacy.ts";
 
 const TARGET_SIZE = 100;
 const DP_SVD_OPTIONS = {
@@ -86,11 +87,40 @@ async function seedEmbeddingUsersAndCustomers() {
       privateProfile: {
         username: user.username,
         email: user.email,
+        firstName: user.username,
+        lastName: user.username,
+        phoneNumber: "",
+        dateOfBirth: "",
+        gender: "",
+        country: "",
+        city: "",
+        address: "",
+        zip: "",
+        spendings: "",
+        shoppingHistory: "[]",
+        shops: [],
+      },
+      anonymizedPrivateProfile: {
+        username: "hidden-user",
+        email: "u***@example.com",
+        firstName: "anonymous",
+        lastName: "anonymous",
+        phoneNumber: "***",
+        dateOfBirth: "",
+        gender: "other",
+        country: "",
+        city: "",
+        address: "",
+        zip: "***",
+        spendings: "***",
+        shoppingHistory: "[]",
+        shops: [],
       },
     });
 
     addUser(encryptedSeedUser.user);
     addUserPrivateData(user.userId, encryptedSeedUser.privateData);
+    applyPrivacyPreset(user.userId, "pl4");
   }
 
   for (const customerId of EMBEDDING_CUSTOMERS) {

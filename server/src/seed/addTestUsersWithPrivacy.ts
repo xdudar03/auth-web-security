@@ -1,11 +1,19 @@
 import {
   addPseudonym,
+  addProvider,
+  addProviderSharedData,
   addUser,
   addUserPrivacy,
   addUserPrivateData,
   addUserToShop,
+  deleteProviderSharedData,
+  getProviderByProviderId,
+  getUserById,
 } from "../database.ts";
-import { buildEncryptedSeedUser } from "./encryption.ts";
+import {
+  buildEncryptedSeedUser,
+  encryptForProviderSeedShare,
+} from "./encryption.ts";
 import type { Visibility } from "../types/privacySetting.ts";
 
 const FIELDS = [
@@ -44,9 +52,140 @@ type UserRecord = {
   zip: string;
   country: string;
   spendings: string;
+  shoppingHistory: string;
   shops: number[];
   pseudoId?: string;
   privacyMap: Partial<Record<Field, Visibility>>;
+};
+
+const SHOP_PROVIDER_BY_ID: Record<number, string> = {
+  1: "p1",
+  2: "p2",
+  3: "p3",
+};
+
+const PROVIDER_SHARE_FIELDS = [
+  "email",
+  "firstName",
+  "lastName",
+  "phoneNumber",
+  "dateOfBirth",
+  "gender",
+  "address",
+  "city",
+  "state",
+  "zip",
+  "country",
+  "spendings",
+  "shoppingHistory",
+  "shops",
+] as const;
+
+type ProviderSharedField = (typeof PROVIDER_SHARE_FIELDS)[number];
+
+const toShareString = (value: unknown): string => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (Array.isArray(value)) {
+    return value.join(", ");
+  }
+  return String(value);
+};
+
+const toProviderVisiblePayload = (
+  userRecord: UserRecord,
+): Record<ProviderSharedField, unknown> => ({
+  email: userRecord.email,
+  firstName: userRecord.firstName,
+  lastName: userRecord.lastName,
+  phoneNumber: userRecord.phoneNumber,
+  dateOfBirth: userRecord.dateOfBirth,
+  gender: userRecord.gender,
+  address: userRecord.address,
+  city: userRecord.city,
+  state: userRecord.state,
+  zip: userRecord.zip,
+  country: userRecord.country,
+  spendings: userRecord.spendings,
+  shoppingHistory: userRecord.shoppingHistory,
+  shops: userRecord.shops,
+});
+
+const toProviderAnonymizedPayload = (
+  userRecord: UserRecord,
+): Record<ProviderSharedField, unknown> => ({
+  email: "u***@example.com",
+  firstName: "anonymous",
+  lastName: "anonymous",
+  phoneNumber: "***",
+  dateOfBirth: userRecord.dateOfBirth.slice(0, 4),
+  gender: "other",
+  address: "anonymous",
+  city: "anonymous",
+  state: "***",
+  zip: "***",
+  country: "anonymous",
+  spendings: "***",
+  shoppingHistory: "[]",
+  shops: [],
+});
+
+const getProviderIdsForUser = (userRecord: UserRecord): string[] => {
+  return Array.from(
+    new Set(
+      userRecord.shops
+        .map((shopId) => SHOP_PROVIDER_BY_ID[shopId])
+        .filter((providerId): providerId is string => Boolean(providerId)),
+    ),
+  );
+};
+
+const toProviderShareData = (
+  userRecord: UserRecord,
+): {
+  mode: "hidden" | "anonymized" | "visible";
+  payload: Record<string, string>;
+} => {
+  const visiblePayload = toProviderVisiblePayload(userRecord);
+  const anonymizedPayload = toProviderAnonymizedPayload(userRecord);
+
+  let hasVisibleField = false;
+  let hasAnonymizedField = false;
+
+  const payload: Record<string, string> = {
+    userId: userRecord.userId,
+  };
+
+  for (const field of PROVIDER_SHARE_FIELDS) {
+    const visibility = (userRecord.privacyMap[field as Field] ??
+      "visible") as Visibility;
+
+    if (visibility === "visible") {
+      hasVisibleField = true;
+      payload[field] = toShareString(visiblePayload[field]);
+      continue;
+    }
+
+    if (visibility === "anonymized") {
+      hasAnonymizedField = true;
+      payload[field] = toShareString(anonymizedPayload[field]);
+      continue;
+    }
+
+    payload[field] = "";
+  }
+
+  const mode: "hidden" | "anonymized" | "visible" = hasVisibleField
+    ? "visible"
+    : hasAnonymizedField
+      ? "anonymized"
+      : "hidden";
+
+  return {
+    mode,
+    payload,
+  };
 };
 
 const visibilityForAllFields = (
@@ -74,6 +213,7 @@ const usersWithPrivacy: UserRecord[] = [
     zip: "00000",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 0 }),
+    shoppingHistory: "[]",
     shops: [3],
     pseudoId: "p101",
     privacyMap: visibilityForAllFields("hidden"),
@@ -95,6 +235,7 @@ const usersWithPrivacy: UserRecord[] = [
     zip: "11111",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 1500 }),
+    shoppingHistory: "[]",
     shops: [1],
     pseudoId: "p102",
     privacyMap: visibilityForAllFields("anonymized"),
@@ -116,6 +257,7 @@ const usersWithPrivacy: UserRecord[] = [
     zip: "90210",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 3200 }),
+    shoppingHistory: "[]",
     shops: [2, 3],
     privacyMap: visibilityForAllFields("visible"),
   },
@@ -136,6 +278,7 @@ const usersWithPrivacy: UserRecord[] = [
     zip: "10001",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 640 }),
+    shoppingHistory: "[]",
     shops: [1, 2],
     privacyMap: {
       firstName: "visible",
@@ -171,6 +314,7 @@ const usersWithPrivacy: UserRecord[] = [
     zip: "73301",
     country: "US",
     spendings: JSON.stringify({ currency: "USD", total: 9800 }),
+    shoppingHistory: "[]",
     shops: [1, 2, 3],
     privacyMap: {
       firstName: "hidden",
@@ -198,6 +342,55 @@ function setPrivacy(userId: string, map: Partial<Record<Field, Visibility>>) {
   }
 }
 
+async function seedProviderSharedDataForUser(userRecord: UserRecord) {
+  const providerIds = getProviderIdsForUser(userRecord);
+  if (!providerIds.length) {
+    return;
+  }
+
+  const shareData = toProviderShareData(userRecord);
+
+  for (const providerId of providerIds) {
+    const existingProvider = getProviderByProviderId(providerId);
+    if (!existingProvider) {
+      const providerUser = getUserById(providerId);
+      if (!providerUser) {
+        continue;
+      }
+      addProvider(providerId, providerUser.username);
+    }
+
+    deleteProviderSharedData(providerId, userRecord.userId, "visible");
+    deleteProviderSharedData(providerId, userRecord.userId, "anonymized");
+
+    if (shareData.mode === "hidden") {
+      continue;
+    }
+
+    const providerUser = getUserById(providerId);
+    const providerPublicKeyB64 = providerUser?.hpkePublicKeyB64;
+    if (!providerPublicKeyB64) {
+      continue;
+    }
+
+    const encryptedShare = await encryptForProviderSeedShare(
+      providerPublicKeyB64,
+      shareData.payload,
+    );
+
+    addProviderSharedData({
+      providerId,
+      userId: userRecord.userId,
+      visibility: shareData.mode,
+      providerPublicKeyHash: encryptedShare.providerPublicKeyHash,
+      userCipher: encryptedShare.userCipher,
+      userIv: encryptedShare.userIv,
+      userEncapPubKey: encryptedShare.userEncapPubKey,
+      userVersion: 1,
+    });
+  }
+}
+
 async function seedUsersWithPrivacy() {
   for (const userRecord of usersWithPrivacy) {
     const encryptedSeedUser = await buildEncryptedSeedUser({
@@ -221,7 +414,25 @@ async function seedUsersWithPrivacy() {
         zip: userRecord.zip,
         country: userRecord.country,
         spendings: userRecord.spendings,
+        shoppingHistory: userRecord.shoppingHistory,
         shops: userRecord.shops,
+      },
+      anonymizedPrivateProfile: {
+        username: "hidden-user",
+        email: "u***@example.com",
+        firstName: "anonymous",
+        lastName: "anonymous",
+        phoneNumber: "***",
+        dateOfBirth: userRecord.dateOfBirth.slice(0, 4),
+        gender: "other",
+        address: userRecord.city,
+        city: userRecord.country,
+        state: "***",
+        zip: "***",
+        country: userRecord.country,
+        spendings: "***",
+        shoppingHistory: "[]",
+        shops: [],
       },
     });
 
@@ -232,6 +443,8 @@ async function seedUsersWithPrivacy() {
     for (const shopId of userRecord.shops) {
       addUserToShop(userRecord.userId, shopId);
     }
+
+    await seedProviderSharedDataForUser(userRecord);
 
     if (userRecord.pseudoId) {
       addPseudonym({

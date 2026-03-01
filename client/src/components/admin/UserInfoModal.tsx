@@ -4,10 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Mail, Phone, Calendar } from 'lucide-react';
 import { useTRPC } from '@/hooks/TrpcContext';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUserContext';
 import InfoRow from './user-info/InfoRow';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  decryptWithHpkePrivateKey,
+  getActiveHpkePrivateKeyJwkB64,
+  importHpkePrivateKeyJwkB64,
+} from '@/lib/encryption';
 
 interface UserInfoModalProps {
   activeUser: User;
@@ -16,6 +21,22 @@ interface UserInfoModalProps {
   onUserUpdated?: () => void;
 }
 
+type UserInfoField =
+  | 'username'
+  | 'roleId'
+  | 'email'
+  | 'firstName'
+  | 'lastName'
+  | 'phoneNumber'
+  | 'dateOfBirth'
+  | 'gender'
+  | 'country'
+  | 'city'
+  | 'address'
+  | 'zip';
+
+type SharedProfile = Record<string, unknown>;
+
 export default function UserInfoModal({
   activeUser,
   setShowUserInfoModal,
@@ -23,7 +44,28 @@ export default function UserInfoModal({
 }: UserInfoModalProps) {
   const { role } = useUser();
   const trpc = useTRPC();
+  const activeUserEmail = (activeUser as User & { email?: string }).email ?? '';
   const [message, setMessage] = useState({ message: '', type: '' });
+  const [sharedProfile, setSharedProfile] = useState<SharedProfile | null>(
+    null
+  );
+  const [sharedVisibility, setSharedVisibility] = useState<
+    'anonymized' | 'visible' | null
+  >(null);
+  const [sharedProfileError, setSharedProfileError] = useState<string | null>(
+    null
+  );
+
+  const providerSharedDataQuery = useQuery({
+    ...trpc.providers.getSharedUserData.queryOptions({
+      userId: activeUser.userId,
+    }),
+    refetchOnMount: 'always',
+    enabled:
+      role?.roleName === 'provider' &&
+      Boolean(activeUser.userId) &&
+      Boolean(activeUser.registered),
+  });
   const sendResetPasswordEmailMutation = useMutation(
     trpc.email.sendResetPasswordEmail.mutationOptions({
       onSuccess: (data) => {
@@ -54,50 +96,113 @@ export default function UserInfoModal({
     setShowUserInfoModal(false);
   };
 
-  const getVisibility = (
-    field: keyof {
-      username: string;
-      roleId: string | null;
-      email: string;
-      firstName: string | null;
-      lastName: string | null;
-      phoneNumber: string | null;
-      dateOfBirth: string | null;
-      gender: string | null;
-      country: string | null;
-      city: string | null;
-      address: string | null;
-      zip: string | null;
+  useEffect(() => {
+    const decryptSharedData = async () => {
+      setSharedProfile(null);
+      setSharedVisibility(null);
+      setSharedProfileError(null);
+
+      if (role?.roleName !== 'provider') {
+        return;
+      }
+
+      const sharedData = providerSharedDataQuery.data;
+      if (
+        !sharedData ||
+        !sharedData.userCipher ||
+        !sharedData.userIv ||
+        !sharedData.userEncapPubKey
+      ) {
+        return;
+      }
+
+      try {
+        const privateKeyJwkB64 = await getActiveHpkePrivateKeyJwkB64();
+        if (!privateKeyJwkB64) {
+          throw new Error('Missing active HPKE private key in this browser');
+        }
+
+        const privateKey = await importHpkePrivateKeyJwkB64(privateKeyJwkB64);
+        const decrypted = await decryptWithHpkePrivateKey(
+          privateKey,
+          sharedData.userCipher,
+          sharedData.userIv,
+          sharedData.userEncapPubKey
+        );
+
+        try {
+          const parsed = JSON.parse(decrypted) as SharedProfile;
+          setSharedProfile(parsed);
+        } catch {
+          setSharedProfile({ value: decrypted });
+        }
+
+        setSharedVisibility(sharedData.visibility);
+      } catch (error) {
+        console.error('Failed to decrypt provider shared profile', error);
+        setSharedProfileError(
+          'Shared profile exists, but this device cannot decrypt it.'
+        );
+      }
+    };
+
+    void decryptSharedData();
+  }, [providerSharedDataQuery.data, role?.roleName]);
+
+  const getSharedFieldValue = (field: UserInfoField): string | null => {
+    if (!sharedProfile) {
+      return null;
     }
+
+    const value = sharedProfile[field];
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    return String(value);
+  };
+
+  const getVisibility = (
+    field: UserInfoField
   ): 'hidden' | 'anonymized' | 'visible' => {
     const v = activeUser.privacy?.[field];
     if (v === 'hidden' || v === 'anonymized' || v === 'visible') return v;
+    if (role?.roleName === 'provider' && sharedVisibility) {
+      return sharedVisibility;
+    }
     return 'hidden';
   };
 
   const formatValue = (
-    field: keyof {
-      username: string;
-      roleId: string | null;
-      email: string;
-      firstName: string | null;
-      lastName: string | null;
-      phoneNumber: string | null;
-      dateOfBirth: string | null;
-      gender: string | null;
-      country: string | null;
-      city: string | null;
-      address: string | null;
-      zip: string | null;
-    },
+    field: UserInfoField,
     raw: string | null | undefined
   ) => {
+    if (role?.roleName === 'provider') {
+      const sharedValue = getSharedFieldValue(field);
+      return sharedValue ?? '';
+    }
+
     const visibility = getVisibility(field);
     if (visibility === 'visible' || visibility === 'anonymized') {
       return raw ?? '';
     }
     return '';
   };
+
+  const emailDisplay = useMemo(
+    () => formatValue('email', activeUserEmail),
+    [activeUserEmail, role?.roleName, sharedProfile, sharedVisibility]
+  );
+
+  const phoneDisplay = useMemo(
+    () => formatValue('phoneNumber', activeUser.phoneNumber ?? ''),
+    [activeUser.phoneNumber, role?.roleName, sharedProfile, sharedVisibility]
+  );
+
+  const usernameDisplay = useMemo(
+    () => formatValue('username', activeUser.username),
+    [activeUser.username, role?.roleName, sharedProfile, sharedVisibility]
+  );
 
   const initials = () => {
     const first = activeUser.firstName?.[0] ?? '';
@@ -110,11 +215,11 @@ export default function UserInfoModal({
   const handleSendResetPasswordEmail = async () => {
     console.log(
       'sending reset password email to: ',
-      activeUser.email,
+      activeUserEmail,
       activeUser.userId
     );
     await sendResetPasswordEmailMutation.mutateAsync({
-      to: activeUser.email,
+      to: activeUserEmail,
       userId: activeUser.userId,
     });
   };
@@ -177,7 +282,10 @@ export default function UserInfoModal({
               {(() => {
                 const f = formatValue('firstName', activeUser.firstName);
                 const l = formatValue('lastName', activeUser.lastName);
-                return !f && !l ? activeUser.username : `${f} ${l}`.trim();
+                if (!f && !l) {
+                  return usernameDisplay || 'Hidden user';
+                }
+                return `${f} ${l}`.trim();
               })()}
             </span>
             <span className="text-xs text-muted-foreground">
@@ -189,24 +297,24 @@ export default function UserInfoModal({
         <div className="divide-y">
           <InfoRow
             label="Username"
-            display={formatValue('username', activeUser.username)}
+            display={usernameDisplay}
             visibility={getVisibility('username')}
           />
           <InfoRow
             label="Email"
-            display={formatValue('email', activeUser.email)}
+            display={emailDisplay}
             visibility={getVisibility('email')}
             icon={<Mail className="h-4 w-4" />}
             canCopy
-            copyText={activeUser.email}
+            copyText={emailDisplay}
           />
           <InfoRow
             label="Phone"
-            display={formatValue('phoneNumber', activeUser.phoneNumber ?? '')}
+            display={phoneDisplay}
             visibility={getVisibility('phoneNumber')}
             icon={<Phone className="h-4 w-4" />}
             canCopy
-            copyText={activeUser.phoneNumber ?? ''}
+            copyText={phoneDisplay}
           />
           <InfoRow
             label="Date of Birth"
@@ -223,11 +331,6 @@ export default function UserInfoModal({
             label="Last Name"
             display={formatValue('lastName', activeUser.lastName ?? '')}
             visibility={getVisibility('lastName')}
-          />
-          <InfoRow
-            label="Role"
-            display={formatValue('roleId', activeUser.roleId?.toString() ?? '')}
-            visibility={getVisibility('roleId')}
           />
           <InfoRow
             label="Gender"
@@ -268,6 +371,19 @@ export default function UserInfoModal({
             Hidden
           </Badge>
         </div>
+        {role?.roleName === 'provider' && (
+          <div className="text-xs text-muted-foreground">
+            {providerSharedDataQuery.isLoading && 'Loading shared profile...'}
+            {!providerSharedDataQuery.isLoading &&
+              sharedVisibility &&
+              `Shared profile access: ${sharedVisibility}`}
+            {!providerSharedDataQuery.isLoading &&
+              !sharedVisibility &&
+              !sharedProfileError &&
+              'No shared profile access granted by this user.'}
+            {sharedProfileError && sharedProfileError}
+          </div>
+        )}
       </div>
     </Modal>
   );

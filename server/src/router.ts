@@ -52,6 +52,11 @@ import {
   getTransactionsByShopIdService,
   addTestTransactionsService,
 } from "./services/transactions.ts";
+import {
+  getSharedUserDataForProvider,
+  listProvidersForUser,
+  setProviderDataAccess,
+} from "./services/providers.ts";
 import type {
   User,
   UserPrivateData as UserPrivateDataType,
@@ -340,6 +345,88 @@ export const appRouter = router({
             ...input.privateData,
           } as UserPrivateDataType),
         );
+      }),
+    listProvidersForSharing: publicProcedure.query(({ ctx }) => {
+      const currentUserId = (ctx.user as User)?.userId;
+      if (!currentUserId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Not authenticated",
+        });
+      }
+
+      return execute(() => listProvidersForUser(currentUserId));
+    }),
+    setProviderDataAccess: publicProcedure
+      .input(
+        z.object({
+          providerId: z.string(),
+          visibility: z.enum(["hidden", "anonymized", "visible"]),
+          providerPublicKeyHash: z.string().optional(),
+          userCipher: z.string().nullable().optional(),
+          userIv: z.string().nullable().optional(),
+          userEncapPubKey: z.string().nullable().optional(),
+          userVersion: z.number().optional(),
+        }),
+      )
+      .mutation(({ input, ctx }) => {
+        const currentUserId = (ctx.user as User)?.userId;
+        if (!currentUserId) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Not authenticated",
+          });
+        }
+
+        const payload: {
+          providerId: string;
+          visibility: "hidden" | "anonymized" | "visible";
+          providerPublicKeyHash?: string;
+          userCipher?: string | null;
+          userIv?: string | null;
+          userEncapPubKey?: string | null;
+          userVersion?: number;
+        } = {
+          providerId: input.providerId,
+          visibility: input.visibility,
+        };
+
+        if (input.providerPublicKeyHash !== undefined) {
+          payload.providerPublicKeyHash = input.providerPublicKeyHash;
+        }
+        if (input.userCipher !== undefined) {
+          payload.userCipher = input.userCipher;
+        }
+        if (input.userIv !== undefined) {
+          payload.userIv = input.userIv;
+        }
+        if (input.userEncapPubKey !== undefined) {
+          payload.userEncapPubKey = input.userEncapPubKey;
+        }
+        if (input.userVersion !== undefined) {
+          payload.userVersion = input.userVersion;
+        }
+
+        return execute(() => setProviderDataAccess(currentUserId, payload));
+      }),
+  }),
+  providers: router({
+    getSharedUserData: publicProcedure
+      .input(
+        z.object({
+          userId: z.string(),
+        }),
+      )
+      .query(({ input, ctx }) => {
+        const providerId = (ctx.user as User)?.userId;
+        if (!providerId) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Not authenticated",
+          });
+        }
+
+        return execute(() => getSharedUserDataForProvider(providerId, input.userId));
       }),
   }),
   shops: router({

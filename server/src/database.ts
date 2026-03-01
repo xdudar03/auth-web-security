@@ -17,6 +17,7 @@ import { TransactionItem } from "./types/transactionItem.ts";
 import { UserTransaction } from "./types/userTransaction.ts";
 import { Pseudonym } from "./types/pseudonym.ts";
 import { Customer } from "./types/customer.ts";
+import { Provider, ProviderSharedData } from "./types/provider.ts";
 
 const rawDbPath = process.env.SQLITE_DB_PATH?.trim() || "./data/users.db";
 const dbPath = isAbsolute(rawDbPath)
@@ -47,6 +48,7 @@ const initTable = () => {
       FOREIGN KEY (roleId) REFERENCES roles(roleId)
     )
   `);
+  // TODO: add aad
   db.exec(`
     CREATE TABLE IF NOT EXISTS user_private_data (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,6 +67,35 @@ const initTable = () => {
     updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (userId) REFERENCES users(userId)
   )`);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS providers (
+    providerId TEXT NOT NULL UNIQUE,
+    name TEXT,
+    createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (providerId) REFERENCES users(userId)
+    )
+    `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS providers_shared_data (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    providerId TEXT NOT NULL,
+    userId TEXT NOT NULL,
+    visibility TEXT NOT NULL, -- 'anonymized' | 'visible'
+    providerPublicKeyHash TEXT NOT NULL, -- hash of the provider's public key
+    
+    userCipher BLOB,
+    userIv BLOB,
+    userEncapPubKey BLOB,
+    userVersion INTEGER NOT NULL DEFAULT 1,
+
+    createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    revokedAt TEXT,
+    FOREIGN KEY (providerId) REFERENCES providers(providerId),
+    FOREIGN KEY (userId) REFERENCES users(userId),
+    UNIQUE (providerId, userId, visibility)
+    )
+    `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS customers (
       customerId TEXT NOT NULL UNIQUE,
@@ -624,6 +655,144 @@ const getUserPrivacyFieldByUserIdQuery = db.prepare(
 const getUserWithRoleQuery = db.prepare(
   `SELECT * FROM users JOIN roles ON roles.roleId = users.roleId WHERE users.userId = ?`,
 );
+
+const getProviderByProviderIdQuery = db.prepare(
+  `SELECT * FROM providers WHERE providerId = ?`,
+);
+
+const getProviderByProviderId = (providerId: string) => {
+  const providerData = getProviderByProviderIdQuery.get(providerId);
+  const result = Provider.safeParse(providerData);
+  if (!result.success) {
+    console.error("Parse error in getProviderByProviderId:", result.error);
+    return null;
+  }
+  return result.data;
+};
+
+const getProviderSharedDataByUserIdQuery = db.prepare(
+  `SELECT * FROM providers_shared_data WHERE providerId = ? AND userId = ? AND visibility = ?`,
+);
+
+const listProviderSharedDataByUserIdQuery = db.prepare(
+  `SELECT * FROM providers_shared_data WHERE userId = ?`,
+);
+
+const normalizeProviderSharedDataBlob = (value: unknown): unknown => {
+  if (value instanceof Uint8Array) {
+    return Buffer.from(value).toString("utf8");
+  }
+  return value;
+};
+
+const normalizeProviderSharedDataRow = (
+  row: Record<string, unknown>,
+): Record<string, unknown> => {
+  return {
+    ...row,
+    userCipher: normalizeProviderSharedDataBlob(row.userCipher),
+    userIv: normalizeProviderSharedDataBlob(row.userIv),
+    userEncapPubKey: normalizeProviderSharedDataBlob(row.userEncapPubKey),
+  };
+};
+
+const getProviderSharedDataByUserId = (
+  providerId: string,
+  userId: string,
+  visibility: string,
+) => {
+  const providerSharedDataData = getProviderSharedDataByUserIdQuery.get(
+    providerId,
+    userId,
+    visibility,
+  ) as Record<string, unknown> | undefined;
+
+  if (!providerSharedDataData) {
+    return null;
+  }
+
+  const normalized = normalizeProviderSharedDataRow(providerSharedDataData);
+  const result = ProviderSharedData.safeParse(normalized);
+  if (!result.success) {
+    console.error(
+      "Parse error in getProviderSharedDataByUserId:",
+      result.error,
+    );
+    return null;
+  }
+  return result.data;
+};
+
+const listProviderSharedDataByUserId = (userId: string) => {
+  const providerSharedData = listProviderSharedDataByUserIdQuery.all(userId);
+  return providerSharedData
+    .map((row) => {
+      const normalized = normalizeProviderSharedDataRow(
+        row as Record<string, unknown>,
+      );
+      const result = ProviderSharedData.safeParse(normalized);
+      if (!result.success) {
+        console.error("Parse error in listProviderSharedDataByUserId:", result.error);
+        return null;
+      }
+      return result.data;
+    })
+    .filter((row) => row !== null);
+};
+
+const addProviderQuery = db.prepare(
+  `INSERT INTO providers (providerId, name) VALUES (?, ?)`,
+);
+
+const addProvider = (providerId: string, name?: string | null) => {
+  addProviderQuery.run(providerId, name ?? null);
+};
+
+const addProviderSharedDataQuery = db.prepare(
+  `INSERT INTO providers_shared_data (providerId, userId, visibility, providerPublicKeyHash, userCipher, userIv, userEncapPubKey, userVersion) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+);
+
+const addProviderSharedData = (providerSharedData: ProviderSharedData) => {
+  addProviderSharedDataQuery.run(
+    providerSharedData.providerId,
+    providerSharedData.userId,
+    providerSharedData.visibility,
+    providerSharedData.providerPublicKeyHash,
+    providerSharedData.userCipher,
+    providerSharedData.userIv,
+    providerSharedData.userEncapPubKey,
+    providerSharedData.userVersion ?? 1,
+  );
+};
+
+const updateProviderSharedDataQuery = db.prepare(
+  `UPDATE providers_shared_data SET providerPublicKeyHash = ?, userCipher = ?, userIv = ?, userEncapPubKey = ?, userVersion = ?, updatedAt = CURRENT_TIMESTAMP WHERE providerId = ? AND userId = ? AND visibility = ?`,
+);
+
+const updateProviderSharedData = (providerSharedData: ProviderSharedData) => {
+  updateProviderSharedDataQuery.run(
+    providerSharedData.providerPublicKeyHash,
+    providerSharedData.userCipher,
+    providerSharedData.userIv,
+    providerSharedData.userEncapPubKey,
+    providerSharedData.userVersion ?? 1,
+    providerSharedData.providerId,
+    providerSharedData.userId,
+    providerSharedData.visibility,
+  );
+};
+
+const deleteProviderSharedDataQuery = db.prepare(
+  `DELETE FROM providers_shared_data WHERE providerId = ? AND userId = ? AND visibility = ?`,
+);
+
+const deleteProviderSharedData = (
+  providerId: string,
+  userId: string,
+  visibility: string,
+) => {
+  deleteProviderSharedDataQuery.run(providerId, userId, visibility);
+};
 
 const addCustomerQuery = db.prepare(
   `INSERT INTO customers (customerId, isBiometric) VALUES (?, ?)`,
@@ -1342,4 +1511,11 @@ export {
   getUserIdByPseudoId,
   getUserPrivacyFieldByUserId,
   getUserPrivacyPresetById,
+  getProviderByProviderId,
+  getProviderSharedDataByUserId,
+  listProviderSharedDataByUserId,
+  addProvider,
+  addProviderSharedData,
+  updateProviderSharedData,
+  deleteProviderSharedData,
 };

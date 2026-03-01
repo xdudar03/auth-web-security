@@ -29,6 +29,10 @@ function bytesToBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64");
 }
 
+function base64ToBytes(value: string): Uint8Array {
+  return new Uint8Array(Buffer.from(value, "base64"));
+}
+
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase().normalize("NFKC");
 }
@@ -148,6 +152,41 @@ async function encryptForUser(
     ciphertextB64: bytesToBase64(new Uint8Array(ciphertext)),
     ivB64: bytesToBase64(iv),
     encapPublicKeyB64: bytesToBase64(new Uint8Array(encapPublicSpki)),
+  };
+}
+
+async function importEcdhPublicKey(publicKeyB64: string): Promise<CryptoKey> {
+  return webcrypto.subtle.importKey(
+    "spki",
+    base64ToBytes(publicKeyB64),
+    { name: "ECDH", namedCurve: "P-256" },
+    true,
+    [],
+  );
+}
+
+export async function encryptForProviderSeedShare(
+  providerPublicKeyB64: string,
+  payload: Record<string, unknown>,
+): Promise<{
+  providerPublicKeyHash: string;
+  userCipher: string;
+  userIv: string;
+  userEncapPubKey: string;
+}> {
+  const providerPublicKey = await importEcdhPublicKey(providerPublicKeyB64);
+  const envelope = await encryptForUser(providerPublicKey, JSON.stringify(payload));
+
+  const providerPublicKeyHashRaw = await webcrypto.subtle.digest(
+    "SHA-256",
+    base64ToBytes(providerPublicKeyB64),
+  );
+
+  return {
+    providerPublicKeyHash: bytesToBase64(new Uint8Array(providerPublicKeyHashRaw)),
+    userCipher: envelope.ciphertextB64,
+    userIv: envelope.ivB64,
+    userEncapPubKey: envelope.encapPublicKeyB64,
   };
 }
 

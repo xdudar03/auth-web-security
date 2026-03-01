@@ -185,5 +185,6 @@ export const useAnonymizedBatchSync = ({
     clearAnonymizedSnapshot,
     flushAnonymizedNow,
     hasPendingSync,
+    anonymizedData,
   };
 };

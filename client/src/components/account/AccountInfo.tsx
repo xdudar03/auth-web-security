@@ -25,12 +25,18 @@ import {
   parseDecryptedAnonymizedPayload,
   parseDecryptedUserPayload,
 } from '@/lib/accountInfoFormUtils';
-import { useAnonymizedBatchSync } from '@/hooks/useAnonymizedBatchSync';
+import {
+  useAnonymizedBatchSync,
+  type AnonymizedValues,
+} from '@/hooks/useAnonymizedBatchSync';
+import { useProviderDataAccessSync } from '@/hooks/useProviderDataAccessSync';
 
 export default function AccountInfo() {
   const { user, shops, privacy, hasPrivateData, privateData } = useUser();
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [messages, setMessages] = useState<Record<string, string>>({});
+  const [providerVisibleValues, setProviderVisibleValues] =
+    useState<FormValues | null>(null);
   const lastHydrationSignatureRef = useRef<string>('');
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -87,12 +93,21 @@ export default function AccountInfo() {
     setAnonymizedSnapshot,
     clearAnonymizedSnapshot,
     flushAnonymizedNow,
+    anonymizedData,
   } = useAnonymizedBatchSync({
     userId: user?.userId,
     hpkePublicKeyB64: user?.hpkePublicKeyB64,
     hasPrivateData,
     addPrivateData: addUserPrivateDataMutation.mutateAsync,
     updatePrivateData: updateUserPrivateDataMutation.mutateAsync,
+  });
+
+  const { syncProviderAccessFromForm } = useProviderDataAccessSync({
+    userId: user?.userId,
+    privacy,
+    providerVisibleValues,
+    anonymizedData,
+    getCurrentFormValues: form.getValues,
   });
 
   const shopsSignature = shops?.map((shop) => shop.shopName).join('|') ?? '';
@@ -135,6 +150,7 @@ export default function AccountInfo() {
     const loadDecryptedUser = async () => {
       if (!user) {
         clearAnonymizedSnapshot();
+        setProviderVisibleValues(buildAccountFormValues(null, shops));
         resetWithValues(null);
         return;
       }
@@ -183,7 +199,9 @@ export default function AccountInfo() {
               privateData.original_encap_pubkey
             );
 
-            resetWithValues(parseDecryptedUserPayload(decryptedOriginal));
+            const parsedOriginal = parseDecryptedUserPayload(decryptedOriginal);
+            resetWithValues(parsedOriginal);
+            setProviderVisibleValues(buildAccountFormValues(parsedOriginal, shops));
             return;
           }
         } catch (error) {
@@ -192,10 +210,11 @@ export default function AccountInfo() {
       }
 
       clearAnonymizedSnapshot();
+      setProviderVisibleValues(buildAccountFormValues(user, shops));
       resetWithValues(user);
     };
 
-    loadDecryptedUser();
+    void loadDecryptedUser();
   }, [
     clearAnonymizedSnapshot,
     form,
@@ -242,6 +261,9 @@ export default function AccountInfo() {
         } else {
           await addUserPrivateDataMutation.mutateAsync(privateDataPayload);
         }
+
+        setProviderVisibleValues(values);
+        await syncProviderAccessFromForm(values);
       } catch (error: unknown) {
         console.error('Error saving account info', error);
       }
@@ -272,11 +294,30 @@ export default function AccountInfo() {
         setMessages
       );
 
+      const nextSnapshot: AnonymizedValues = {
+        ...anonymizedData,
+        [fieldName]: form.getValues(fieldName),
+      };
+
       upsertAnonymizedField(fieldName, form.getValues(fieldName));
+      await syncProviderAccessFromForm(form.getValues(), {
+        privacyOverride: { field: name, visibility },
+        anonymizedSnapshot: nextSnapshot,
+      });
       return;
     }
 
     removeAnonymizedField(fieldName);
+
+    const nextSnapshot: AnonymizedValues = {
+      ...anonymizedData,
+    };
+    delete nextSnapshot[fieldName];
+
+    await syncProviderAccessFromForm(form.getValues(), {
+      privacyOverride: { field: name, visibility },
+      anonymizedSnapshot: nextSnapshot,
+    });
   };
 
   return (
