@@ -202,7 +202,6 @@ class PredictionResponse(BaseModel):
     """Face recognition prediction result."""
     predicted_label: str
     confidence: float
-    verified: Optional[bool] = None  # For verification mode
 
 
 class ModelStatusResponse(BaseModel):
@@ -251,49 +250,88 @@ async def model_status():
 async def predict_embedding(request: EmbeddingRequest):
     """
     Predict identity from face embedding.
-    
-    If user_id is provided, returns verification result (verified: true/false).
-    Otherwise returns the predicted identity.
+    Returns the predicted identity and confidence.
     """
     controller = get_controller()
     
     try:
         import numpy as np
 
-        decoded_embedding = _decode_embedding_payload(request.embedding)
-        if not decoded_embedding:
+        raw_embedding = _decode_embedding_payload(request.embedding)
+        if not raw_embedding:
             raise HTTPException(status_code=400, detail="Embedding is required")
-        if decoded_embedding and isinstance(decoded_embedding[0], list):
-            raise HTTPException(
-                status_code=400,
-                detail="Prediction requires a single embedding array, not a list of embeddings",
-            )
-        # Convert embedding to numpy array and reshape for model
-        embedding = np.array(decoded_embedding, dtype=np.float32)
-        
-        # Run prediction
-        predicted_label, confidence = _predict_with_retry(
-            controller,
-            embedding,
-            user_id=request.user_id or "",
+        if raw_embedding and isinstance(raw_embedding[0], list):
+            embedding_batch = raw_embedding
+        else:
+            embedding_batch = [raw_embedding]
+
+        frame_results = []
+        for embedding_item in embedding_batch:
+            embedding = np.array(embedding_item, dtype=np.float32)
+            guessed_label, guessed_confidence = _predict_with_retry(controller, embedding)
+            frame_results.append((str(guessed_label), float(guessed_confidence)))
+
+        guessed_scores = {}
+        for guessed_label, guessed_confidence in frame_results:
+            guessed_scores[guessed_label] = guessed_scores.get(guessed_label, 0.0) + guessed_confidence
+
+        if guessed_scores:
+            predicted_label = max(guessed_scores.items(), key=lambda item: item[1])[0]
+        else:
+            predicted_label = "unknown"
+
+        predicted_confidence = max(
+            (conf for label, conf in frame_results if label == predicted_label),
+            default=0.0,
         )
-        
-        # Build response
+
+        total_frames = len(frame_results)
+        accepted_frames = sum(
+            1
+            for label, conf in frame_results
+            if label == predicted_label
+            and label != "unknown"
+            and conf >= VERIFY_CONFIDENCE_THRESHOLD
+        )
+        strong_matches = sum(
+            1
+            for label, conf in frame_results
+            if label == predicted_label
+            and label != "unknown"
+            and conf >= VERIFY_STRONG_CONFIDENCE_THRESHOLD
+        )
+        ratio_required = max(1, math.ceil(total_frames * VERIFY_MIN_ACCEPTED_RATIO))
+        min_required = max(1, min(VERIFY_MIN_ACCEPTED_FRAMES, total_frames))
+        required_votes = max(min_required, ratio_required)
+        single_good_frame_verified = (
+            VERIFY_ALLOW_SINGLE_GOOD_FRAME
+            and accepted_frames >= 1
+            and predicted_confidence >= VERIFY_CONFIDENCE_THRESHOLD
+        )
+        is_consistent_prediction = (
+            (accepted_frames >= required_votes)
+            or (strong_matches >= 1)
+            or single_good_frame_verified
+        )
+
+        if not is_consistent_prediction:
+            predicted_label = "unknown"
+            predicted_confidence = 0.0
+
         response = PredictionResponse(
             predicted_label=str(predicted_label),
-            confidence=float(confidence),
+            confidence=float(predicted_confidence),
         )
-        
-        # If user_id provided, add verification result
         if request.user_id:
             response.verified = (
                 str(predicted_label) == request.user_id
                 and str(predicted_label) != "unknown"
-                and float(confidence) >= VERIFY_CONFIDENCE_THRESHOLD
+                and float(predicted_confidence) >= VERIFY_CONFIDENCE_THRESHOLD
+                and is_consistent_prediction
             )
-        
+
         return response
-        
+
     except HTTPException:
         raise
     except Exception as e:

@@ -61,14 +61,12 @@ export async function getModelStatus(): Promise<ModelStatusResponse> {
  * @param userId - Optional user ID for verification mode
  */
 export async function predictFromEmbedding(
-  embedding: number[],
-  userId?: string,
+  embedding: string,
 ): Promise<PredictionResponse> {
   return fetchModel<PredictionResponse>("/predict", {
     method: "POST",
     body: JSON.stringify({
-      embedding,
-      user_id: userId,
+      embedding: JSON.parse(embedding),
     }),
   });
 }

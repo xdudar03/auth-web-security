@@ -7,8 +7,12 @@ import {
   getUserShops,
   listProviderSharedDataByUserId,
   updateProviderSharedData,
+  addStatistic,
+  getCustomerByCustomerId,
+  getUserEmbeddingsByUserId,
 } from "../database.ts";
 import { HttpError } from "../errors.ts";
+import { predictFromEmbedding } from "./model.ts";
 import type { ProviderSharedData } from "../types/provider.ts";
 
 type ProviderAccessVisibility = "hidden" | "anonymized" | "visible";
@@ -165,7 +169,10 @@ export function setProviderDataAccess(
   };
 }
 
-export function getSharedUserDataForProvider(providerId: string, userId: string) {
+export function getSharedUserDataForProvider(
+  providerId: string,
+  userId: string,
+) {
   const provider = getProviderByProviderId(providerId);
   if (!provider) {
     throw new HttpError(404, "Provider not found");
@@ -178,7 +185,11 @@ export function getSharedUserDataForProvider(providerId: string, userId: string)
 
   ensureUserCanManageProvider(userId, providerId);
 
-  const visibleData = getProviderSharedDataByUserId(providerId, userId, "visible");
+  const visibleData = getProviderSharedDataByUserId(
+    providerId,
+    userId,
+    "visible",
+  );
   if (visibleData) {
     return visibleData;
   }
@@ -193,4 +204,60 @@ export function getSharedUserDataForProvider(providerId: string, userId: string)
   }
 
   return null;
+}
+
+export function addNewShopVisit(id: string, shopId: number, visitAt: string) {
+  const user = getUserById(id);
+  if (!user) {
+    const customer = getCustomerByCustomerId(id);
+    if (!customer) {
+      throw new HttpError(404, "Customer not found");
+    }
+    addStatistic({
+      customerId: customer.customerId,
+      shopId,
+      visitAt,
+    });
+  } else {
+    addStatistic({
+      userId: user.userId,
+      shopId,
+      visitAt,
+    });
+  }
+}
+
+export async function predictFromEmbeddingService(id: string) {
+  const user = getUserById(id);
+  if (!user) {
+    const customer = getCustomerByCustomerId(id);
+    if (!customer) {
+      throw new HttpError(404, "Customer not found");
+    }
+  }
+  const embeddings = getUserEmbeddingsByUserId(id);
+  if (embeddings.length === 0) {
+    throw new HttpError(404, "Embedding not found");
+  }
+
+  const embeddingBatch = embeddings.flatMap((embedding) => {
+    if (typeof embedding !== "string") {
+      return [];
+    }
+    const parsed = JSON.parse(embedding);
+    return Array.isArray(parsed[0]) ? parsed : [parsed];
+  });
+
+  if (embeddingBatch.length === 0) {
+    throw new HttpError(404, "Embedding not found");
+  }
+
+  const response = await predictFromEmbedding(JSON.stringify(embeddingBatch));
+  if (!response) {
+    throw new HttpError(500, "Failed to predict from embedding");
+  }
+  return {
+    predictedLabel: response.predicted_label,
+    confidence: response.confidence,
+  };
 }

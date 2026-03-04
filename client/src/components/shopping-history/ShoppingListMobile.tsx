@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatDate } from '@/lib/shopping-history/utils';
-import { AssociationChoice, HistoryEntry } from './types';
+import { AssociationChoice, HistoryEntry } from '@/types/shoppingHistory';
 
 export default function ShoppingListMobile({
   history,

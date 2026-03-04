@@ -1,7 +1,4 @@
-import {
-  AssociationChoice,
-  HistoryEntry,
-} from '@/components/shopping-history/types';
+import { AssociationChoice, HistoryEntry } from '@/types/shoppingHistory';
 import { Badge } from '@/components/ui/badge';
 import { PrivacySettings } from '@/hooks/useUserContext';
 import { formatCurrency, formatDate } from '@/lib/shopping-history/utils';

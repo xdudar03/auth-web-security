@@ -16,7 +16,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { formatPaymentMethod } from '@/lib/shopping-history/utils';
-import { BackendTransaction, HistoryEntry } from '../shopping-history/types';
+import { BackendTransaction, HistoryEntry } from '../../types/shoppingHistory';
 import {
   itemsColumn,
   quantityColumn,
@@ -49,10 +49,10 @@ export default function ShopOrdersTable({ shopId }: { shopId: number }) {
   const transactions = transactionsQuery.data;
   const transactionsReady = transactionsQuery.isSuccess;
   const userFields: { pseudoId: string; field: string }[] = transactionsReady
-    ? transactions?.map((t: BackendTransaction) => ({
+    ? (transactions?.map((t: BackendTransaction) => ({
         pseudoId: t.pseudoId ?? '',
         field: `shoppingHistory_transaction_${t.transactionId}`,
-      })) ?? []
+      })) ?? [])
     : [];
 
   const { userPrivacy } = useUserPrivacy(userFields);

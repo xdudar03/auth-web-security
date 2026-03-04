@@ -13,7 +13,11 @@ import { formatPaymentMethod } from '@/lib/shopping-history/utils';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { PrivacySettings, useUser } from '@/hooks/useUserContext';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AssociationChoice, HistoryEntry, TransactionsData } from './types';
+import {
+  AssociationChoice,
+  HistoryEntry,
+  TransactionsData,
+} from '@/types/shoppingHistory';
 import {
   ColumnDef,
   flexRender,

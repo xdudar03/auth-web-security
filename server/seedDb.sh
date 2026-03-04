@@ -13,6 +13,5 @@ npx tsx src/seed/addTestUsersWithPrivacy.ts
 npx tsx src/seed/addItems.ts
 npx tsx src/seed/addTransactions.ts
 npx tsx src/seed/addEmbeddings.ts
-npx tsx src/seed/addCustomers.ts
 
 curl -X POST "http://127.0.0.1:5000/initial_training" -H "Content-Type: application/json"

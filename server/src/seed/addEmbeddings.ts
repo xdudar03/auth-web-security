@@ -4,6 +4,8 @@ import {
   addUser,
   addUserPrivateData,
   addUserEmbedding,
+  addCustomerToShop,
+  updateUser,
 } from "../database.ts";
 import fs from "node:fs";
 import path from "node:path";
@@ -219,6 +221,8 @@ const addEmbeddings = async () => {
         const existing = embeddingsByUser.get(uId) ?? [];
         existing.push(embedding);
         embeddingsByUser.set(uId, existing);
+        // set isBiometric to true
+        updateUser(uId, { isBiometric: true });
       }
 
       if (CUSTOMER_ID_SET.has(cId)) {
@@ -246,6 +250,13 @@ const addEmbeddings = async () => {
 
     addCustomerEmbedding(customerId, JSON.stringify(embeddings));
   }
+  addCustomerToShop("c109", 1);
+  addCustomerToShop("c110", 2);
+  addCustomerToShop("c111", 3);
+  addCustomerToShop("c112", 1);
+  addCustomerToShop("c113", 2);
+  addCustomerToShop("c114", 3);
+  addCustomerToShop("c115", 1);
 };
 
 async function runSeedEmbeddings() {

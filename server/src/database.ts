@@ -549,11 +549,14 @@ const addUserEmbedding = (userId: string, embedding: string) => {
 };
 
 const getUserEmbeddingsByUserIdQuery = db.prepare(
-  `SELECT embedding FROM user_embeddings WHERE userId = ?`,
+  `SELECT embedding FROM user_embeddings WHERE userId = ? OR customerId = ?`,
 );
 
-const getUserEmbeddingsByUserId = (userId: string) => {
-  const embeddingsData = getUserEmbeddingsByUserIdQuery.all(userId);
+const getUserEmbeddingsByUserId = (userId: string | null) => {
+  if (!userId) {
+    return [];
+  }
+  const embeddingsData = getUserEmbeddingsByUserIdQuery.all(userId, userId);
   return embeddingsData.map((embedding) => embedding.embedding);
 };
 
@@ -732,7 +735,10 @@ const listProviderSharedDataByUserId = (userId: string) => {
       );
       const result = ProviderSharedData.safeParse(normalized);
       if (!result.success) {
-        console.error("Parse error in listProviderSharedDataByUserId:", result.error);
+        console.error(
+          "Parse error in listProviderSharedDataByUserId:",
+          result.error,
+        );
         return null;
       }
       return result.data;
@@ -1167,13 +1173,23 @@ const getUserShops = (userId: string) => {
 
 const getShopUsers = (shopId: number) => {
   const usersData = getShopUsersQuery.all(shopId, shopId);
-  console.log("usersData: ", usersData);
-  return usersData;
+  // dont include admins and shop owners
+  const users = usersData.filter(
+    (user) => user.roleName !== "admin" && user.roleName !== "provider",
+  );
+  console.log("users: ", users);
+  return users;
 };
 
 // Statistics queries
 const addStatisticQuery = db.prepare(
   `INSERT INTO shop_visits (userId, customerId, shopId, visitAt) VALUES (?, ?, ?, ?)`,
+);
+const getShopVisitsByShopIdQuery = db.prepare(
+  `SELECT *
+   FROM shop_visits
+   WHERE shopId = ?
+   ORDER BY datetime(visitAt) DESC`,
 );
 
 const addStatistic = (statistic: Statistic) => {
@@ -1184,6 +1200,10 @@ const addStatistic = (statistic: Statistic) => {
     statisticWithoutId.shopId,
     statisticWithoutId.visitAt,
   );
+};
+
+const getShopVisitsByShopId = (shopId: number) => {
+  return getShopVisitsByShopIdQuery.all(shopId);
 };
 
 // Token queries
@@ -1500,6 +1520,7 @@ export {
   addPseudonym,
   getAllEmbeddings,
   addStatistic,
+  getShopVisitsByShopId,
   getLastInsertRowId,
   getTransactionsByUserId,
   getTransactionsByShopId,

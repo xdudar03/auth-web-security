@@ -1,4 +1,4 @@
-import { HistoryEntry } from '@/components/shopping-history/types';
+import { HistoryEntry } from '@/types/shoppingHistory';
 
 export function formatCurrency(value: number) {
   return new Intl.NumberFormat(undefined, {

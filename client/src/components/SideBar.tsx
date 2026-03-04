@@ -1,5 +1,6 @@
 'use client';
 import {
+  ChartSpline,
   LayoutDashboard,
   LogOut,
   Settings,
@@ -108,6 +109,20 @@ export default function SideBar() {
                 <ShoppingCart className="w-6 h-6" />
               </Link>
             </Button>
+            {role?.canAccessProviderPanel ? (
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                className={`icon-btn-zoom ${
+                  isActive === 'shop-stats' ? 'active' : ''
+                }`}
+              >
+                <Link href="/shop-stats" aria-label="Shop Stats">
+                  <ChartSpline className="w-6 h-6" />
+                </Link>
+              </Button>
+            ) : null}
             <Button
               asChild
               variant="ghost"

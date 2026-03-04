@@ -30,7 +30,7 @@ import {
   verifyIdentity,
 } from "./services/model.ts";
 import { HttpError } from "./errors.ts";
-import { getAllShops, getAllUsersFromShop } from "./services/shops.ts";
+import { getAllShops, getAllUsersFromShop, getShopVisits } from "./services/shops.ts";
 import {
   resetPassword,
   sendEmailWithToken,
@@ -56,6 +56,8 @@ import {
   getSharedUserDataForProvider,
   listProvidersForUser,
   setProviderDataAccess,
+  addNewShopVisit,
+  predictFromEmbeddingService,
 } from "./services/providers.ts";
 import type {
   User,
@@ -114,12 +116,11 @@ export const appRouter = router({
     predict: publicProcedure
       .input(
         z.object({
-          embedding: z.array(z.number()),
-          userId: z.string().optional(),
+          id: z.string(),
         }),
       )
       .mutation(({ input }) =>
-        execute(() => predictFromEmbedding(input.embedding, input.userId)),
+        execute(() => predictFromEmbeddingService(input.id)),
       ),
     verify: publicProcedure
       .input(
@@ -426,7 +427,22 @@ export const appRouter = router({
           });
         }
 
-        return execute(() => getSharedUserDataForProvider(providerId, input.userId));
+        return execute(() =>
+          getSharedUserDataForProvider(providerId, input.userId),
+        );
+      }),
+    addNewShopVisit: publicProcedure
+      .input(
+        z.object({
+          id: z.string(),
+          shopId: z.number(),
+          visitAt: z.string(),
+        }),
+      )
+      .mutation(({ input }) => {
+        return execute(() =>
+          addNewShopVisit(input.id, input.shopId, input.visitAt),
+        );
       }),
   }),
   shops: router({
@@ -434,6 +450,9 @@ export const appRouter = router({
     getAllUsersFromShop: publicProcedure
       .input(z.object({ shopId: z.number() }))
       .query(({ input }) => execute(() => getAllUsersFromShop(input.shopId))),
+    getShopVisits: publicProcedure
+      .input(z.object({ shopId: z.number() }))
+      .query(({ input }) => execute(() => getShopVisits(input.shopId))),
   }),
   email: router({
     sendConfirmationEmail: publicProcedure

@@ -1,9 +1,9 @@
 import {
-  db,
   getShopById,
   getShopUsers,
   getUserPrivacyByUserId,
   getAllShops as getAllShopsDatabase,
+  getShopVisitsByShopId,
 } from "../database.ts";
 import { sanitizeUserSummary } from "./admin.ts";
 
@@ -26,4 +26,9 @@ export function getAllUsersFromShop(shopId: number) {
   });
   const response = users.map((row: any) => sanitizeUserSummary(row));
   return { users: response };
+}
+
+export function getShopVisits(shopId: number) {
+  const visits = getShopVisitsByShopId(shopId);
+  return { visits };
 }
