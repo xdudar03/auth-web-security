@@ -28,6 +28,9 @@ export const VerificationResponse = z.object({
   user_id: z.string(),
   jwt: z.string().optional(),
   hpkePublicKeyB64: z.string().nullable().optional(),
+  recoverySaltB64: z.string().nullable().optional(),
+  encryptedPrivateKey: z.string().nullable().optional(),
+  encryptedPrivateKeyIv: z.string().nullable().optional(),
   predicted_user_id: z.string().optional(),
   predicted_user_confidence: z.number().optional(),
 });

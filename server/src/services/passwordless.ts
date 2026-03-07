@@ -256,6 +256,10 @@ export async function verifyAuthentication(
 
     const { verified, authenticationInfo } = verification as any;
 
+    if (!verified) {
+      throw new HttpError(401, "Passwordless authentication failed");
+    }
+
     if (verified && authenticationInfo) {
       const updatedCreds = credentialsArray.map((c: any) =>
         c.credentialID === authenticator.credentialID
@@ -267,7 +271,14 @@ export async function verifyAuthentication(
       });
     }
 
-    return { verified, jwt: generateJwt(query.userId as string) };
+    return {
+      verified,
+      jwt: generateJwt(query.userId as string),
+      hpkePublicKeyB64: query.hpkePublicKeyB64 ?? null,
+      recoverySaltB64: query.recoverySaltB64 ?? null,
+      encryptedPrivateKey: query.encryptedPrivateKey ?? null,
+      encryptedPrivateKeyIv: query.encryptedPrivateKeyIv ?? null,
+    };
   } catch (error) {
     console.error("Error verifying authentication", error);
     if (error instanceof HttpError) {

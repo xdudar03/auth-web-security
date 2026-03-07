@@ -28,6 +28,100 @@ export type SuccessData = {
   jwt: string;
 };
 
+type EncryptedAccessInput = {
+  username: string;
+  recoveryPassphrase?: string;
+  hpkePublicKeyB64?: string | null;
+  recoverySaltB64?: string | null;
+  encryptedPrivateKey?: string | null;
+  encryptedPrivateKeyIv?: string | null;
+};
+
+type EncryptedAccessResult = {
+  hasAccess: boolean;
+  message?: string;
+};
+
+export async function ensureEncryptedDataAccessForLogin({
+  username,
+  recoveryPassphrase,
+  hpkePublicKeyB64,
+  recoverySaltB64,
+  encryptedPrivateKey,
+  encryptedPrivateKeyIv,
+}: EncryptedAccessInput): Promise<EncryptedAccessResult> {
+  const storedBundle = await getUserHpkeBundle(username);
+
+  if (
+    storedBundle &&
+    (!hpkePublicKeyB64 || storedBundle.publicKeyB64 === hpkePublicKeyB64)
+  ) {
+    await setActiveHpkePrivateKey(storedBundle.privateKeyJwkB64);
+    await setActiveHpkePublicKey(storedBundle.publicKeyB64);
+    return { hasAccess: true };
+  }
+
+  const hasRecoveryMaterial = Boolean(
+    hpkePublicKeyB64 &&
+      recoverySaltB64 &&
+      encryptedPrivateKey &&
+      encryptedPrivateKeyIv
+  );
+
+  if (!hasRecoveryMaterial) {
+    if (storedBundle && hpkePublicKeyB64) {
+      await deleteUserHpkeBundle(username);
+      await deleteActiveHpkeKey();
+    }
+    return {
+      hasAccess: false,
+      message:
+        'Login succeeded, but encrypted profile data is locked on this device. Sign in once with your recovery passphrase to restore access.',
+    };
+  }
+
+  if (!recoveryPassphrase) {
+    if (storedBundle && hpkePublicKeyB64) {
+      await deleteUserHpkeBundle(username);
+      await deleteActiveHpkeKey();
+    }
+    return {
+      hasAccess: false,
+      message:
+        'Enter your recovery passphrase to unlock encrypted profile data on this device.',
+    };
+  }
+
+  try {
+    const recoveryKey = await deriveRecoveryKey(
+      recoveryPassphrase,
+      recoverySaltB64 as string
+    );
+    const privateKeyJwkB64 = await decryptPrivateKeyWithRecoveryKey(
+      encryptedPrivateKey as string,
+      encryptedPrivateKeyIv as string,
+      recoveryKey
+    );
+    await saveUserHpkeBundle(username, {
+      privateKeyJwkB64,
+      publicKeyB64: hpkePublicKeyB64 as string,
+    });
+    await setActiveHpkePrivateKey(privateKeyJwkB64);
+    await setActiveHpkePublicKey(hpkePublicKeyB64 as string);
+    return { hasAccess: true };
+  } catch {
+    if (storedBundle && hpkePublicKeyB64) {
+      await deleteUserHpkeBundle(username);
+      await deleteActiveHpkeKey();
+    }
+    return {
+      hasAccess: false,
+      message:
+        'Login succeeded, but encrypted profile data could not be unlocked. Verify your recovery passphrase and try again.',
+    };
+  }
+}
+
 export default function useAuth({
   handleSuccess,
   allShops,
@@ -78,10 +172,6 @@ export default function useAuth({
   );
   const verifyAuthenticationMutation = useMutation(
     trpc.passwordless.verifyAuthentication.mutationOptions({
-      onSuccess: (data: SuccessData) => {
-        console.log('data', data);
-        handleSuccess(data);
-      },
       onError: (error) => {
         console.error('error', error);
         setMessage({
@@ -139,6 +229,12 @@ export default function useAuth({
         });
       },
     })
+  );
+
+  const ensureEncryptedDataAccess = useCallback(
+    async (input: EncryptedAccessInput): Promise<EncryptedAccessResult> =>
+      ensureEncryptedDataAccessForLogin(input),
+    []
   );
 
   const loadShops = useCallback(
@@ -329,7 +425,10 @@ export default function useAuth({
       }
     }
   };
-  const handlePasswordless = async (username: string) => {
+  const handlePasswordless = async (
+    username: string,
+    recoveryPassphrase?: string
+  ) => {
     try {
       if (
         getAuthenticationOptionsMutation.isPending ||
@@ -348,7 +447,31 @@ export default function useAuth({
         optionsJSON: options,
       });
 
-      await verifyAuthenticationMutation.mutateAsync(attResp);
+      const result = await verifyAuthenticationMutation.mutateAsync(attResp);
+
+      if (!result?.verified || !result?.jwt) {
+        throw new Error('Passwordless verification failed');
+      }
+
+      const encryptedAccess = await ensureEncryptedDataAccess({
+        username,
+        recoveryPassphrase,
+        hpkePublicKeyB64: result.hpkePublicKeyB64 ?? null,
+        recoverySaltB64: result.recoverySaltB64 ?? null,
+        encryptedPrivateKey: result.encryptedPrivateKey ?? null,
+        encryptedPrivateKeyIv: result.encryptedPrivateKeyIv ?? null,
+      });
+
+      if (!encryptedAccess.hasAccess) {
+        setMessage({
+          message:
+            encryptedAccess.message ??
+            'Encrypted profile data is locked on this device.',
+          type: 'error',
+        });
+      }
+
+      handleSuccess({ jwt: result.jwt });
     } catch (error) {
       console.error('Passwordless authentication failed', error);
       setMessage({
@@ -361,6 +484,7 @@ export default function useAuth({
   return {
     handleAuthenticate,
     handlePasswordless,
+    ensureEncryptedDataAccess,
     loadShops,
     isRegistering: registerMutation.isPending,
     isAuthenticating:

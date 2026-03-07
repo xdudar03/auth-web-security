@@ -153,11 +153,12 @@ export default function FormAuth({
   const onPasswordless = () => {
     setMessage({ message: '', type: '' });
     const username = form.getValues('username');
+    const recoveryPassphrase = form.getValues('recoveryPassphrase');
     if (!username) {
       setMessage({ message: 'Username is required', type: 'error' });
       return;
     }
-    handlePasswordless(username);
+    handlePasswordless(username, recoveryPassphrase || undefined);
   };
 
   const handleBiometric = () => {

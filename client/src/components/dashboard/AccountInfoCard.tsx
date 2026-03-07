@@ -25,11 +25,13 @@ export default function AccountInfoCard() {
     username: '',
     email: '',
   });
+  const [isProfileLocked, setIsProfileLocked] = useState(false);
 
   useEffect(() => {
     const loadDecryptedData = async () => {
       if (!privateData || !user?.hpkePublicKeyB64) {
         setDecryptedData({ username: '', email: '' });
+        setIsProfileLocked(false);
         return;
       }
 
@@ -39,13 +41,16 @@ export default function AccountInfoCard() {
         !privateData.original_encap_pubkey
       ) {
         setDecryptedData({ username: '', email: '' });
+        setIsProfileLocked(false);
         return;
       }
 
       try {
         const privateKeyJwkB64 = await getActiveHpkePrivateKeyJwkB64();
         if (!privateKeyJwkB64) {
-          throw new Error('Missing active HPKE private key in session');
+          setDecryptedData({ username: '', email: '' });
+          setIsProfileLocked(true);
+          return;
         }
         const privateKey = await importHpkePrivateKeyJwkB64(privateKeyJwkB64);
         const decrypted = await decryptWithHpkePrivateKey(
@@ -58,12 +63,15 @@ export default function AccountInfoCard() {
         try {
           const parsed = JSON.parse(decrypted) as DecryptedPrivateProfile;
           setDecryptedData(parsed);
+          setIsProfileLocked(false);
         } catch {
           setDecryptedData({ username: '', email: decrypted });
+          setIsProfileLocked(false);
         }
       } catch (error) {
         console.error('Failed to decrypt account data', error);
         setDecryptedData({ username: '', email: '' });
+        setIsProfileLocked(true);
       }
     };
 
@@ -94,6 +102,12 @@ export default function AccountInfoCard() {
           <p className="text-sm text-muted-foreground">
             Email: {decryptedData?.email ?? '-'}
           </p>
+          {isProfileLocked && (
+            <p className="text-sm text-warning mt-2">
+              Encrypted profile is locked on this device. Sign in with your
+              recovery passphrase once to restore access.
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -161,6 +161,9 @@ export const appRouter = router({
             jwt: generateJwt(result.user_id),
             hpkePublicKeyB64:
               existingUser.hpkePublicKeyB64 ?? input.hpkePublicKeyB64 ?? null,
+            recoverySaltB64: existingUser.recoverySaltB64 ?? null,
+            encryptedPrivateKey: existingUser.encryptedPrivateKey ?? null,
+            encryptedPrivateKeyIv: existingUser.encryptedPrivateKeyIv ?? null,
           };
         }),
       ),

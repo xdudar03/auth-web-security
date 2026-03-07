@@ -12,16 +12,11 @@ import {
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import useJwt from '@/hooks/useJwt';
+import { ensureEncryptedDataAccessForLogin } from '@/hooks/useAuth';
 import type { FeedbackMessage } from '../components/authentication/BiometricAlerts';
-import {
-  exportHpkePrivateKeyJwkB64,
-  exportHpkePublicKeyB64,
-  generateHpkeKeyPair,
-  getUserHpkeBundle,
-  saveUserHpkeBundle,
-  setActiveHpkePrivateKey,
-  setActiveHpkePublicKey,
-} from '@/lib/encryption';
+import { getUserHpkeBundle } from '@/lib/encryption';
+import { Matrix } from 'ml-matrix';
+import { getProjectionMatrix, l2NormalizeVector } from '@/lib/randomProjection';
 
 type CapturedFrame = {
   data: Uint8ClampedArray;
@@ -31,6 +26,7 @@ type CapturedFrame = {
 type UseBiometricCaptureParams = {
   action: string;
   username: string;
+  recoveryPassphrase?: string;
   isModelTraining: boolean;
   isModelStatusLoading: boolean;
   isModelStatusError: boolean;
@@ -45,6 +41,9 @@ const DP_SVD_OPTIONS: DpSvdOptions = {
   imageSize: [TARGET_SIZE, TARGET_SIZE],
   blockSize: 25,
 };
+const RP_TARGET_DIMENSION = 1024;
+const RP_VERSION = 'rp-v1';
+
 const createImageUrlFromPixels = (
   pixels: number[],
   size: number
@@ -85,6 +84,7 @@ const sleep = (ms: number) =>
 export default function useBiometricCapture({
   action,
   username,
+  recoveryPassphrase,
   isModelTraining,
   isModelStatusLoading,
   isModelStatusError,
@@ -163,26 +163,33 @@ export default function useBiometricCapture({
       }
       const parsed = JSON.parse(payload.embedding);
       const embeddingBatch = Array.isArray(parsed[0]) ? parsed : [parsed];
-
-      let hpkeBundle = await getUserHpkeBundle(username);
-      if (!hpkeBundle) {
-        const pair = await generateHpkeKeyPair();
-        hpkeBundle = {
-          privateKeyJwkB64: await exportHpkePrivateKeyJwkB64(pair.privateKey),
-          publicKeyB64: await exportHpkePublicKeyB64(pair.publicKey),
-        };
-        await saveUserHpkeBundle(username, hpkeBundle);
-      }
-      await setActiveHpkePrivateKey(hpkeBundle.privateKeyJwkB64);
-      await setActiveHpkePublicKey(hpkeBundle.publicKeyB64);
+      const hpkeBundle = await getUserHpkeBundle(username);
 
       const response = await verify.mutateAsync({
         embedding: JSON.stringify(embeddingBatch),
         username,
-        hpkePublicKeyB64: hpkeBundle.publicKeyB64,
+        hpkePublicKeyB64: hpkeBundle?.publicKeyB64,
       });
       if (!response.verified || !response.jwt) {
         throw new Error('Biometric verification failed');
+      }
+
+      const encryptedAccess = await ensureEncryptedDataAccessForLogin({
+        username,
+        recoveryPassphrase,
+        hpkePublicKeyB64: response.hpkePublicKeyB64 ?? null,
+        recoverySaltB64: response.recoverySaltB64 ?? null,
+        encryptedPrivateKey: response.encryptedPrivateKey ?? null,
+        encryptedPrivateKeyIv: response.encryptedPrivateKeyIv ?? null,
+      });
+
+      if (!encryptedAccess.hasAccess) {
+        setFeedbackMessage({
+          type: 'error',
+          text:
+            encryptedAccess.message ??
+            'Encrypted profile data is locked on this device.',
+        });
       }
 
       queryClient.clear();
@@ -296,6 +303,30 @@ export default function useBiometricCapture({
         return;
       }
 
+      const sourceDimension = projections[0].length;
+      const hasInconsistentDimensions = projections.some(
+        (projection) => projection.length !== sourceDimension
+      );
+      if (hasInconsistentDimensions) {
+        console.error(
+          'Inconsistent projection dimensions across captured frames.'
+        );
+        return;
+      }
+
+      const projectionMatrix = getProjectionMatrix(
+        sourceDimension,
+        RP_TARGET_DIMENSION,
+        RP_VERSION
+      );
+      const projectedProjections = projections.map((projection) => {
+        const normalizedInput = l2NormalizeVector(projection);
+        const projected = projectionMatrix
+          .mmul(new Matrix(normalizedInput.map((value: number) => [value])))
+          .to1DArray();
+        return l2NormalizeVector(projected);
+      });
+
       try {
         const reconstructed = dpSvdReconstructFromFlattened(
           flattenedFrames[flattenedFrames.length - 1],
@@ -313,7 +344,7 @@ export default function useBiometricCapture({
 
       const userWithEmbedding = {
         ...user,
-        embedding: JSON.stringify(projections),
+        embedding: JSON.stringify(projectedProjections),
         userId: user?.userId ?? '',
       } as User & { embedding: string };
 

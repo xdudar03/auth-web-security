@@ -17,6 +17,7 @@ export default function BiometricAuth({
   action: string;
 }) {
   const [username, setUsername] = useState('');
+  const [recoveryPassphrase, setRecoveryPassphrase] = useState('');
   const { role, isAuthenticated } = useUser();
   const router = useRouter();
   const trpc = useTRPC();
@@ -41,6 +42,7 @@ export default function BiometricAuth({
   } = useBiometricCapture({
     action,
     username,
+    recoveryPassphrase,
     isModelTraining: Boolean(isModelTraining),
     isModelStatusLoading: modelStatusQuery.isLoading,
     isModelStatusError: modelStatusQuery.isError,
@@ -74,13 +76,23 @@ export default function BiometricAuth({
         </h2>
       )}
       {action === 'login' && (
-        <Input
-          type="text"
-          placeholder="Enter your username"
-          className="w-full"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
+        <>
+          <Input
+            type="text"
+            placeholder="Enter your username"
+            className="w-full"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+          <Input
+            type="password"
+            placeholder="Optional: recovery passphrase for first login on this browser"
+            className="w-full"
+            value={recoveryPassphrase}
+            onChange={(e) => setRecoveryPassphrase(e.target.value)}
+            autoComplete="current-password"
+          />
+        </>
       )}
       <BiometricAlerts
         action={action}

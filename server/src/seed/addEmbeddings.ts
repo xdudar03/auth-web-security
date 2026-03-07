@@ -13,6 +13,11 @@ import { dpSvdEmbeddingFromMatrix } from "../lib/dpSvd.ts";
 import sharp from "sharp";
 import { buildEncryptedSeedUser } from "./encryption.ts";
 import { applyPrivacyPreset } from "../services/privacy.ts";
+import { getProjectionMatrix, l2NormalizeVector } from "./randomProjection.ts";
+import { Matrix } from "ml-matrix";
+
+const RP_TARGET_DIMENSION = 1024;
+const RP_VERSION = "rp-v1";
 
 const TARGET_SIZE = 100;
 const DP_SVD_OPTIONS = {
@@ -217,9 +222,26 @@ const addEmbeddings = async () => {
         info.channels,
       );
       const embedding = dpSvdEmbeddingFromMatrix(matrix, DP_SVD_OPTIONS);
+
+      const sourceDimension = embedding.length;
+      const projectionMatrix = getProjectionMatrix(
+        sourceDimension,
+        RP_TARGET_DIMENSION,
+        RP_VERSION,
+      );
+      const normalizedEmbedding = l2NormalizeVector(embedding);
+      const projectedEmbedding = projectionMatrix
+        .mmul(
+          new Matrix(
+            normalizedEmbedding.map((value: number) => [value] as [number]),
+          ),
+        )
+        .to1DArray();
+      const normalizedProjectedEmbedding = l2NormalizeVector(projectedEmbedding);
+
       if (USER_ID_SET.has(uId)) {
         const existing = embeddingsByUser.get(uId) ?? [];
-        existing.push(embedding);
+        existing.push(normalizedProjectedEmbedding);
         embeddingsByUser.set(uId, existing);
         // set isBiometric to true
         updateUser(uId, { isBiometric: true });
@@ -227,7 +249,7 @@ const addEmbeddings = async () => {
 
       if (CUSTOMER_ID_SET.has(cId)) {
         const existingCustomer = embeddingsByCustomer.get(cId) ?? [];
-        existingCustomer.push(embedding);
+        existingCustomer.push(normalizedProjectedEmbedding);
         embeddingsByCustomer.set(cId, existingCustomer);
       }
     } catch (error) {
