@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { useTRPC } from './TrpcContext';
 import { useQuery } from '@tanstack/react-query';
 import useJwt from './useJwt';
+import { clearAllHpkeState } from '@/lib/encryption';
 import type { User } from '../../../server/src/types/user.ts';
 import type { UserPrivateData } from '../../../server/src/types/user.ts';
 import type { Role } from '../../../server/src/types/role.ts';
@@ -53,6 +54,14 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       setPrivacyPreset(defaultPrivacyPreset);
     }
   }, [defaultPrivacyPreset, setPrivacyPreset]);
+
+  useEffect(() => {
+    if (jwt) return;
+    // Ensure local encrypted-key material is removed once the session is gone.
+    clearAllHpkeState().catch((error) => {
+      console.error('Failed to clear local HPKE state after logout', error);
+    });
+  }, [jwt]);
 
   const getUserInfoQuery = useQuery({
     ...trpc.info.getUserInfo.queryOptions(),

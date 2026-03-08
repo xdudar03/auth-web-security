@@ -5,12 +5,15 @@ import { useCallback } from 'react';
 import { FormValues } from '@/components/authentication/types';
 import { startAuthentication } from '@simplewebauthn/browser';
 import {
+  decryptPrivateKeyWithPasskeyPrfOutput,
   deleteActiveHpkeKey,
   deleteUserHpkeBundle,
   decryptPrivateKeyWithRecoveryKey,
   deriveRecoveryKey,
+  encryptPrivateKeyWithPasskeyPrfOutput,
   encryptPrivateKeyWithRecoveryKey,
   encryptWithHpkePublicKey,
+  extractPasskeyPrfOutputB64,
   exportHpkePrivateKeyJwkB64,
   exportHpkePublicKeyB64,
   generateHpkeKeyPair,
@@ -28,9 +31,16 @@ export type SuccessData = {
   jwt: string;
 };
 
+const PASSKEY_PRF_EVAL_LABEL = 'auth-web-security:hpke-unlock-v1';
+
 type EncryptedAccessInput = {
   username: string;
   recoveryPassphrase?: string;
+  passkeyPrfOutputB64?: string;
+  passkeyCredentialId?: string | null;
+  passkeyWrappedPrivateKey?: string | null;
+  passkeyWrappedPrivateKeyIv?: string | null;
+  passkeyWrapSaltB64?: string | null;
   hpkePublicKeyB64?: string | null;
   recoverySaltB64?: string | null;
   encryptedPrivateKey?: string | null;
@@ -42,9 +52,17 @@ type EncryptedAccessResult = {
   message?: string;
 };
 
+const FIRST_LOGIN_RECOVERY_MESSAGE =
+  'For first login on a new device, enter your recovery passphrase once to unlock encrypted profile data.';
+
 export async function ensureEncryptedDataAccessForLogin({
   username,
   recoveryPassphrase,
+  passkeyPrfOutputB64,
+  passkeyCredentialId,
+  passkeyWrappedPrivateKey,
+  passkeyWrappedPrivateKeyIv,
+  passkeyWrapSaltB64,
   hpkePublicKeyB64,
   recoverySaltB64,
   encryptedPrivateKey,
@@ -59,6 +77,37 @@ export async function ensureEncryptedDataAccessForLogin({
     await setActiveHpkePrivateKey(storedBundle.privateKeyJwkB64);
     await setActiveHpkePublicKey(storedBundle.publicKeyB64);
     return { hasAccess: true };
+  }
+
+  const hasPasskeyWrappedMaterial = Boolean(
+    passkeyPrfOutputB64 &&
+      passkeyWrappedPrivateKey &&
+      passkeyWrappedPrivateKeyIv &&
+      passkeyWrapSaltB64 &&
+      hpkePublicKeyB64
+  );
+
+  if (hasPasskeyWrappedMaterial) {
+    try {
+      const privateKeyJwkB64 = await decryptPrivateKeyWithPasskeyPrfOutput(
+        passkeyWrappedPrivateKey as string,
+        passkeyWrappedPrivateKeyIv as string,
+        passkeyWrapSaltB64 as string,
+        passkeyPrfOutputB64 as string
+      );
+      await saveUserHpkeBundle(username, {
+        privateKeyJwkB64,
+        publicKeyB64: hpkePublicKeyB64 as string,
+      });
+      await setActiveHpkePrivateKey(privateKeyJwkB64);
+      await setActiveHpkePublicKey(hpkePublicKeyB64 as string);
+      return { hasAccess: true };
+    } catch {
+      console.warn(
+        'Passkey private-key unwrap failed for credential',
+        passkeyCredentialId
+      );
+    }
   }
 
   const hasRecoveryMaterial = Boolean(
@@ -76,7 +125,7 @@ export async function ensureEncryptedDataAccessForLogin({
     return {
       hasAccess: false,
       message:
-        'Login succeeded, but encrypted profile data is locked on this device. Sign in once with your recovery passphrase to restore access.',
+        `Login succeeded, but encrypted profile data is locked on this device. ${FIRST_LOGIN_RECOVERY_MESSAGE}`,
     };
   }
 
@@ -87,8 +136,7 @@ export async function ensureEncryptedDataAccessForLogin({
     }
     return {
       hasAccess: false,
-      message:
-        'Enter your recovery passphrase to unlock encrypted profile data on this device.',
+      message: FIRST_LOGIN_RECOVERY_MESSAGE,
     };
   }
 
@@ -117,7 +165,7 @@ export async function ensureEncryptedDataAccessForLogin({
     return {
       hasAccess: false,
       message:
-        'Login succeeded, but encrypted profile data could not be unlocked. Verify your recovery passphrase and try again.',
+        `Login succeeded, but encrypted profile data could not be unlocked. ${FIRST_LOGIN_RECOVERY_MESSAGE}`,
     };
   }
 }
@@ -178,6 +226,13 @@ export default function useAuth({
           message: 'Failed to verify authentication',
           type: 'error',
         });
+      },
+    })
+  );
+  const saveCredentialKeyMaterialMutation = useMutation(
+    trpc.passwordless.saveCredentialKeyMaterial.mutationOptions({
+      onError: (error) => {
+        console.error('Failed to save passkey key material', error);
       },
     })
   );
@@ -443,9 +498,40 @@ export default function useAuth({
       const options = await getAuthenticationOptionsMutation.mutateAsync({
         username,
       });
-      const attResp = await startAuthentication({
-        optionsJSON: options,
-      });
+      const prfInput = new TextEncoder().encode(PASSKEY_PRF_EVAL_LABEL);
+      const optionsWithPrf = {
+        ...options,
+        extensions: {
+          ...(options.extensions ?? {}),
+          // WebAuthn expects BufferSource here, not JSON strings.
+          prf: { eval: { first: prfInput } },
+        },
+      } as typeof options & {
+        extensions: Record<string, unknown>;
+      };
+
+      let attResp;
+      try {
+        attResp = await startAuthentication({
+          optionsJSON: optionsWithPrf,
+        });
+      } catch (error) {
+        const isPrfExtensionError =
+          error instanceof TypeError &&
+          /extensions|prf|BufferSource|ArrayBuffer|evalByCredential/i.test(
+            String(error.message ?? '')
+          );
+        if (!isPrfExtensionError) {
+          throw error;
+        }
+        // Graceful fallback for browsers/authenticators that reject PRF inputs.
+        attResp = await startAuthentication({
+          optionsJSON: options,
+        });
+      }
+      const passkeyPrfOutputB64 = extractPasskeyPrfOutputB64(
+        attResp.clientExtensionResults
+      );
 
       const result = await verifyAuthenticationMutation.mutateAsync(attResp);
 
@@ -456,11 +542,36 @@ export default function useAuth({
       const encryptedAccess = await ensureEncryptedDataAccess({
         username,
         recoveryPassphrase,
+        passkeyPrfOutputB64: passkeyPrfOutputB64 ?? undefined,
+        passkeyCredentialId: result.credentialId ?? attResp.id ?? null,
+        passkeyWrappedPrivateKey: result.passkeyWrappedPrivateKey ?? null,
+        passkeyWrappedPrivateKeyIv: result.passkeyWrappedPrivateKeyIv ?? null,
+        passkeyWrapSaltB64: result.passkeyWrapSaltB64 ?? null,
         hpkePublicKeyB64: result.hpkePublicKeyB64 ?? null,
         recoverySaltB64: result.recoverySaltB64 ?? null,
         encryptedPrivateKey: result.encryptedPrivateKey ?? null,
         encryptedPrivateKeyIv: result.encryptedPrivateKeyIv ?? null,
       });
+
+      if (
+        encryptedAccess.hasAccess &&
+        passkeyPrfOutputB64 &&
+        result.credentialId
+      ) {
+        const activePrivateKeyJwkB64 = await getActiveHpkePrivateKeyJwkB64();
+        if (activePrivateKeyJwkB64) {
+          const wrappedPrivateKey = await encryptPrivateKeyWithPasskeyPrfOutput(
+            activePrivateKeyJwkB64,
+            passkeyPrfOutputB64
+          );
+          await saveCredentialKeyMaterialMutation.mutateAsync({
+            credentialId: result.credentialId,
+            wrappedPrivateKey: wrappedPrivateKey.ciphertextB64,
+            wrappedPrivateKeyIv: wrappedPrivateKey.ivB64,
+            wrapSaltB64: wrappedPrivateKey.saltB64,
+          });
+        }
+      }
 
       if (!encryptedAccess.hasAccess) {
         setMessage({
@@ -490,6 +601,7 @@ export default function useAuth({
     isAuthenticating:
       authenticateMutation.isPending ||
       getAuthenticationOptionsMutation.isPending ||
-      verifyAuthenticationMutation.isPending,
+      verifyAuthenticationMutation.isPending ||
+      saveCredentialKeyMaterialMutation.isPending,
   };
 }

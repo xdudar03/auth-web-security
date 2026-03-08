@@ -17,17 +17,23 @@ export const l2NormalizeVector = (vector: number[]) => {
   return vector.map((value) => value / norm);
 };
 
+// Fowler–Noll–Vo hash function (FNV-1a)
 const fnv1a32 = (value: string) => {
   let hash = 0x811c9dc5;
   for (let i = 0; i < value.length; i += 1) {
+    // XOR the current hash with the character code of the current character
     hash ^= value.charCodeAt(i);
+    // Multiply the hash by a prime number
     hash = Math.imul(hash, 0x01000193);
   }
   return hash >>> 0;
 };
 
+// Mulberry32 pseudorandom number generator
 const mulberry32 = (seed: number) => {
+  // Convert the seed to an unsigned 32-bit integer
   let t = seed >>> 0;
+  // Return a function that generates a random number between 0 and 1
   return () => {
     t = (t + 0x6d2b79f5) >>> 0;
     let r = Math.imul(t ^ (t >>> 15), t | 1);

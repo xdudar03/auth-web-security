@@ -21,6 +21,16 @@ export type ChallengeSession = Session & {
   userId?: string;
 };
 
+type PasskeyCredentialRecord = {
+  credentialID: string;
+  credentialPublicKey: string;
+  counter?: number;
+  transports?: string[];
+  wrappedPrivateKey?: string;
+  wrappedPrivateKeyIv?: string;
+  wrapSaltB64?: string;
+};
+
 function toBase64URL(bytes: Uint8Array): string {
   const b64 = Buffer.from(bytes).toString("base64");
   return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -31,8 +41,18 @@ function fromBase64URL(str: string): Uint8Array {
   return new Uint8Array(Buffer.from(b64, "base64"));
 }
 
+function parseCredentials(raw: string | null | undefined): PasskeyCredentialRecord[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as PasskeyCredentialRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 function assertSession(
-  session: ChallengeSession | undefined
+  session: ChallengeSession | undefined,
 ): asserts session is ChallengeSession {
   if (!session) {
     throw new HttpError(500, "Session is not initialized");
@@ -41,7 +61,7 @@ function assertSession(
 
 export async function getRegistrationOptions(
   userId: string,
-  session?: ChallengeSession
+  session?: ChallengeSession,
 ) {
   assertSession(session);
 
@@ -54,14 +74,7 @@ export async function getRegistrationOptions(
     throw new HttpError(404, "User not found");
   }
 
-  let credentials: any[] = [];
-  if (user.credentials) {
-    try {
-      credentials = JSON.parse(user.credentials as string) || [];
-    } catch {
-      credentials = [];
-    }
-  }
+  const credentials = parseCredentials(user.credentials ?? null);
 
   try {
     const options = await generateRegistrationOptions({
@@ -73,9 +86,9 @@ export async function getRegistrationOptions(
       authenticatorSelection: {
         userVerification: "required",
       },
-      excludeCredentials: credentials.map((cred: any) => ({
+      excludeCredentials: credentials.map((cred) => ({
         id: cred.credentialID,
-        transports: cred.transports || ["internal"],
+        transports: (cred.transports as any) || ["internal"],
       })),
       timeout: 60_000,
     });
@@ -92,7 +105,7 @@ export async function getRegistrationOptions(
 
 export async function verifyRegistration(
   responseBody: unknown,
-  session?: ChallengeSession
+  session?: ChallengeSession,
 ) {
   assertSession(session);
 
@@ -120,14 +133,7 @@ export async function verifyRegistration(
         throw new HttpError(404, "User not found");
       }
 
-      let credentials: any[] = [];
-      if (userRecord.credentials) {
-        try {
-          credentials = JSON.parse(userRecord.credentials as string) || [];
-        } catch {
-          credentials = [];
-        }
-      }
+      const credentials = parseCredentials(userRecord.credentials ?? null);
 
       const newAuthenticator = {
         credentialID: registrationInfo.credential.id,
@@ -139,7 +145,7 @@ export async function verifyRegistration(
       };
 
       const filtered = credentials.filter(
-        (c: any) => c.credentialID !== newAuthenticator.credentialID
+        (c) => c.credentialID !== newAuthenticator.credentialID,
       );
       const updated = [...filtered, newAuthenticator];
       updateUser(userRecord.userId as string, {
@@ -159,7 +165,7 @@ export async function verifyRegistration(
 
 export async function getAuthenticationOptions(
   username: string,
-  session?: ChallengeSession
+  session?: ChallengeSession,
 ) {
   assertSession(session);
 
@@ -169,24 +175,14 @@ export async function getAuthenticationOptions(
     throw new HttpError(400, "User not found");
   }
 
-  if (user.credentials) {
-    try {
-      user.credentials = JSON.parse(user.credentials as string);
-    } catch {
-      user.credentials = [] as any;
-    }
-  }
-
   try {
-    const credentialsArray = Array.isArray(user.credentials)
-      ? user.credentials
-      : [];
+    const credentialsArray = parseCredentials(user.credentials ?? null);
 
     const options = await generateAuthenticationOptions({
       rpID: "localhost",
-      allowCredentials: credentialsArray.map((cred: any) => ({
+      allowCredentials: credentialsArray.map((cred) => ({
         id: cred.credentialID,
-        transports: cred.transports || ["internal"],
+        transports: (cred.transports as any) || ["internal"],
       })),
       timeout: 60_000,
       userVerification: "required",
@@ -204,7 +200,7 @@ export async function getAuthenticationOptions(
 
 export async function verifyAuthentication(
   responseBody: any,
-  session?: ChallengeSession
+  session?: ChallengeSession,
 ) {
   assertSession(session);
   console.log("responseBody", responseBody);
@@ -223,18 +219,10 @@ export async function verifyAuthentication(
       throw new HttpError(404, "User not found");
     }
 
-    let credentialsArray: any[] = [];
-    if (query.credentials) {
-      try {
-        const parsed = JSON.parse(query.credentials as string);
-        credentialsArray = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        credentialsArray = [];
-      }
-    }
+    const credentialsArray = parseCredentials(query.credentials ?? null);
 
     const authenticator = credentialsArray.find(
-      (c: any) => c.credentialID === responseBody.id
+      (c) => c.credentialID === responseBody.id,
     );
 
     if (!authenticator) {
@@ -251,6 +239,9 @@ export async function verifyAuthentication(
         publicKey: fromBase64URL(authenticator.credentialPublicKey),
         counter: authenticator.counter || 0,
       },
+      extensions: {
+        prf: {},
+      },
       requireUserVerification: false,
     } as any);
 
@@ -261,10 +252,10 @@ export async function verifyAuthentication(
     }
 
     if (verified && authenticationInfo) {
-      const updatedCreds = credentialsArray.map((c: any) =>
+      const updatedCreds = credentialsArray.map((c) =>
         c.credentialID === authenticator.credentialID
           ? { ...c, counter: authenticationInfo.newCounter }
-          : c
+          : c,
       );
       updateUser(query.userId as string, {
         credentials: JSON.stringify(updatedCreds),
@@ -274,6 +265,10 @@ export async function verifyAuthentication(
     return {
       verified,
       jwt: generateJwt(query.userId as string),
+      credentialId: authenticator.credentialID,
+      passkeyWrappedPrivateKey: authenticator.wrappedPrivateKey ?? null,
+      passkeyWrappedPrivateKeyIv: authenticator.wrappedPrivateKeyIv ?? null,
+      passkeyWrapSaltB64: authenticator.wrapSaltB64 ?? null,
       hpkePublicKeyB64: query.hpkePublicKeyB64 ?? null,
       recoverySaltB64: query.recoverySaltB64 ?? null,
       encryptedPrivateKey: query.encryptedPrivateKey ?? null,
@@ -286,6 +281,52 @@ export async function verifyAuthentication(
     }
     throw new HttpError(400, "Invalid authentication response");
   }
+}
+
+export async function saveCredentialKeyMaterial(
+  input: {
+    credentialId: string;
+    wrappedPrivateKey: string;
+    wrappedPrivateKeyIv: string;
+    wrapSaltB64: string;
+  },
+  session?: ChallengeSession,
+) {
+  assertSession(session);
+  if (!session.userId) {
+    throw new HttpError(
+      401,
+      "Passwordless session missing user context for key material update",
+    );
+  }
+
+  const user = getUserById(session.userId);
+  if (!user) {
+    throw new HttpError(404, "User not found");
+  }
+
+  const credentials = parseCredentials(user.credentials ?? null);
+  const matching = credentials.find((c) => c.credentialID === input.credentialId);
+  if (!matching) {
+    throw new HttpError(400, "Credential not found for current session user");
+  }
+
+  const updatedCredentials = credentials.map((credential) =>
+    credential.credentialID === input.credentialId
+      ? {
+          ...credential,
+          wrappedPrivateKey: input.wrappedPrivateKey,
+          wrappedPrivateKeyIv: input.wrappedPrivateKeyIv,
+          wrapSaltB64: input.wrapSaltB64,
+        }
+      : credential,
+  );
+
+  updateUser(user.userId, {
+    credentials: JSON.stringify(updatedCredentials),
+  });
+
+  return { saved: true };
 }
 
 export const passwordlessSessionKeys = {

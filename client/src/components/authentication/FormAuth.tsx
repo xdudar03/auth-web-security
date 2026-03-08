@@ -37,11 +37,27 @@ export default function FormAuth({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [message, setMessage] = useState({ message: '', type: '' });
+  const [showRecoveryPassphraseField, setShowRecoveryPassphraseField] =
+    useState(false);
   const listShopsQuery = useQuery(trpc.shops.getAllShops.queryOptions());
   const allShops = useMemo(
     () => listShopsQuery.data?.shops ?? [],
     [listShopsQuery.data?.shops]
   );
+  const handleAuthMessage = useCallback(
+    (next: { message: string; type: 'success' | 'error' }) => {
+      setMessage(next);
+      if (
+        title === 'Login' &&
+        next.type === 'error' &&
+        /(recovery passphrase|locked on this device)/i.test(next.message)
+      ) {
+        setShowRecoveryPassphraseField(true);
+      }
+    },
+    [title]
+  );
+
   const {
     handleAuthenticate,
     handlePasswordless,
@@ -53,7 +69,7 @@ export default function FormAuth({
     allShops: allShops as Shop[],
     user: user as User,
     title: title,
-    setMessage: setMessage,
+    setMessage: handleAuthMessage,
   });
 
   function handleSuccess({ jwt }: { jwt: string }) {
@@ -212,28 +228,47 @@ export default function FormAuth({
           <PasswordField form={form} title={title} />
 
           {title === 'Login' && (
-            <FormField
-              control={form.control}
-              name="recoveryPassphrase"
-              render={({ field }) => (
-                <FormItem className="form-field">
-                  <FormLabel>Recovery Passphrase</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="password"
-                      placeholder="Optional: unlock encrypted profile on this device"
-                      autoComplete="current-password"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Required only on a new device if your key is not available in
-                    this browser session.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
+            <>
+              {!showRecoveryPassphraseField ? (
+                <div className="w-full">
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="p-0 h-auto self-start"
+                    onClick={() => setShowRecoveryPassphraseField(true)}
+                  >
+                    Use recovery passphrase for this device
+                  </Button>
+                  <p className="text-xs text-muted mt-1">
+                    If this is a new device, enter your recovery passphrase once
+                    to unlock encrypted profile data.
+                  </p>
+                </div>
+              ) : (
+                <FormField
+                  control={form.control}
+                  name="recoveryPassphrase"
+                  render={({ field }) => (
+                    <FormItem className="form-field">
+                      <FormLabel>Recovery Passphrase</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          placeholder="Optional: unlock encrypted profile on this device"
+                          autoComplete="current-password"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Needed only when this browser does not have your private
+                        key yet.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               )}
-            />
+            </>
           )}
 
           {message.message && (
@@ -248,14 +283,19 @@ export default function FormAuth({
 
           <div className="flex items-center justify-between flex-col">
             {title === 'Login' && (
-              <Button
-                type="button"
-                variant="link"
-                className="shadow-none self-center w-full p-0"
-                onClick={onPasswordless}
-              >
-                Use passwordless {title.toLowerCase()}
-              </Button>
+              <div className="w-full">
+                <Button
+                  type="button"
+                  variant="link"
+                  className="shadow-none self-center w-full p-0"
+                  onClick={onPasswordless}
+                >
+                  Use passwordless {title.toLowerCase()}
+                </Button>
+                <p className="text-xs text-muted text-center mt-1">
+                  New device? You may need your recovery passphrase once.
+                </p>
+              </div>
             )}
             <Button
               type="button"

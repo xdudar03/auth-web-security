@@ -74,7 +74,7 @@ body {
 
   /* Surfaces */
   .card {
-    @apply flex flex-col items-center justify-center border p-6 bg-surface rounded shadow-md border-border gap-6;
+    @apply flex flex-col max-w-md items-center justify-center border p-6 bg-surface rounded shadow-md border-border gap-6;
   }
 
   /* Inputs */

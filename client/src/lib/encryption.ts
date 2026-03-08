@@ -11,6 +11,7 @@ const HPKE_ACTIVE_STORE = 'hpke-active';
 const HPKE_ACTIVE_KEY = 'active';
 const RECOVERY_KEY_ITERATIONS = 310000;
 const HPKE_INFO = 'auth-web-security:hpke-v1';
+const PASSKEY_WRAP_INFO = 'auth-web-security:passkey-wrap-v1';
 
 export function bytesToBase64(bytes: Uint8Array): string {
   let bin = '';
@@ -23,6 +24,34 @@ export function base64ToBytes(b64: string): Uint8Array {
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
+}
+
+function base64UrlToBytes(base64url: string): Uint8Array {
+  const padded = `${base64url.replace(/-/g, '+').replace(/_/g, '/')}${'='.repeat((4 - (base64url.length % 4)) % 4)}`;
+  return base64ToBytes(padded);
+}
+
+function toBytesFromUnknown(value: unknown): Uint8Array | null {
+  if (!value) return null;
+  if (value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'buffer' in value &&
+    (value as { buffer?: unknown }).buffer instanceof ArrayBuffer
+  ) {
+    return new Uint8Array((value as { buffer: ArrayBuffer }).buffer);
+  }
+  if (typeof value === 'string') {
+    try {
+      // Some browsers encode extension bytes as Base64URL strings.
+      return base64UrlToBytes(value);
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 function userHpkeKey(username: string): string {
@@ -143,6 +172,87 @@ export async function decryptPrivateKeyWithRecoveryKey(
     base64ToBytes(ciphertextB64) as BufferSource
   );
   return dec.decode(plaintext);
+}
+
+async function derivePasskeyWrapKey(
+  passkeyPrfOutputB64: string,
+  saltB64: string
+): Promise<CryptoKey> {
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    base64ToBytes(passkeyPrfOutputB64) as BufferSource,
+    'HKDF',
+    false,
+    ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: base64ToBytes(saltB64) as BufferSource,
+      info: enc.encode(PASSKEY_WRAP_INFO),
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+export async function encryptPrivateKeyWithPasskeyPrfOutput(
+  privateKeyJwkB64: string,
+  passkeyPrfOutputB64: string
+): Promise<{ ciphertextB64: string; ivB64: string; saltB64: string }> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const saltB64 = bytesToBase64(crypto.getRandomValues(new Uint8Array(16)));
+  const key = await derivePasskeyWrapKey(passkeyPrfOutputB64, saltB64);
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    enc.encode(privateKeyJwkB64)
+  );
+  return {
+    ciphertextB64: bytesToBase64(new Uint8Array(ciphertext)),
+    ivB64: bytesToBase64(iv),
+    saltB64,
+  };
+}
+
+export async function decryptPrivateKeyWithPasskeyPrfOutput(
+  ciphertextB64: string,
+  ivB64: string,
+  saltB64: string,
+  passkeyPrfOutputB64: string
+): Promise<string> {
+  const key = await derivePasskeyWrapKey(passkeyPrfOutputB64, saltB64);
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToBytes(ivB64) as BufferSource },
+    key,
+    base64ToBytes(ciphertextB64) as BufferSource
+  );
+  return dec.decode(plaintext);
+}
+
+export function extractPasskeyPrfOutputB64(
+  clientExtensionResults: unknown
+): string | null {
+  const outputs = clientExtensionResults as {
+    prf?: { results?: { first?: unknown } };
+    hmacGetSecret?: { output1?: unknown };
+  };
+
+  const fromPrf = toBytesFromUnknown(outputs?.prf?.results?.first);
+  if (fromPrf && fromPrf.length > 0) {
+    return bytesToBase64(fromPrf);
+  }
+
+  // Legacy compat for devices exposing hmac-secret style output.
+  const fromHmacSecret = toBytesFromUnknown(outputs?.hmacGetSecret?.output1);
+  if (fromHmacSecret && fromHmacSecret.length > 0) {
+    return bytesToBase64(fromHmacSecret);
+  }
+
+  return null;
 }
 
 export async function exportHpkePublicKeyB64(

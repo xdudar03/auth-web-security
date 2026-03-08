@@ -4,6 +4,7 @@ import { publicProcedure, router } from "./tools/trpc.ts";
 import {
   getAuthenticationOptions,
   getRegistrationOptions,
+  saveCredentialKeyMaterial,
   verifyAuthentication,
   verifyRegistration,
   type ChallengeSession,
@@ -204,6 +205,20 @@ export const appRouter = router({
             input as any,
             ctx.req.session as ChallengeSession,
           ),
+        ),
+      ),
+    saveCredentialKeyMaterial: publicProcedure
+      .input(
+        z.object({
+          credentialId: z.string(),
+          wrappedPrivateKey: z.string(),
+          wrappedPrivateKeyIv: z.string(),
+          wrapSaltB64: z.string(),
+        }),
+      )
+      .mutation(({ input, ctx }) =>
+        execute(() =>
+          saveCredentialKeyMaterial(input, ctx.req.session as ChallengeSession),
         ),
       ),
   }),
