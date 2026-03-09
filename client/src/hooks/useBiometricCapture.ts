@@ -184,12 +184,10 @@ export default function useBiometricCapture({
       });
 
       if (!encryptedAccess.hasAccess) {
-        setFeedbackMessage({
-          type: 'error',
-          text:
-            encryptedAccess.message ??
-            'Encrypted profile data is locked on this device.',
-        });
+        throw new Error(
+          encryptedAccess.message ??
+            'Encrypted profile data is locked on this device. Enter your recovery passphrase once and retry biometric login.'
+        );
       }
 
       queryClient.clear();
