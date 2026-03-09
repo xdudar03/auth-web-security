@@ -13,6 +13,7 @@ from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard, CSVLogger
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.neighbors import KNeighborsClassifier
 
 try:
     import faiss
@@ -61,6 +62,7 @@ RETRIEVAL_TOP_K = _get_env_int("MODEL_RETRIEVAL_TOP_K", 80)
 RETRIEVAL_NPROBE = _get_env_int("MODEL_RETRIEVAL_NPROBE", 8)
 RETRIEVAL_IVF_NLIST = _get_env_int("MODEL_RETRIEVAL_IVF_NLIST", 8)
 RETRIEVAL_ANN_OVERFETCH_FACTOR = _get_env_int("MODEL_RETRIEVAL_ANN_OVERFETCH_FACTOR", 8)
+KNN_COMPARE_K = _get_env_int("MODEL_KNN_COMPARE_K", 5)
 IDENTIFY_LABEL_TOP_M = _get_env_int("MODEL_IDENTIFY_LABEL_TOP_M", 3)
 VERIFY_TOP_M = _get_env_int("MODEL_VERIFY_TOP_M", 3)
 TIMING_LOGS_ENABLED = (
@@ -370,6 +372,21 @@ class MLController:
             model_save_dir=self._model_save_dir,
             model_name=self.MODEL_NAME,
         )
+
+    def compare_image_details(self, vector: np.ndarray):
+        # Comparison-only path; ANN production logic remains unchanged.
+        return {
+            "ann": identify_image(
+                vector_array=vector,
+                model_save_dir=self._model_save_dir,
+                model_name=self.MODEL_NAME,
+            ),
+            "knn": identify_image_knn_comparison(
+                vector_array=vector,
+                model_save_dir=self._model_save_dir,
+                model_name=self.MODEL_NAME,
+            ),
+        }
 
     def verify_image(self, vector: np.ndarray, user_id: str):
         return verify_claimed_identity(
@@ -1279,6 +1296,112 @@ def identify_image(
 
     except Exception as e:
         raise Exception(f"Error in prediction: {e}") from e
+
+
+def identify_image_knn_comparison(
+    vector_array: np.ndarray,
+    model_save_dir: str = 'ml_models/trained/',
+    model_name: str = 'arcface_yale_anony_v1',
+):
+    """
+    KNN baseline for ANN comparison only.
+    This function is intentionally separate from the production ANN path.
+    """
+    try:
+        runtime = _load_retrieval_runtime_artifacts(model_save_dir, model_name)
+        label_encoder = runtime["label_encoder"]
+        template_vectors = runtime["template_vectors"]
+        template_labels = runtime["template_labels"]
+
+        expected_dim = int(template_vectors.shape[1])
+        preprocessed_vector = preprocess_single_vector(vector_array, expected_dim)
+        if preprocessed_vector is None:
+            raise Exception("Vector preprocessing failed.")
+
+        n_neighbors = max(1, min(int(KNN_COMPARE_K), int(template_vectors.shape[0])))
+        knn = KNeighborsClassifier(
+            n_neighbors=n_neighbors,
+            weights="distance",
+            metric="cosine",
+            algorithm="brute",
+        )
+        knn.fit(template_vectors, template_labels)
+
+        neighbor_distances, neighbor_indices = knn.kneighbors(
+            preprocessed_vector,
+            n_neighbors=n_neighbors,
+            return_distance=True,
+        )
+        neighbor_distances = np.asarray(neighbor_distances[0], dtype=np.float32)
+        neighbor_indices = np.asarray(neighbor_indices[0], dtype=np.int64)
+
+        # For cosine metric, distance ~= 1 - cosine_similarity.
+        neighbor_scores = np.asarray(1.0 - neighbor_distances, dtype=np.float32)
+        label_scores = {}
+        for idx, score in zip(neighbor_indices, neighbor_scores):
+            label_idx = int(template_labels[int(idx)])
+            label_scores.setdefault(label_idx, []).append(float(score))
+
+        ranked_labels = sorted(
+            [
+                (int(label_idx), float(np.mean(scores)))
+                for label_idx, scores in label_scores.items()
+            ],
+            key=lambda item: item[1],
+            reverse=True,
+        )
+
+        if not ranked_labels:
+            return {
+                "predicted_label": "unknown",
+                "confidence": 0.0,
+                "decision": "unknown",
+                "best_score": 0.0,
+                "second_score": 0.0,
+                "tau_abs": float(OPENSET_TAU_ABS),
+                "tau_margin": float(OPENSET_TAU_MARGIN),
+                "k": int(n_neighbors),
+                "algorithm": "knn_comparison_only",
+                "top_k": [],
+            }
+
+        best_label_idx, best_score = ranked_labels[0]
+        second_score = float(ranked_labels[1][1]) if len(ranked_labels) > 1 else -1.0
+        margin = float(best_score - second_score)
+        accepted = (
+            float(best_score) >= float(OPENSET_TAU_ABS)
+            and margin >= float(OPENSET_TAU_MARGIN)
+        )
+
+        predicted_label = _safe_inverse_label(label_encoder, best_label_idx) if accepted else "unknown"
+        confidence = float(best_score) if accepted else 0.0
+        decision = "accepted" if accepted else "unknown"
+
+        neighbor_top_k = []
+        for template_idx, score in zip(neighbor_indices.tolist(), neighbor_scores.tolist()):
+            label_idx = int(template_labels[int(template_idx)])
+            neighbor_top_k.append(
+                {
+                    "label": _safe_inverse_label(label_encoder, label_idx),
+                    "score": float(score),
+                    "template_index": int(template_idx),
+                }
+            )
+
+        return {
+            "predicted_label": str(predicted_label),
+            "confidence": float(confidence),
+            "decision": decision,
+            "best_score": float(best_score),
+            "second_score": float(second_score),
+            "tau_abs": float(OPENSET_TAU_ABS),
+            "tau_margin": float(OPENSET_TAU_MARGIN),
+            "k": int(n_neighbors),
+            "algorithm": "knn_comparison_only",
+            "top_k": neighbor_top_k,
+        }
+    except Exception as e:
+        raise Exception(f"Error in KNN comparison prediction: {e}") from e
 
 
 def verify_claimed_identity(

@@ -487,6 +487,42 @@ async def predict_embedding(request: EmbeddingRequest):
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 
+@app.post("/predict_compare")
+async def predict_compare_embedding(request: EmbeddingRequest):
+    """
+    Compare production ANN prediction with a KNN baseline.
+    This endpoint is comparison-only and does not affect production logic.
+    """
+    controller = get_controller()
+
+    try:
+        import numpy as np
+
+        raw_embedding = _decode_embedding_payload(request.embedding)
+        if not raw_embedding:
+            raise HTTPException(status_code=400, detail="Embedding is required")
+        if raw_embedding and isinstance(raw_embedding[0], list):
+            embedding_batch = raw_embedding
+        else:
+            embedding_batch = [raw_embedding]
+
+        frame_results = []
+        for embedding_item in embedding_batch:
+            embedding = np.array(embedding_item, dtype=np.float32)
+            comparison = controller.compare_image_details(embedding)
+            frame_results.append(comparison)
+
+        return {
+            "mode": "comparison_only",
+            "frames": frame_results,
+            "frame_count": len(frame_results),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction comparison failed: {str(e)}")
+
+
 @app.post("/verify")
 async def verify_identity(request: EmbeddingRequest):
     """
