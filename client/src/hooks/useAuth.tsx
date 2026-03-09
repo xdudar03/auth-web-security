@@ -6,8 +6,6 @@ import { FormValues } from '@/components/authentication/types';
 import { startAuthentication } from '@simplewebauthn/browser';
 import {
   decryptPrivateKeyWithPasskeyPrfOutput,
-  deleteActiveHpkeKey,
-  deleteUserHpkeBundle,
   decryptPrivateKeyWithRecoveryKey,
   deriveRecoveryKey,
   encryptPrivateKeyWithPasskeyPrfOutput,
@@ -20,6 +18,7 @@ import {
   getActiveHpkePrivateKeyJwkB64,
   getActiveHpkePublicKeyB64,
   getUserHpkeBundle,
+  getUserHpkeBundleByPublicKey,
   newRecoverySaltB64,
   saveUserHpkeBundle,
   setActiveHpkePrivateKey,
@@ -68,7 +67,15 @@ export async function ensureEncryptedDataAccessForLogin({
   encryptedPrivateKey,
   encryptedPrivateKeyIv,
 }: EncryptedAccessInput): Promise<EncryptedAccessResult> {
-  const storedBundle = await getUserHpkeBundle(username);
+  let storedBundle = await getUserHpkeBundle(username);
+
+  if (!storedBundle && hpkePublicKeyB64) {
+    const matchedBundle = await getUserHpkeBundleByPublicKey(hpkePublicKeyB64);
+    if (matchedBundle) {
+      await saveUserHpkeBundle(username, matchedBundle);
+      storedBundle = matchedBundle;
+    }
+  }
 
   if (
     storedBundle &&
@@ -118,10 +125,6 @@ export async function ensureEncryptedDataAccessForLogin({
   );
 
   if (!hasRecoveryMaterial) {
-    if (storedBundle && hpkePublicKeyB64) {
-      await deleteUserHpkeBundle(username);
-      await deleteActiveHpkeKey();
-    }
     return {
       hasAccess: false,
       message:
@@ -130,10 +133,6 @@ export async function ensureEncryptedDataAccessForLogin({
   }
 
   if (!recoveryPassphrase) {
-    if (storedBundle && hpkePublicKeyB64) {
-      await deleteUserHpkeBundle(username);
-      await deleteActiveHpkeKey();
-    }
     return {
       hasAccess: false,
       message: FIRST_LOGIN_RECOVERY_MESSAGE,
@@ -158,10 +157,6 @@ export async function ensureEncryptedDataAccessForLogin({
     await setActiveHpkePublicKey(hpkePublicKeyB64 as string);
     return { hasAccess: true };
   } catch {
-    if (storedBundle && hpkePublicKeyB64) {
-      await deleteUserHpkeBundle(username);
-      await deleteActiveHpkeKey();
-    }
     return {
       hasAccess: false,
       message:
@@ -405,8 +400,9 @@ export default function useAuth({
         return;
       }
       try {
-        const { bundle: hpkeBundle, hadStoredBundle } =
-          await ensureActiveHpkeBundle(values.username);
+        const { bundle: hpkeBundle } = await ensureActiveHpkeBundle(
+          values.username
+        );
 
         const result = await authenticateMutation.mutateAsync({
           username: values.username,
@@ -414,61 +410,22 @@ export default function useAuth({
           hpkePublicKeyB64: hpkeBundle.publicKeyB64,
         });
 
-        const serverHpkePublicKeyB64 = result.hpkePublicKeyB64 ?? null;
-        const bundleMismatch = Boolean(
-          serverHpkePublicKeyB64 &&
-            hpkeBundle.publicKeyB64 !== serverHpkePublicKeyB64
-        );
-        const shouldRestoreFromRecovery = !hadStoredBundle || bundleMismatch;
+        const encryptedAccess = await ensureEncryptedDataAccess({
+          username: values.username,
+          recoveryPassphrase: values.recoveryPassphrase || values.password,
+          hpkePublicKeyB64: result.hpkePublicKeyB64 ?? null,
+          recoverySaltB64: result.recoverySaltB64 ?? null,
+          encryptedPrivateKey: result.encryptedPrivateKey ?? null,
+          encryptedPrivateKeyIv: result.encryptedPrivateKeyIv ?? null,
+        });
 
-        if (shouldRestoreFromRecovery) {
-          const recoveryPassphraseToTry =
-            values.recoveryPassphrase || values.password;
-          if (
-            recoveryPassphraseToTry &&
-            result.recoverySaltB64 &&
-            result.encryptedPrivateKey &&
-            result.encryptedPrivateKeyIv &&
-            serverHpkePublicKeyB64
-          ) {
-            try {
-              const recoveryKey = await deriveRecoveryKey(
-                recoveryPassphraseToTry,
-                result.recoverySaltB64
-              );
-              const privateKeyJwkB64 = await decryptPrivateKeyWithRecoveryKey(
-                result.encryptedPrivateKey,
-                result.encryptedPrivateKeyIv,
-                recoveryKey
-              );
-              await saveUserHpkeBundle(values.username, {
-                privateKeyJwkB64,
-                publicKeyB64: serverHpkePublicKeyB64,
-              });
-              await setActiveHpkePrivateKey(privateKeyJwkB64);
-              await setActiveHpkePublicKey(serverHpkePublicKeyB64);
-            } catch {
-              if (bundleMismatch) {
-                await deleteUserHpkeBundle(values.username);
-                await deleteActiveHpkeKey();
-              }
-              setMessage({
-                message:
-                  'Login succeeded, but encrypted profile data is still locked on this device. Enter your recovery passphrase to restore your key.',
-                type: 'error',
-              });
-            }
-          } else {
-            if (bundleMismatch) {
-              await deleteUserHpkeBundle(values.username);
-              await deleteActiveHpkeKey();
-            }
-            setMessage({
-              message:
-                'Login succeeded, but private profile data is locked on this device. Enter recovery passphrase to restore your key.',
-              type: 'error',
-            });
-          }
+        if (!encryptedAccess.hasAccess) {
+          setMessage({
+            message:
+              encryptedAccess.message ??
+              'Encrypted profile data is locked on this device.',
+            type: 'error',
+          });
         }
 
         handleSuccess({ jwt: result.jwt });

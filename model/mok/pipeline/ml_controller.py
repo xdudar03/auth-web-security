@@ -12,7 +12,11 @@ from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard, CSVLogger
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, classification_report
-from sklearn.neighbors import KNeighborsClassifier
+
+try:
+    import faiss
+except Exception:
+    faiss = None
 
 from mok.preprocessing.utils_image import pillow_image_to_bytes
 import mok.data.data_loader as data_loader
@@ -31,31 +35,46 @@ def _get_env_float(name: str, default: float) -> float:
         return default
 
 
-PREDICTION_CONFIDENCE_THRESHOLD = _get_env_float(
-    "MODEL_PREDICTION_CONFIDENCE_THRESHOLD", 0.65
-)
-PREDICTION_MARGIN_THRESHOLD = _get_env_float(
-    "MODEL_PREDICTION_MARGIN_THRESHOLD", 0.03
-)
-KNN_MAX_NEAREST_DISTANCE = _get_env_float(
-    "MODEL_KNN_MAX_NEAREST_DISTANCE", 0.0
-)
+def _get_env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        print(f"Invalid int for {name}={raw!r}, using default {default}")
+        return default
 
 
-def _top_two_margin(probabilities: np.ndarray) -> float:
-    if probabilities.size <= 1:
-        return 1.0
-    sorted_probs = np.sort(probabilities)
-    return float(sorted_probs[-1] - sorted_probs[-2])
+RP_VERSION = os.environ.get("MODEL_RP_VERSION", "rp-v1")
+OPENSET_TAU_ABS = _get_env_float("MODEL_OPENSET_TAU_ABS", 0.58)
+OPENSET_TAU_MARGIN = _get_env_float("MODEL_OPENSET_TAU_MARGIN", 0.02)
+VERIFY_COSINE_THRESHOLD = _get_env_float("MODEL_VERIFY_COSINE_THRESHOLD", 0.52)
+VERIFY_COSINE_MARGIN = _get_env_float("MODEL_VERIFY_COSINE_MARGIN", 0.015)
+VERIFY_MARGIN_BYPASS_DELTA = _get_env_float("MODEL_VERIFY_MARGIN_BYPASS_DELTA", 0.03)
+RETRIEVAL_TOP_K = _get_env_int("MODEL_RETRIEVAL_TOP_K", 80)
+RETRIEVAL_NPROBE = _get_env_int("MODEL_RETRIEVAL_NPROBE", 8)
+RETRIEVAL_IVF_NLIST = _get_env_int("MODEL_RETRIEVAL_IVF_NLIST", 8)
+RETRIEVAL_ANN_OVERFETCH_FACTOR = _get_env_int("MODEL_RETRIEVAL_ANN_OVERFETCH_FACTOR", 8)
+IDENTIFY_LABEL_TOP_M = _get_env_int("MODEL_IDENTIFY_LABEL_TOP_M", 3)
+VERIFY_TOP_M = _get_env_int("MODEL_VERIFY_TOP_M", 3)
 
 
-def _is_low_confidence(confidence: float, margin: float) -> bool:
-    # Reject only when both indicators are weak to reduce false rejections
-    # caused by appearance/background drift.
-    return (
-        confidence < PREDICTION_CONFIDENCE_THRESHOLD
-        and margin < PREDICTION_MARGIN_THRESHOLD
-    )
+def _atomic_binary_replace(filepath: str, write_func) -> None:
+    tmp_path = f"{filepath}.tmp"
+    prev_path = f"{filepath}.prev"
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    write_func(tmp_path)
+    if os.path.exists(filepath):
+        os.replace(filepath, prev_path)
+    os.replace(tmp_path, filepath)
+
+
+def _save_joblib_with_backup(obj, filepath: str) -> None:
+    def _writer(tmp_path: str) -> None:
+        data_loader.joblib.dump(obj, tmp_path)
+
+    _atomic_binary_replace(filepath, _writer)
 
 
 def _l2_normalize_rows(vectors: np.ndarray, eps: float = 1e-12) -> np.ndarray:
@@ -64,40 +83,62 @@ def _l2_normalize_rows(vectors: np.ndarray, eps: float = 1e-12) -> np.ndarray:
     return vectors / norms
 
 
-def _distance_to_confidence(distance: float, metric: str) -> float:
-    metric_name = (metric or "").lower()
-    if metric_name == "cosine":
-        # cosine distance is in [0, 2] => map to [1, 0]
-        return float(np.clip(1.0 - (distance / 2.0), 0.0, 1.0))
-    return float(1.0 / (1.0 + max(distance, 0.0)))
+def _load_joblib_with_backup(filepath: str):
+    prev_filepath = f"{filepath}.prev"
+    if os.path.exists(filepath):
+        return data_loader.joblib.load(filepath)
+    if os.path.exists(prev_filepath):
+        return data_loader.joblib.load(prev_filepath)
+    raise FileNotFoundError(f"Artifact not found at {filepath} (or backup {prev_filepath})")
 
 
-def _pairwise_distances_1_to_n(
-    query_vector: np.ndarray,
-    candidate_vectors: np.ndarray,
-    metric: str,
-) -> np.ndarray:
-    if candidate_vectors is None or candidate_vectors.size == 0:
-        return np.asarray([], dtype=np.float32)
+def _save_faiss_index_with_backup(index, filepath: str) -> None:
+    if faiss is None:
+        return
 
-    query = np.asarray(query_vector, dtype=np.float32).reshape(-1)
-    candidates = np.asarray(candidate_vectors, dtype=np.float32)
-    metric_name = (metric or "").lower()
+    def _writer(tmp_path: str) -> None:
+        assert faiss is not None
+        faiss.write_index(index, tmp_path)
 
-    if metric_name == "cosine":
-        query_norm = max(float(np.linalg.norm(query)), 1e-12)
-        query = query / query_norm
-        candidates = _l2_normalize_rows(candidates)
-        similarities = np.clip(candidates @ query, -1.0, 1.0)
-        return 1.0 - similarities
-
-    return np.linalg.norm(candidates - query, axis=1)
+    _atomic_binary_replace(filepath, _writer)
 
 
-def _distance_separation_score(target_distance: float, other_distance: float) -> float:
-    if other_distance <= 1e-12:
-        return 0.0
-    return float(np.clip((other_distance - target_distance) / other_distance, 0.0, 1.0))
+def _load_faiss_index_with_backup(filepath: str):
+    if faiss is None:
+        return None
+    prev_filepath = f"{filepath}.prev"
+    if os.path.exists(filepath):
+        assert faiss is not None
+        return faiss.read_index(filepath)
+    if os.path.exists(prev_filepath):
+        assert faiss is not None
+        return faiss.read_index(prev_filepath)
+    return None
+
+
+def _parse_embedding_payload(raw_value, subject_id: str = "") -> list[np.ndarray]:
+    try:
+        decoded = json.loads(raw_value)
+    except Exception:
+        decoded = raw_value
+
+    if not isinstance(decoded, list):
+        raise ValueError(
+            f"Invalid embedding payload for user_id={subject_id}: expected list, got {type(decoded).__name__}"
+        )
+
+    parsed_vectors = []
+    if decoded and all(isinstance(item, (int, float)) for item in decoded):
+        parsed_vectors.append(np.asarray(decoded, dtype=np.float32))
+    elif decoded and all(isinstance(item, (list, tuple)) for item in decoded):
+        for item in decoded:
+            if not all(isinstance(val, (int, float)) for val in item):
+                raise ValueError(f"Non-numeric embedding values for user_id={subject_id}")
+            parsed_vectors.append(np.asarray(item, dtype=np.float32))
+    else:
+        raise ValueError(f"Invalid embedding format for user_id={subject_id}")
+
+    return parsed_vectors
 
 
 class MLController:
@@ -172,26 +213,7 @@ class MLController:
         print(f"Embeddings rows fetched: {len(embeddings_result)}")
         for user_id, raw_value in embeddings_result:
             print(f"Parsing embeddings for user_id={user_id} (raw_type={type(raw_value).__name__})")
-            try:
-                decoded = json.loads(raw_value)
-            except Exception:
-                decoded = raw_value
-            if not isinstance(decoded, list):
-                raise ValueError(
-                    f"Invalid embedding payload for user_id={user_id}: expected list, got {type(decoded).__name__}"
-                )
-
-            parsed_vectors = []
-            if decoded and all(isinstance(item, (int, float)) for item in decoded):
-                parsed_vectors.append(np.asarray(decoded, dtype=np.float32))
-            elif decoded and all(isinstance(item, (list, tuple)) for item in decoded):
-                for item in decoded:
-                    if not all(isinstance(val, (int, float)) for val in item):
-                        raise ValueError(f"Non-numeric embedding values for user_id={user_id}")
-                    parsed_vectors.append(np.asarray(item, dtype=np.float32))
-            else:
-                raise ValueError(f"Invalid embedding format for user_id={user_id}")
-
+            parsed_vectors = _parse_embedding_payload(raw_value, subject_id=str(user_id))
             image_dict.setdefault(user_id, []).extend(parsed_vectors)
         X, y = [], []
         for user_id, images in image_dict.items():
@@ -230,7 +252,16 @@ class MLController:
             raise ValueError("No embeddings available for training.")
         self.prepare_data()
         self.create_model()
-        return self.train_model()
+        train_output = self.train_model()
+        retrieval_output = train_retrieval_index(
+            X_templates=self.X,
+            y_templates=self.y,
+            model_save_dir=self._model_save_dir,
+            model_name=self.MODEL_NAME,
+        )
+        train_output["retrieval"] = retrieval_output
+        self.output_train = train_output
+        return self.output_train
 
     def prepare_data(self):
         # Prepare data
@@ -292,7 +323,40 @@ class MLController:
 
 
     def predict_image(self, vector: np.ndarray, user_id: str = ""):
-        return predict_image(vector, self._model_save_dir, self.MODEL_NAME, user_id=user_id)
+        if user_id:
+            verify_output = verify_claimed_identity(
+                vector_array=vector,
+                claimed_user_id=user_id,
+                db_path=self._db_path,
+                model_save_dir=self._model_save_dir,
+                model_name=self.MODEL_NAME,
+            )
+            if verify_output["verified"]:
+                return str(user_id), float(verify_output["confidence"])
+            return "unknown", 0.0
+
+        prediction_output = identify_image(
+            vector_array=vector,
+            model_save_dir=self._model_save_dir,
+            model_name=self.MODEL_NAME,
+        )
+        return prediction_output["predicted_label"], float(prediction_output["confidence"])
+
+    def predict_image_details(self, vector: np.ndarray):
+        return identify_image(
+            vector_array=vector,
+            model_save_dir=self._model_save_dir,
+            model_name=self.MODEL_NAME,
+        )
+
+    def verify_image(self, vector: np.ndarray, user_id: str):
+        return verify_claimed_identity(
+            vector_array=vector,
+            claimed_user_id=user_id,
+            db_path=self._db_path,
+            model_save_dir=self._model_save_dir,
+            model_name=self.MODEL_NAME,
+        )
 
 
 def prepare_data_train_model(
@@ -600,57 +664,116 @@ def _draw_accuracy_and_loss_curves2(epochs_range, acc, loss, val_acc=None, val_l
     return plt
 
 
-def train_knn_model(
-    X_train,
-    y_train,
-    X_test=None,
-    y_test=None,
+def _retrieval_templates_path(model_save_dir: str, model_name: str) -> str:
+    return os.path.join(model_save_dir, f"{model_name}_rp_templates.joblib")
+
+
+def _retrieval_index_path(model_save_dir: str, model_name: str) -> str:
+    return os.path.join(model_save_dir, f"{model_name}_flatip.faiss")
+
+
+def _safe_inverse_label(label_encoder: LabelEncoder, label_index: int) -> str:
+    try:
+        return str(label_encoder.inverse_transform([int(label_index)])[0])
+    except Exception:
+        return "unknown"
+
+
+def _compute_label_centroids(
+    template_vectors: np.ndarray,
+    template_labels: np.ndarray,
+):
+    unique_labels = np.unique(template_labels)
+    centroids = []
+    centroid_labels = []
+    for label_idx in unique_labels:
+        label_mask = template_labels == label_idx
+        label_vectors = template_vectors[label_mask]
+        if label_vectors.size == 0:
+            continue
+        centroid = np.mean(label_vectors, axis=0)
+        centroid_norm = float(np.linalg.norm(centroid))
+        if centroid_norm <= 1e-12:
+            continue
+        centroid = centroid / centroid_norm
+        centroids.append(centroid.astype(np.float32))
+        centroid_labels.append(int(label_idx))
+    if not centroids:
+        return np.asarray([], dtype=np.int32), np.empty((0, template_vectors.shape[1]), dtype=np.float32)
+    return np.asarray(centroid_labels, dtype=np.int32), np.vstack(centroids).astype(np.float32)
+
+
+def train_retrieval_index(
+    X_templates,
+    y_templates,
     model_save_dir='ml_models/trained/',
     model_name='arcface_yale_anony_v1',
-    n_neighbors=5,
-    metric="cosine",
-    show_logs=False
-    ):
+    show_logs=False,
+):
     """
-    Train and save a KNN classifier on embedding vectors.
+    Persist RP templates and a FlatIP retrieval index.
     """
-    if X_train is None or y_train is None or len(X_train) == 0:
-        raise Exception("KNN training requires non-empty training data.")
+    if X_templates is None or y_templates is None or len(X_templates) == 0:
+        raise Exception("Retrieval indexing requires non-empty templates.")
 
-    train_size = int(len(X_train))
-    default_neighbors = int(np.clip(round(np.sqrt(train_size)), 3, 15))
-    n_neighbors = max(1, min(int(n_neighbors or default_neighbors), train_size))
-    knn_model = KNeighborsClassifier(
-        n_neighbors=n_neighbors,
-        weights="distance",
-        metric=metric,
-        algorithm="brute" if str(metric).lower() == "cosine" else "auto",
-    )
-    knn_model.fit(X_train, y_train)
+    vectors = np.asarray(X_templates, dtype=np.float32)
+    if vectors.ndim == 1:
+        vectors = vectors.reshape(1, -1)
+    if vectors.ndim != 2:
+        raise ValueError(f"Expected 2D template matrix, got shape={vectors.shape}")
 
+    labels = np.asarray(y_templates, dtype=np.int32).reshape(-1)
+    if labels.shape[0] != vectors.shape[0]:
+        raise ValueError(
+            f"Template/label size mismatch: vectors={vectors.shape[0]} labels={labels.shape[0]}"
+        )
+
+    vectors = _l2_normalize_rows(vectors)
     os.makedirs(model_save_dir, exist_ok=True)
-    knn_model_path = os.path.join(model_save_dir, f"{model_name}_knn.joblib")
-    tmp_knn_model_path = f"{knn_model_path}.tmp"
-    prev_knn_model_path = f"{knn_model_path}.prev"
-    data_loader.joblib.dump(knn_model, tmp_knn_model_path)
-    if os.path.exists(knn_model_path):
-        os.replace(knn_model_path, prev_knn_model_path)
-    os.replace(tmp_knn_model_path, knn_model_path)
 
-    knn_accuracy = None
-    if X_test is not None and y_test is not None and len(X_test) > 0:
-        knn_accuracy = float(knn_model.score(X_test, y_test))
+    templates_payload = {
+        "vectors": vectors,
+        "labels": labels,
+        "rp_version": RP_VERSION,
+        "space": "rp",
+        "normalized": True,
+        "created_at": time.time(),
+    }
+    templates_path = _retrieval_templates_path(model_save_dir, model_name)
+    _save_joblib_with_backup(templates_payload, templates_path)
+
+    index_path = None
+    backend = "numpy-flatip"
+    if faiss is not None:
+        dim = int(vectors.shape[1])
+        total = int(vectors.shape[0])
+        nlist = max(1, min(int(RETRIEVAL_IVF_NLIST), total))
+        quantizer = faiss.IndexFlatIP(dim)
+        index = faiss.IndexIVFFlat(quantizer, dim, nlist, faiss.METRIC_INNER_PRODUCT)
+        index.train(vectors)
+        index.add(vectors)
+        if hasattr(index, "nprobe"):
+            index.nprobe = max(1, min(int(RETRIEVAL_NPROBE), nlist))
+        index_path = _retrieval_index_path(model_save_dir, model_name)
+        _save_faiss_index_with_backup(index, index_path)
+        backend = "faiss-ivfflat-ip"
 
     if show_logs:
-        print("\n--- KNN Training ---")
-        print(f"KNN saved in: {knn_model_path}")
-        if knn_accuracy is not None:
-            print(f"KNN test accuracy: {knn_accuracy:.4f}")
+        print("\n--- Retrieval Index Build ---")
+        print(f"Templates saved in: {templates_path}")
+        print(f"Backend: {backend}")
+        if backend.startswith("faiss"):
+            print(f"nlist={int(min(max(1, int(RETRIEVAL_IVF_NLIST)), vectors.shape[0]))} nprobe={int(RETRIEVAL_NPROBE)}")
+        if index_path:
+            print(f"FAISS index saved in: {index_path}")
 
     return {
-        "model_path": knn_model_path,
-        "n_neighbors": n_neighbors,
-        "accuracy": knn_accuracy,
+        "templates_path": templates_path,
+        "index_path": index_path,
+        "backend": backend,
+        "template_count": int(vectors.shape[0]),
+        "dimension": int(vectors.shape[1]),
+        "rp_version": RP_VERSION,
     }
 
 
@@ -763,17 +886,6 @@ def train_model(
         except Exception as plot_e:
             print(f"Error generating/saving curves: {plot_e}")
 
-    # Train a KNN classifier on the same embeddings and persist it for prediction fallback.
-    knn_output = train_knn_model(
-        X_train=X_train,
-        y_train=y_train,
-        X_test=X_test,
-        y_test=y_test,
-        model_save_dir=model_save_dir,
-        model_name=model_name,
-        show_logs=show_logs,
-    )
-
     if show_logs:
         print(f"The best model should be saved in : {model_filepath}")
         print(f"The label encoder is saved in : {encoder_save_path}")
@@ -786,7 +898,7 @@ def train_model(
             "loss": eval_loss,
             "accuracy": eval_acc
         },
-        "knn": knn_output,
+        "retrieval": None,
     }
 
 
@@ -795,7 +907,7 @@ def preprocess_single_vector(
     expected_dim: int,
     ):
     """
-    Validates and formats one embedding vector for prediction.
+    Validate and normalize one RP embedding vector from the client.
     """
     try:
         vector = np.asarray(vector_array, dtype=np.float32).reshape(-1)
@@ -808,236 +920,403 @@ def preprocess_single_vector(
             raise ValueError("Input vector norm is zero")
         vector = vector / norm
         vector = vector.reshape(1, expected_dim)
-        print(f"Preprocessed vector, final shape: {vector.shape}")
         return vector
     except Exception as e:
         print(f"Error during vector preprocessing: {e}")
         return None
 
 
-def predict_image(
+def _load_retrieval_runtime_artifacts(
+    model_save_dir: str,
+    model_name: str,
+):
+    encoder_filepath = os.path.join(model_save_dir, f"{model_name}_label_encoder.joblib")
+    label_encoder = data_loader.load_label_encoder(encoder_filepath)
+    if label_encoder is None:
+        raise Exception("Critical error: Unable to load label encoder.")
+
+    templates_payload = _load_joblib_with_backup(
+        _retrieval_templates_path(model_save_dir, model_name)
+    )
+    template_vectors = np.asarray(templates_payload.get("vectors"), dtype=np.float32)
+    template_labels = np.asarray(templates_payload.get("labels"), dtype=np.int32).reshape(-1)
+    if template_vectors.ndim != 2 or template_vectors.size == 0:
+        raise ValueError("Invalid retrieval templates artifact: vectors must be a non-empty 2D array")
+    if template_labels.shape[0] != template_vectors.shape[0]:
+        raise ValueError("Invalid retrieval templates artifact: labels size mismatch")
+
+    template_vectors = _l2_normalize_rows(template_vectors)
+    centroid_labels, centroid_vectors = _compute_label_centroids(template_vectors, template_labels)
+
+    faiss_index = _load_faiss_index_with_backup(_retrieval_index_path(model_save_dir, model_name))
+    if faiss_index is not None and hasattr(faiss_index, "nprobe"):
+        faiss_index.nprobe = max(1, int(RETRIEVAL_NPROBE))
+
+    return {
+        "label_encoder": label_encoder,
+        "template_vectors": template_vectors,
+        "template_labels": template_labels,
+        "centroid_labels": centroid_labels,
+        "centroid_vectors": centroid_vectors,
+        "faiss_index": faiss_index,
+        "rp_version": str(templates_payload.get("rp_version") or RP_VERSION),
+        "space": str(templates_payload.get("space") or "rp"),
+    }
+
+
+def _search_top_k_candidates(
+    query_vector_2d: np.ndarray,
+    template_vectors: np.ndarray,
+    faiss_index,
+    top_k: int,
+):
+    total_templates = int(template_vectors.shape[0])
+    if total_templates == 0:
+        return np.asarray([], dtype=np.int64), np.asarray([], dtype=np.float32)
+
+    search_k = max(1, min(int(top_k), total_templates))
+    query_vector = query_vector_2d.reshape(-1)
+
+    if faiss_index is not None:
+        requested = max(1, min(total_templates, int(search_k * max(1, int(RETRIEVAL_ANN_OVERFETCH_FACTOR)))))
+        ann_scores, ann_indices = faiss_index.search(query_vector_2d, requested)
+        ann_indices = np.asarray(ann_indices[0], dtype=np.int64)
+        ann_scores = np.asarray(ann_scores[0], dtype=np.float32)
+    else:
+        cosine_scores = np.asarray(template_vectors @ query_vector, dtype=np.float32)
+        # Exact mode: keep all templates to avoid truncation-induced recall loss.
+        full_order = np.argsort(-cosine_scores)
+        ann_indices = np.asarray(full_order, dtype=np.int64)
+        ann_scores = np.asarray(cosine_scores[full_order], dtype=np.float32)
+
+    valid_mask = ann_indices >= 0
+    return ann_indices[valid_mask], ann_scores[valid_mask]
+
+
+def identify_image(
     vector_array: np.ndarray,
     model_save_dir: str = 'ml_models/trained/',
     model_name: str = 'arcface_yale_anony_v1',
-    user_id: str = "",
-    show_logs = False,
-    ):
+    show_logs=False,
+):
     """
-    Loads the model and encoder, predicts the identity for one embedding vector.
+    Retrieval-style identification in RP space: FlatIP retrieval then exact cosine rerank.
     """
     try:
-        # Load Configuration and Paths
-        if show_logs:
-            print("--- Starting the Prediction Script ---")
+        runtime = _load_retrieval_runtime_artifacts(model_save_dir, model_name)
+        label_encoder = runtime["label_encoder"]
+        template_vectors = runtime["template_vectors"]
+        template_labels = runtime["template_labels"]
+        centroid_labels = runtime["centroid_labels"]
+        centroid_vectors = runtime["centroid_vectors"]
+        faiss_index = runtime["faiss_index"]
 
-        encoder_filepath = os.path.join(model_save_dir, f"{model_name}_label_encoder.joblib")
-        knn_model_filepath = os.path.join(model_save_dir, f"{model_name}_knn.joblib")
-        knn_model_backup_filepath = f"{knn_model_filepath}.prev"
+        expected_dim = int(template_vectors.shape[1])
+        preprocessed_vector = preprocess_single_vector(vector_array, expected_dim)
+        if preprocessed_vector is None:
+            raise Exception("Vector preprocessing failed.")
+        query_vector = preprocessed_vector.reshape(-1)
 
-        # Load the label encoder (shared by ArcFace and KNN paths)
-        label_encoder = data_loader.load_label_encoder(encoder_filepath)
-        if label_encoder is None:
-            raise Exception("Critical error: Unable to load label encoder.")
-
-        # KNN model for prediction 
-        if os.path.exists(knn_model_filepath) or os.path.exists(knn_model_backup_filepath):
-            knn_model = None
-            if os.path.exists(knn_model_filepath):
-                try:
-                    if show_logs:
-                        print(f"Using KNN model: {knn_model_filepath}")
-                    knn_model = data_loader.joblib.load(knn_model_filepath)
-                except Exception as primary_knn_error:
-                    if show_logs:
-                        print(f"Primary KNN load failed: {primary_knn_error}")
-            if knn_model is None and os.path.exists(knn_model_backup_filepath):
-                if show_logs:
-                    print(f"Falling back to backup KNN model: {knn_model_backup_filepath}")
-                knn_model = data_loader.joblib.load(knn_model_backup_filepath)
-            if knn_model is None:
-                raise Exception("Unable to load KNN model (primary and backup failed).")
-
-            if hasattr(knn_model, "n_features_in_"):
-                expected_dim = int(knn_model.n_features_in_)
-            elif hasattr(knn_model, "_fit_X"):
-                expected_dim = int(knn_model._fit_X.shape[1])
-            else:
-                raise Exception("KNN model does not expose input feature dimension.")
-
-            preprocessed_vector = preprocess_single_vector(vector_array, expected_dim)
-            if preprocessed_vector is None:
-                raise Exception("Vector preprocessing failed.")
-
-            neighbor_distances, _ = knn_model.kneighbors(
-                preprocessed_vector,
-                return_distance=True,
-            )
-            neighbor_distances = neighbor_distances[0]
-            nearest_distance = float(neighbor_distances[0]) if len(neighbor_distances) > 0 else 0.0
-
-            predicted_index = int(knn_model.predict(preprocessed_vector)[0])
-            metric_name = str(getattr(knn_model, "metric", ""))
-            distance_confidence = _distance_to_confidence(nearest_distance, metric_name)
-
-            if hasattr(knn_model, "predict_proba"):
-                probabilities = knn_model.predict_proba(preprocessed_vector)[0]
-                if user_id:
-                    try:
-                        claimed_index = int(label_encoder.transform([str(user_id)])[0])
-                    except Exception:
-                        if show_logs:
-                            print(f"Unknown claimed user_id={user_id}")
-                        return "unknown", 0.0
-
-                    fit_x = np.asarray(getattr(knn_model, "_fit_X", np.empty((0, 0))), dtype=np.float32)
-                    fit_y = np.asarray(getattr(knn_model, "_y", np.empty((0,))), dtype=np.int32)
-                    if fit_x.size == 0 or fit_y.size == 0:
-                        raise Exception("KNN model does not expose fitted vectors for verification.")
-
-                    claimed_mask = fit_y == claimed_index
-                    if not np.any(claimed_mask):
-                        if show_logs:
-                            print(f"No training vectors available for claimed user_id={user_id}")
-                        return "unknown", 0.0
-
-                    query_vector = preprocessed_vector.reshape(-1)
-                    claimed_vectors = fit_x[claimed_mask]
-                    other_vectors = fit_x[~claimed_mask]
-                    metric_name = str(getattr(knn_model, "metric", ""))
-
-                    claimed_distances = _pairwise_distances_1_to_n(
-                        query_vector,
-                        claimed_vectors,
-                        metric_name,
-                    )
-                    nearest_claimed_distance = float(
-                        np.min(claimed_distances) if claimed_distances.size > 0 else 2.0
-                    )
-
-                    claimed_confidence = float(probabilities[claimed_index])
-                    other_probabilities = np.delete(probabilities, claimed_index)
-                    best_other = float(np.max(other_probabilities)) if other_probabilities.size > 0 else 0.0
-
-                    # Binary verification signal: closeness to claimed identity, not multiclass winner.
-                    claimed_distance_confidence = _distance_to_confidence(
-                        nearest_claimed_distance,
-                        metric_name,
-                    )
-                    if metric_name.lower() == "cosine":
-                        claimed_centroid = np.mean(claimed_vectors, axis=0)
-                        claimed_centroid_norm = max(float(np.linalg.norm(claimed_centroid)), 1e-12)
-                        claimed_centroid = claimed_centroid / claimed_centroid_norm
-                    else:
-                        claimed_centroid = np.mean(claimed_vectors, axis=0)
-                    claimed_centroid_distance = float(
-                        _pairwise_distances_1_to_n(
-                            query_vector,
-                            claimed_centroid.reshape(1, -1),
-                            metric_name,
-                        )[0]
-                    )
-                    centroid_confidence = _distance_to_confidence(
-                        claimed_centroid_distance,
-                        metric_name,
-                    )
-
-                    prediction_confidence = float(
-                        np.clip(
-                            0.20 * claimed_confidence
-                            + 0.40 * claimed_distance_confidence
-                            + 0.40 * centroid_confidence,
-                            0.0,
-                            1.0,
-                        )
-                    )
-
-                    nearest_other_distance = None
-                    nearest_other_centroid_distance = None
-                    if other_vectors.size > 0:
-                        other_distances = _pairwise_distances_1_to_n(
-                            query_vector,
-                            other_vectors,
-                            metric_name,
-                        )
-                        if other_distances.size > 0:
-                            nearest_other_distance = float(np.min(other_distances))
-
-                        other_class_ids = np.unique(fit_y[~claimed_mask])
-                        other_centroid_distances = []
-                        for class_id in other_class_ids:
-                            class_vectors = fit_x[fit_y == class_id]
-                            if class_vectors.size == 0:
-                                continue
-                            class_centroid = np.mean(class_vectors, axis=0)
-                            if metric_name.lower() == "cosine":
-                                class_centroid_norm = max(float(np.linalg.norm(class_centroid)), 1e-12)
-                                class_centroid = class_centroid / class_centroid_norm
-                            dist_to_centroid = float(
-                                _pairwise_distances_1_to_n(
-                                    query_vector,
-                                    class_centroid.reshape(1, -1),
-                                    metric_name,
-                                )[0]
-                            )
-                            other_centroid_distances.append(dist_to_centroid)
-                        if other_centroid_distances:
-                            nearest_other_centroid_distance = float(min(other_centroid_distances))
-
-                    local_separation = (
-                        _distance_separation_score(nearest_claimed_distance, nearest_other_distance)
-                        if nearest_other_distance is not None
-                        else 1.0
-                    )
-                    centroid_separation = (
-                        _distance_separation_score(
-                            claimed_centroid_distance,
-                            nearest_other_centroid_distance,
-                        )
-                        if nearest_other_centroid_distance is not None
-                        else 1.0
-                    )
-                    prediction_margin = max(
-                        float(claimed_confidence - best_other),
-                        local_separation,
-                        centroid_separation,
-                    )
-                    predicted_label = str(user_id)
-                else:
-                    model_confidence = float(np.max(probabilities))
-                    prediction_confidence = float(
-                        np.clip(0.75 * model_confidence + 0.25 * distance_confidence, 0.0, 1.0)
-                    )
-                    prediction_margin = _top_two_margin(probabilities)
-                    predicted_label = label_encoder.inverse_transform([predicted_index])[0]
-            else:
-                prediction_confidence = distance_confidence
-                prediction_margin = 1.0
-                predicted_label = label_encoder.inverse_transform([predicted_index])[0]
-            should_reject = _is_low_confidence(prediction_confidence, prediction_margin)
-            if (
-                nearest_distance is not None
-                and KNN_MAX_NEAREST_DISTANCE > 0
-                and nearest_distance > KNN_MAX_NEAREST_DISTANCE
-            ):
-                should_reject = True
-
-            if show_logs:
-                print("\n--- Prediction Result (KNN) ---")
-                print(f"  - Predicted Identity (Subject ID): {predicted_label}")
-                print(f"  - Trust: {prediction_confidence:.4f} ({prediction_confidence*100:.2f}%)")
-                print(f"  - Margin: {prediction_margin:.4f}")
-                if nearest_distance is not None:
-                    print(f"  - Nearest distance: {nearest_distance:.4f}")
-            if should_reject:
-                if show_logs:
-                    print("  - Rejected as unknown due to confidence/margin checks.")
-                return "unknown", 0.0
-            return predicted_label, prediction_confidence
-        raise FileNotFoundError(
-            f"KNN model not found at {knn_model_filepath} "
-            f"(or backup {knn_model_backup_filepath})"
+        ann_indices, ann_scores = _search_top_k_candidates(
+            query_vector_2d=preprocessed_vector,
+            template_vectors=template_vectors,
+            faiss_index=faiss_index,
+            top_k=max(1, int(RETRIEVAL_TOP_K)),
         )
-        
+
+        if ann_indices.size == 0:
+            return {
+                "predicted_label": "unknown",
+                "confidence": 0.0,
+                "decision": "unknown",
+                "best_score": 0.0,
+                "second_score": 0.0,
+                "tau_abs": float(OPENSET_TAU_ABS),
+                "tau_margin": float(OPENSET_TAU_MARGIN),
+                "top_k": [],
+                "rp_version": runtime["rp_version"],
+                "space": runtime["space"],
+                "retrieval_backend": "faiss-flatip" if faiss_index is not None else "numpy-flatip",
+                "nprobe": int(RETRIEVAL_NPROBE),
+            }
+
+        candidate_vectors = template_vectors[ann_indices]
+        rerank_scores = np.asarray(candidate_vectors @ query_vector, dtype=np.float32)
+        rerank_order = np.argsort(-rerank_scores)
+        ranked_indices = ann_indices[rerank_order]
+        ranked_ann_scores = ann_scores[rerank_order]
+        ranked_rerank_scores = rerank_scores[rerank_order]
+
+        label_scores = {}
+        label_ann_scores = {}
+        label_best_template = {}
+        for template_idx, ann_score, exact_score in zip(
+            ranked_indices,
+            ranked_ann_scores,
+            ranked_rerank_scores,
+        ):
+            label_idx = int(template_labels[int(template_idx)])
+            label_scores.setdefault(label_idx, []).append(float(exact_score))
+            label_ann_scores.setdefault(label_idx, []).append(float(ann_score))
+            if label_idx not in label_best_template:
+                label_best_template[label_idx] = int(template_idx)
+
+        template_ranked_labels = sorted(
+            [
+                (
+                    label_idx,
+                    float(
+                        0.70 * scores[0]
+                        + 0.30 * np.mean(scores[: max(1, min(int(IDENTIFY_LABEL_TOP_M), len(scores)))])
+                    ),
+                )
+                for label_idx, scores in (
+                    (label_idx, sorted(scores, reverse=True))
+                    for label_idx, scores in label_scores.items()
+                )
+            ],
+            key=lambda item: item[1],
+            reverse=True,
+        )
+        template_label_scores = {int(label_idx): float(score) for label_idx, score in template_ranked_labels}
+        centroid_label_scores = {}
+        if centroid_vectors.size > 0 and centroid_labels.size > 0:
+            centroid_scores = np.asarray(centroid_vectors @ query_vector, dtype=np.float32)
+            for label_idx, score in zip(centroid_labels.tolist(), centroid_scores.tolist()):
+                centroid_label_scores[int(label_idx)] = float(score)
+
+        merged_labels = set(template_label_scores.keys()) | set(centroid_label_scores.keys())
+        ranked_labels = sorted(
+            [
+                (
+                    int(label_idx),
+                    float(
+                        0.55 * template_label_scores.get(int(label_idx), centroid_label_scores.get(int(label_idx), 0.0))
+                        + 0.45 * centroid_label_scores.get(int(label_idx), template_label_scores.get(int(label_idx), 0.0))
+                    ),
+                )
+                for label_idx in merged_labels
+            ],
+            key=lambda item: item[1],
+            reverse=True,
+        )
+
+        if not ranked_labels:
+            return {
+                "predicted_label": "unknown",
+                "confidence": 0.0,
+                "decision": "unknown",
+                "best_score": 0.0,
+                "second_score": 0.0,
+                "tau_abs": float(OPENSET_TAU_ABS),
+                "tau_margin": float(OPENSET_TAU_MARGIN),
+                "top_k": [],
+                "rp_version": runtime["rp_version"],
+                "space": runtime["space"],
+                "retrieval_backend": "faiss-flatip" if faiss_index is not None else "numpy-flatip",
+                "nprobe": int(RETRIEVAL_NPROBE),
+            }
+
+        best_label_idx, best_score = ranked_labels[0]
+        second_score = float(ranked_labels[1][1]) if len(ranked_labels) > 1 else -1.0
+        margin = float(best_score - second_score)
+        accepted = (
+            float(best_score) >= float(OPENSET_TAU_ABS)
+            and margin >= float(OPENSET_TAU_MARGIN)
+        )
+
+        top_k_debug = []
+        for label_idx, score in ranked_labels[: max(1, min(RETRIEVAL_TOP_K, len(ranked_labels)))]:
+            per_label_scores = sorted(label_scores.get(label_idx, [score]), reverse=True)
+            top_m = max(1, min(int(IDENTIFY_LABEL_TOP_M), len(per_label_scores)))
+            top_k_debug.append(
+                {
+                    "label": _safe_inverse_label(label_encoder, label_idx),
+                    "score": float(score),
+                    "best_score": float(per_label_scores[0]),
+                    "top_m_mean": float(np.mean(per_label_scores[:top_m])),
+                    "centroid_score": float(centroid_label_scores.get(label_idx, per_label_scores[0])),
+                    "ann_score": float(max(label_ann_scores.get(label_idx, [per_label_scores[0]]))),
+                    "template_index": int(label_best_template.get(label_idx, -1)),
+                }
+            )
+
+        if accepted:
+            predicted_label = _safe_inverse_label(label_encoder, best_label_idx)
+            confidence = float(best_score)
+            decision = "accepted"
+        else:
+            predicted_label = "unknown"
+            confidence = 0.0
+            decision = "unknown"
+
+        output = {
+            "predicted_label": str(predicted_label),
+            "confidence": float(confidence),
+            "decision": decision,
+            "best_score": float(best_score),
+            "second_score": float(second_score),
+            "tau_abs": float(OPENSET_TAU_ABS),
+            "tau_margin": float(OPENSET_TAU_MARGIN),
+            "top_k": top_k_debug,
+            "rp_version": runtime["rp_version"],
+            "space": runtime["space"],
+            "retrieval_backend": "faiss-flatip" if faiss_index is not None else "numpy-flatip",
+            "nprobe": int(RETRIEVAL_NPROBE),
+        }
+
+        if show_logs:
+            print("\n--- Prediction Result (Retrieval + Rerank) ---")
+            print(f"  - Predicted Identity (Subject ID): {output['predicted_label']}")
+            print(f"  - Best rerank score: {output['best_score']:.4f}")
+            print(f"  - Second rerank score: {output['second_score']:.4f}")
+            print(f"  - Decision: {output['decision']}")
+
+        return output
+
     except Exception as e:
         raise Exception(f"Error in prediction: {e}") from e
-  
+
+
+def verify_claimed_identity(
+    vector_array: np.ndarray,
+    claimed_user_id: str,
+    db_path: str | None = None,
+    model_save_dir: str = 'ml_models/trained/',
+    model_name: str = 'arcface_yale_anony_v1',
+):
+    """
+    1:1 verification in RP space using strict cosine threshold.
+    """
+    resolved_db_path = db_path or os.environ.get("SQLITE_DB_PATH", DatabaseController.DEFAULT_DB_PATH)
+    db = DatabaseController(resolved_db_path)
+    raw_embeddings = db.get_embeddings_for_subject(str(claimed_user_id))
+
+    claimed_vectors_list = []
+    for raw_embedding in raw_embeddings:
+        claimed_vectors_list.extend(
+            _parse_embedding_payload(raw_embedding, subject_id=str(claimed_user_id))
+        )
+
+    if not claimed_vectors_list:
+        return {
+            "verified": False,
+            "confidence": 0.0,
+            "claimed_user_id": str(claimed_user_id),
+            "best_score": 0.0,
+            "threshold": float(VERIFY_COSINE_THRESHOLD),
+            "template_count": 0,
+            "decision": "unknown_claimed_user",
+            "rp_version": RP_VERSION,
+            "space": "rp",
+        }
+
+    claimed_vectors = np.vstack(claimed_vectors_list).astype(np.float32)
+    claimed_vectors = _l2_normalize_rows(claimed_vectors)
+
+    expected_dim = int(claimed_vectors.shape[1])
+    preprocessed_vector = preprocess_single_vector(vector_array, expected_dim)
+    if preprocessed_vector is None:
+        raise Exception("Vector preprocessing failed.")
+    query_vector = preprocessed_vector.reshape(-1)
+
+    if claimed_vectors.size == 0:
+        return {
+            "verified": False,
+            "confidence": 0.0,
+            "claimed_user_id": str(claimed_user_id),
+            "best_score": 0.0,
+            "threshold": float(VERIFY_COSINE_THRESHOLD),
+            "template_count": 0,
+            "decision": "no_claimed_templates",
+            "rp_version": RP_VERSION,
+            "space": "rp",
+        }
+
+    cosine_scores = np.asarray(claimed_vectors @ query_vector, dtype=np.float32)
+    sorted_scores = np.sort(cosine_scores)[::-1] if cosine_scores.size > 0 else np.asarray([], dtype=np.float32)
+    best_score = float(sorted_scores[0]) if sorted_scores.size > 0 else 0.0
+    top_m = max(1, min(int(VERIFY_TOP_M), int(sorted_scores.size) if sorted_scores.size > 0 else 1))
+    top_m_mean = float(np.mean(sorted_scores[:top_m])) if sorted_scores.size > 0 else 0.0
+
+    centroid = np.mean(claimed_vectors, axis=0)
+    centroid_norm = float(np.linalg.norm(centroid))
+    centroid_score = 0.0
+    if centroid_norm > 1e-12:
+        centroid = centroid / centroid_norm
+        centroid_score = float(np.dot(centroid, query_vector))
+
+    # Favor centroid/cohort signals over single-template peaks to reduce noisy nearest-neighbor failures.
+    fused_score = float(0.20 * best_score + 0.30 * top_m_mean + 0.50 * centroid_score)
+
+    impostor_best = -1.0
+    try:
+        runtime = _load_retrieval_runtime_artifacts(model_save_dir, model_name)
+        label_encoder = runtime["label_encoder"]
+        template_vectors = runtime["template_vectors"]
+        template_labels = runtime["template_labels"]
+        centroid_labels = runtime["centroid_labels"]
+        centroid_vectors = runtime["centroid_vectors"]
+        claimed_label_idx = int(label_encoder.transform([str(claimed_user_id)])[0])
+        impostor_mask = template_labels != claimed_label_idx
+        if np.any(impostor_mask):
+            impostor_scores = np.asarray(template_vectors[impostor_mask] @ query_vector, dtype=np.float32)
+            if impostor_scores.size > 0:
+                impostor_best = float(np.max(impostor_scores))
+
+        impostor_best_centroid = -1.0
+        if centroid_vectors.size > 0 and centroid_labels.size > 0:
+            centroid_mask = centroid_labels != claimed_label_idx
+            if np.any(centroid_mask):
+                centroid_impostor_scores = np.asarray(
+                    centroid_vectors[centroid_mask] @ query_vector,
+                    dtype=np.float32,
+                )
+                if centroid_impostor_scores.size > 0:
+                    impostor_best_centroid = float(np.max(centroid_impostor_scores))
+            else:
+                impostor_best_centroid = -1.0
+        else:
+            impostor_best_centroid = -1.0
+    except Exception:
+        # Verification should still work when retrieval artifacts are missing/outdated.
+        impostor_best = -1.0
+        impostor_best_centroid = -1.0
+
+    effective_impostor = impostor_best_centroid if impostor_best_centroid >= 0.0 else impostor_best
+    margin_to_impostor = float(fused_score - effective_impostor) if effective_impostor >= 0.0 else 1.0
+    threshold_pass = bool(fused_score >= float(VERIFY_COSINE_THRESHOLD))
+    margin_pass = bool(margin_to_impostor >= float(VERIFY_COSINE_MARGIN))
+    high_confidence_bypass = bool(
+        fused_score >= float(VERIFY_COSINE_THRESHOLD + VERIFY_MARGIN_BYPASS_DELTA)
+    )
+    verified = bool(threshold_pass and (margin_pass or high_confidence_bypass))
+    if verified:
+        if margin_pass:
+            decision = "accepted"
+        else:
+            decision = "accepted_high_confidence_bypass"
+    else:
+        if not threshold_pass:
+            decision = "rejected_below_threshold"
+        else:
+            decision = "rejected_low_margin"
+
+    return {
+        "verified": verified,
+        "confidence": float(fused_score),
+        "claimed_user_id": str(claimed_user_id),
+        "best_score": float(best_score),
+        "top_m_mean": float(top_m_mean),
+        "centroid_score": float(centroid_score),
+        "impostor_best_score": float(impostor_best),
+        "impostor_best_centroid_score": float(impostor_best_centroid),
+        "margin_to_impostor": float(margin_to_impostor),
+        "threshold": float(VERIFY_COSINE_THRESHOLD),
+        "margin_threshold": float(VERIFY_COSINE_MARGIN),
+        "margin_bypass_delta": float(VERIFY_MARGIN_BYPASS_DELTA),
+        "template_count": int(claimed_vectors.shape[0]),
+        "decision": decision,
+        "rp_version": RP_VERSION,
+        "space": "rp",
+    }

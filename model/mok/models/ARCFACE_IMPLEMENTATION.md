@@ -1,97 +1,241 @@
-# ArcFace + KNN Implementation Guide
+# ArcFace to ANN Migration Guide
 
-## Overview
+## Purpose
 
-This project uses ArcFace during model training and KNN during runtime prediction.
+This document explains the migration from KNN-based prediction to ANN retrieval plus rerank, including:
 
-- ArcFace improves embedding discrimination while training.
-- KNN is the online classifier used by `predict_image()`.
-- There is no separate inference `.h5` model in the current pipeline.
+- the theory behind the approach,
+- what changed in training and runtime,
+- why accuracy can regress after migration,
+- what was fixed in this codebase,
+- and how to tune/operate the system safely.
 
-## Current Architecture
+## Executive Summary
 
-### Training path
+The model uses ArcFace-like training for discriminative embeddings, but runtime identity is now solved as nearest-neighbor retrieval in embedding space:
 
-1. Build a vector-based ArcFace training model in `mok/models/ml_models.py`.
-2. Train with labeled inputs: `[X_train, y_train]`.
-3. Evaluate with the same training model interface.
-4. Train and save a KNN classifier on embeddings.
+1. Retrieve candidates quickly with ANN (FAISS IVF, inner product on normalized vectors).
+2. Rerank with exact cosine.
+3. Aggregate scores at label level (not single template only).
+4. Apply open-set acceptance policy (`unknown` rejection).
+5. For verification, combine claimed-user signals with impostor margin checks.
 
-### Runtime prediction path
+This replaces the previous KNN classifier path.
 
-`predict_image()` in `mok/pipeline/ml_controller.py` loads:
+## Why Move from KNN to ANN + Rerank
 
-- `{model_name}_knn.joblib`
+KNN classification can work on small datasets, but retrieval-style serving is more scalable and easier to reason about for biometric systems:
+
+- **Scalability**: ANN supports larger template sets without O(N) full search latency.
+- **Separation of concerns**: retrieval stage for recall, rerank stage for precision.
+- **Open-set behavior**: thresholding on similarity/margins is explicit.
+- **Debuggability**: top-k candidates and scores are visible.
+
+## Core Theory
+
+### 1) Embedding Geometry
+
+All embeddings are L2-normalized. For normalized vectors:
+
+- cosine similarity and inner product are equivalent,
+- higher score means closer identity,
+- score range is typically near `[-1, 1]` (but practical ranges are narrower).
+
+### 2) ANN Retrieval + Exact Rerank
+
+ANN retrieves likely neighbors quickly but can miss exact top candidates. Rerank with exact dot-product/cosine on retrieved candidates restores precision.
+
+### 3) Open-Set Recognition
+
+Identification is open-set: "none of the known users" must map to `unknown`.
+Typical policy:
+
+- accept only if best score passes absolute threshold,
+- and best-vs-second margin is high enough.
+
+### 4) Why Single-Template NN Can Fail
+
+In biometric data, one user's templates may be noisy/outlier-heavy. A single nearest template can be misleading.
+
+Mitigation:
+
+- aggregate multiple templates per label (`top-m mean`),
+- add per-label centroid similarity,
+- compare against impostor scores.
+
+This is now implemented.
+
+## Migration Changes in This Repository
+
+### A) Artifact Format and Runtime
+
+Runtime now relies on:
+
+- `{model_name}_rp_templates.joblib`
+- `{model_name}_flatip.faiss` (FAISS IVF index when available)
 - `{model_name}_label_encoder.joblib`
 
-Then it predicts identity from a single embedding vector using KNN.
+### B) Retrieval Index Build
 
-## ArcFace Components
+`train_retrieval_index()` now:
 
-### `ArcFace` layer
+- saves normalized template vectors + labels,
+- builds FAISS IVF-Flat index when FAISS is present,
+- stores index with backup-safe writes.
 
-- Applies angular margin when labels are provided in training.
-- Returns scaled cosine logits when labels are absent or `training=False`.
+If FAISS is unavailable, runtime still works with exact NumPy search.
 
-### `L2Normalize` layer
+### C) Candidate Search Fixes
 
-- Normalizes embeddings before ArcFace logits.
-- Replaces lambda-style normalization for safer serialization.
+Important correctness fixes:
 
-## Model Builder
+- ANN path now overfetches candidates before rerank (improves recall).
+- Non-FAISS fallback no longer truncates too early; exact mode can score all templates to avoid dropping true identities.
 
-### `build_arcface_vector()`
+### D) Label-Level Scoring for Identification
 
-- Returns one model: the ArcFace training model.
-- Input shape: `(input_dim,)` plus label input for ArcFace loss behavior.
-- Output shape: `(batch_size, num_classes)`.
+`identify_image()` no longer trusts only a single nearest template.
+It builds label-level scores using:
 
-## Training Pipeline Notes
+- best template score,
+- top-m mean template score per label,
+- centroid score per label,
+- weighted fusion for final ranking.
 
-In `mok/pipeline/ml_controller.py`:
+### E) Verification Logic Improvements
 
-- `create_model()` builds and compiles only the training model.
-- `train_model()` fits, evaluates, saves encoder, and trains KNN.
-- Evaluation uses the training model inputs directly.
+`verify_claimed_identity()` now computes:
 
-## Saved Artifacts
+- best claimed template score,
+- claimed top-m mean,
+- claimed centroid score,
+- fused claimed confidence,
+- impostor best score (template and centroid views),
+- claimed-vs-impostor margin.
 
-After training, expected artifacts are:
+Decision now has explicit reasons:
 
-- `{model_name}.h5` (training model checkpoint)
-- `{model_name}_knn.joblib` (runtime classifier)
-- `{model_name}_label_encoder.joblib` (label mapping)
-- `{model_name}_training_log.csv` (training log)
-- `{model_name}_training_curves.pdf` (optional curves)
+- `accepted`
+- `accepted_high_confidence_bypass`
+- `rejected_below_threshold`
+- `rejected_low_margin`
 
-## Prediction Contract
+### F) API Debug Signals
 
-`predict_image(vector_array, model_save_dir, model_name)` expects an embedding vector that matches the KNN feature dimension.
+`/verify` includes diagnostics to support fast root-cause analysis:
 
-Behavior:
+- `verify_margin`
+- `verify_margin_threshold`
+- `verify_decision`
+- `verify_impostor_best_score`
+- `verify_impostor_best_centroid_score`
 
-- Validates vector length.
-- Predicts class with KNN.
-- Computes confidence/margin checks.
-- Returns `(predicted_label, confidence)` or `("unknown", 0.0)` when rejected.
+### G) Predict vs Verify Policy Split
 
-## File Structure
+Prediction and verification now use separate frame-consistency knobs.
+This prevents strict verification policy from over-penalizing 1:N identification.
+
+## Why Accuracy Dropped During Migration (Observed Failure Modes)
+
+The following issues were identified and fixed during migration hardening:
+
+1. **ANN index not truly used** in some flows (templates saved, weak/no index path).
+2. **Small-dataset IVF misconfiguration** (`nlist` too large for template count).
+3. **Candidate truncation** in exact fallback path.
+4. **Single-template dominance** causing unstable class assignment.
+5. **Verification margin gate** rejecting cases where threshold passed but impostor score was higher.
+6. **Predict/verify threshold coupling** making prediction too strict.
+
+## FAISS IVF Sizing Guidance
+
+If you see warnings like:
+
+`clustering X points to Y centroids: please provide at least ... training points`
+
+it means `nlist` is too high for your dataset size.
+
+Practical guidance for this project size:
+
+- with ~100-300 templates, start with `nlist=8` or `16`,
+- set `nprobe` to a meaningful fraction of `nlist` (e.g. 4 for 8, 8 for 16),
+- retrain index after changing these values.
+
+## Environment Variables
+
+### Retrieval and Open-Set
+
+- `MODEL_OPENSET_TAU_ABS` (default `0.58`)
+- `MODEL_OPENSET_TAU_MARGIN` (default `0.02`)
+- `MODEL_RETRIEVAL_TOP_K` (default `80`)
+- `MODEL_RETRIEVAL_NPROBE` (default `8`)
+- `MODEL_RETRIEVAL_IVF_NLIST` (default `64`, lower for small datasets)
+- `MODEL_RETRIEVAL_ANN_OVERFETCH_FACTOR` (default `8`)
+- `MODEL_IDENTIFY_LABEL_TOP_M` (default `3`)
+
+### Verification (model-level)
+
+- `MODEL_VERIFY_COSINE_THRESHOLD` (default `0.52`)
+- `MODEL_VERIFY_COSINE_MARGIN` (default `0.015`)
+- `MODEL_VERIFY_MARGIN_BYPASS_DELTA` (default `0.03`)
+- `MODEL_VERIFY_TOP_M` (default `3`)
+
+### API Frame Voting (predict path)
+
+- `MODEL_PREDICT_CONFIDENCE_THRESHOLD` (default `0.50`)
+- `MODEL_PREDICT_MIN_ACCEPTED_FRAMES` (default `1`)
+- `MODEL_PREDICT_MIN_ACCEPTED_RATIO` (default `0.34`)
+- `MODEL_PREDICT_STRONG_CONFIDENCE_THRESHOLD` (default `0.75`)
+- `MODEL_PREDICT_ALLOW_SINGLE_GOOD_FRAME` (default `true`)
+
+### API Frame Voting (verify path)
+
+- `MODEL_VERIFY_CONFIDENCE_THRESHOLD` (default `0.60`)
+- `MODEL_VERIFY_MIN_ACCEPTED_FRAMES` (default `2`)
+- `MODEL_VERIFY_MIN_ACCEPTED_RATIO` (default `0.5`)
+- `MODEL_VERIFY_STRONG_CONFIDENCE_THRESHOLD` (default `0.9`)
+- `MODEL_VERIFY_ALLOW_SINGLE_GOOD_FRAME` (default `true`)
+
+## Operational Runbook
+
+After changing retrieval or scoring code:
+
+1. Restart model API.
+2. Trigger retraining (`/initial_training`) to rebuild artifacts.
+3. Validate both `/predict` and `/verify`.
+4. Inspect debug fields for rejected verifications.
+5. Tune thresholds only after checking impostor-vs-claimed score distributions.
+
+## Troubleshooting Checklist
+
+If verification fails with high confidence:
+
+- Check `verify_decision`.
+- If `rejected_low_margin`, inspect impostor scores and centroid impostor score.
+- If impostor consistently wins, suspect data overlap/noise and re-enroll templates.
+- If IVF warning appears, reduce `MODEL_RETRIEVAL_IVF_NLIST`.
+
+If prediction returns too many `unknown`:
+
+- lower `MODEL_OPENSET_TAU_ABS` slightly,
+- reduce `MODEL_OPENSET_TAU_MARGIN`,
+- ensure ANN overfetch and rerank are active.
+
+## File Map
 
 ```text
-mok/
-├── models/
-│   └── ml_models.py          # ArcFace layers and vector model builder
-└── pipeline/
-    └── ml_controller.py      # Training + KNN prediction pipeline
+model/mok/pipeline/ml_controller.py
+  - index training
+  - retrieval search + rerank
+  - label/centroid aggregation
+  - verification and margin policy
 
-data/ml_models/trained/
-├── {model_name}.h5                      # ArcFace training model checkpoint
-├── {model_name}_knn.joblib              # KNN classifier used in runtime
-├── {model_name}_label_encoder.joblib    # Label encoder
-└── {model_name}_training_curves.pdf     # Training curves (if generated)
+model/mok/api/server.py
+  - /predict and /verify endpoints
+  - frame-level aggregation
+  - debug response fields
 ```
 
 ---
 
-**Last Updated**: 2026-02-13  
-**Status**: Production Ready
+**Last Updated**: 2026-03-09  
+**Status**: In active migration hardening

@@ -15,10 +15,25 @@ export const ModelStatusResponse = z.object({
 });
 export type ModelStatusResponse = z.infer<typeof ModelStatusResponse>;
 
+export const PredictionTopKItem = z.object({
+  label: z.string(),
+  score: z.number(),
+  ann_score: z.number().optional(),
+  template_index: z.number().optional(),
+});
+export type PredictionTopKItem = z.infer<typeof PredictionTopKItem>;
+
 export const PredictionResponse = z.object({
   predicted_label: z.string(),
   confidence: z.number(),
-  verified: z.boolean().nullable(),
+  verified: z.boolean().nullable().optional(),
+  decision: z.string().optional(),
+  best_score: z.number().optional(),
+  second_score: z.number().optional(),
+  tau_abs: z.number().optional(),
+  tau_margin: z.number().optional(),
+  top_k: z.array(PredictionTopKItem).optional(),
+  unknown_rate: z.number().optional(),
 });
 export type PredictionResponse = z.infer<typeof PredictionResponse>;
 
@@ -33,6 +48,8 @@ export const VerificationResponse = z.object({
   encryptedPrivateKeyIv: z.string().nullable().optional(),
   predicted_user_id: z.string().optional(),
   predicted_user_confidence: z.number().optional(),
+  verify_threshold: z.number().optional(),
+  verify_accept_rate: z.number().optional(),
 });
 export type VerificationResponse = z.infer<typeof VerificationResponse>;
 

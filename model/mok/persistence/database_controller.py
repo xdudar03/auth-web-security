@@ -120,6 +120,17 @@ class DatabaseController:
         """)
         return self.cursor.fetchall()
 
+    def get_embeddings_for_subject(self, subject_id: str):
+        self.cursor.execute(
+            f"""
+            SELECT {self._embeddings_data}
+            FROM {self._embeddings_table_name}
+            WHERE {self._embeddings_user_id} = ? OR {self._embeddings_customer_id} = ?
+            """,
+            (subject_id, subject_id),
+        )
+        return [row[0] for row in self.cursor.fetchall()]
+
 
     def reset_database(self):
         # Only reset model tables to avoid wiping shared DB
@@ -187,7 +198,6 @@ class DatabaseController:
             raise RuntimeError(f"No valid anonymized images found in {target_dir}")
 
         self.process_dataset(user_to_images_b64)
-
 
 
 

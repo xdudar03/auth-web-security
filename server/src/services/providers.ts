@@ -253,6 +253,7 @@ export async function predictFromEmbeddingService(id: string) {
   }
 
   const response = await predictFromEmbedding(JSON.stringify(embeddingBatch));
+  console.log("response from predictFromEmbeddingService: ", response);
   if (!response) {
     throw new HttpError(500, "Failed to predict from embedding");
   }

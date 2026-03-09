@@ -10,6 +10,7 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table';
+import { useDeviceDetails } from '@/hooks/useDeviceDetails';
 
 const fakePairedDevices = [
   { id: 1, name: 'Device 1', status: 'Connected', type: 'Smartphone' },
@@ -21,6 +22,9 @@ export default function PairedDeviceTable() {
   const [pairedDevicesTable, setPairedDevicesTable] = useState([
     ...fakePairedDevices,
   ]);
+  const { isMobile, isAndroid, isIOS, isIpad, isTablet, isDesktop } =
+    useDeviceDetails();
+
   const deviceIcons = {
     Smartphone: <Smartphone className="w-4 h-4" />,
     Laptop: <Laptop className="w-4 h-4" />,

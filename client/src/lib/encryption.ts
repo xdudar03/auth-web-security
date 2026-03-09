@@ -58,7 +58,7 @@ function userHpkeKey(username: string): string {
   return `${USER_HPKE_PREFIX}${username.trim().toLowerCase()}`;
 }
 
-type HpkeBundle = { privateKeyJwkB64: string; publicKeyB64: string };
+export type HpkeBundle = { privateKeyJwkB64: string; publicKeyB64: string };
 
 function openHpkeDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -407,6 +407,42 @@ export async function getUserHpkeBundle(
     privateKeyJwkB64: stored.privateKeyJwkB64,
     publicKeyB64: stored.publicKeyB64,
   };
+}
+
+export async function getUserHpkeBundleByPublicKey(
+  publicKeyB64: string
+): Promise<HpkeBundle | null> {
+  if (typeof window === 'undefined') return null;
+  const db = await openHpkeDb();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(HPKE_BUNDLES_STORE, 'readonly');
+    const store = tx.objectStore(HPKE_BUNDLES_STORE);
+    const request = store.openCursor();
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve(null);
+        return;
+      }
+
+      const candidate = cursor.value as Partial<HpkeBundle> | undefined;
+      if (
+        candidate?.privateKeyJwkB64 &&
+        candidate.publicKeyB64 === publicKeyB64
+      ) {
+        resolve({
+          privateKeyJwkB64: candidate.privateKeyJwkB64,
+          publicKeyB64: candidate.publicKeyB64,
+        });
+        return;
+      }
+
+      cursor.continue();
+    };
+  });
 }
 
 export async function setActiveHpkePrivateKey(

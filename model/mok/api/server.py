@@ -10,7 +10,7 @@ Run with:
 import os
 import math
 import time
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from contextlib import asynccontextmanager
 import json
 
@@ -25,10 +25,15 @@ from mok.pipeline.ml_controller import MLController
 _controller: Optional[MLController] = None
 _training_lock = Lock()
 _retrain_state_lock = Lock()
+_metrics_lock = Lock()
 _retrain_dirty = False
 _retrain_worker_running = False
 _retrain_first_pending_at = 0.0
 _retrain_last_request_at = 0.0
+_predict_total = 0
+_predict_unknown = 0
+_verify_total = 0
+_verify_verified = 0
 RETRAIN_DEBOUNCE_SECONDS = float(
     os.environ.get("MODEL_RETRAIN_DEBOUNCE_SECONDS", "10")
 )
@@ -42,7 +47,7 @@ PREDICT_RETRY_DELAY_SECONDS = float(
     os.environ.get("MODEL_PREDICT_RETRY_DELAY_SECONDS", "0.1")
 )
 VERIFY_CONFIDENCE_THRESHOLD = float(
-    os.environ.get("MODEL_VERIFY_CONFIDENCE_THRESHOLD", "0.65")
+    os.environ.get("MODEL_VERIFY_CONFIDENCE_THRESHOLD", "0.60")
 )
 VERIFY_MIN_ACCEPTED_FRAMES = int(
     os.environ.get("MODEL_VERIFY_MIN_ACCEPTED_FRAMES", "2")
@@ -55,6 +60,22 @@ VERIFY_STRONG_CONFIDENCE_THRESHOLD = float(
 )
 VERIFY_ALLOW_SINGLE_GOOD_FRAME = (
     os.environ.get("MODEL_VERIFY_ALLOW_SINGLE_GOOD_FRAME", "true").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
+PREDICT_CONFIDENCE_THRESHOLD = float(
+    os.environ.get("MODEL_PREDICT_CONFIDENCE_THRESHOLD", "0.50")
+)
+PREDICT_MIN_ACCEPTED_FRAMES = int(
+    os.environ.get("MODEL_PREDICT_MIN_ACCEPTED_FRAMES", "1")
+)
+PREDICT_MIN_ACCEPTED_RATIO = float(
+    os.environ.get("MODEL_PREDICT_MIN_ACCEPTED_RATIO", "0.34")
+)
+PREDICT_STRONG_CONFIDENCE_THRESHOLD = float(
+    os.environ.get("MODEL_PREDICT_STRONG_CONFIDENCE_THRESHOLD", "0.75")
+)
+PREDICT_ALLOW_SINGLE_GOOD_FRAME = (
+    os.environ.get("MODEL_PREDICT_ALLOW_SINGLE_GOOD_FRAME", "true").strip().lower()
     in {"1", "true", "yes", "on"}
 )
 
@@ -71,18 +92,39 @@ def _decode_embedding_payload(embedding: Union[List[float], List[List[float]], s
 def _predict_with_retry(
     controller: MLController,
     embedding,
-    user_id: str = "",
 ):
     attempts = max(1, int(PREDICT_RETRY_ATTEMPTS))
     delay_seconds = max(0.0, float(PREDICT_RETRY_DELAY_SECONDS))
     last_error = None
     for attempt in range(1, attempts + 1):
         try:
-            return controller.predict_image(embedding, user_id=user_id)
+            return controller.predict_image_details(embedding)
         except Exception as error:
             last_error = error
             if attempt < attempts:
                 time.sleep(delay_seconds)
+    if last_error is None:
+        raise RuntimeError("Prediction failed without a captured exception")
+    raise last_error
+
+
+def _verify_with_retry(
+    controller: MLController,
+    embedding,
+    user_id: str,
+):
+    attempts = max(1, int(PREDICT_RETRY_ATTEMPTS))
+    delay_seconds = max(0.0, float(PREDICT_RETRY_DELAY_SECONDS))
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return controller.verify_image(embedding, user_id)
+        except Exception as error:
+            last_error = error
+            if attempt < attempts:
+                time.sleep(delay_seconds)
+    if last_error is None:
+        raise RuntimeError("Verification failed without a captured exception")
     raise last_error
 
 
@@ -92,6 +134,24 @@ def _run_single_retrain(controller: MLController):
             controller.retrain_from_db()
         except Exception as e:
             print(f"Retraining failed: {e}")
+
+
+def _record_predict_outcome(predicted_label: str) -> float:
+    global _predict_total, _predict_unknown
+    with _metrics_lock:
+        _predict_total += 1
+        if str(predicted_label) == "unknown":
+            _predict_unknown += 1
+        return float(_predict_unknown / max(1, _predict_total))
+
+
+def _record_verify_outcome(verified: bool) -> float:
+    global _verify_total, _verify_verified
+    with _metrics_lock:
+        _verify_total += 1
+        if verified:
+            _verify_verified += 1
+        return float(_verify_verified / max(1, _verify_total))
 
 
 def _retrain_worker_loop(controller: MLController):
@@ -202,6 +262,13 @@ class PredictionResponse(BaseModel):
     """Face recognition prediction result."""
     predicted_label: str
     confidence: float
+    decision: Optional[str] = None
+    best_score: Optional[float] = None
+    second_score: Optional[float] = None
+    tau_abs: Optional[float] = None
+    tau_margin: Optional[float] = None
+    top_k: Optional[List[Dict[str, Any]]] = None
+    unknown_rate: Optional[float] = None
 
 
 class ModelStatusResponse(BaseModel):
@@ -268,11 +335,13 @@ async def predict_embedding(request: EmbeddingRequest):
         frame_results = []
         for embedding_item in embedding_batch:
             embedding = np.array(embedding_item, dtype=np.float32)
-            guessed_label, guessed_confidence = _predict_with_retry(controller, embedding)
-            frame_results.append((str(guessed_label), float(guessed_confidence)))
+            details = _predict_with_retry(controller, embedding)
+            frame_results.append(details)
 
         guessed_scores = {}
-        for guessed_label, guessed_confidence in frame_results:
+        for details in frame_results:
+            guessed_label = str(details.get("predicted_label", "unknown"))
+            guessed_confidence = float(details.get("confidence", 0.0))
             guessed_scores[guessed_label] = guessed_scores.get(guessed_label, 0.0) + guessed_confidence
 
         if guessed_scores:
@@ -281,32 +350,36 @@ async def predict_embedding(request: EmbeddingRequest):
             predicted_label = "unknown"
 
         predicted_confidence = max(
-            (conf for label, conf in frame_results if label == predicted_label),
+            (
+                float(details.get("confidence", 0.0))
+                for details in frame_results
+                if str(details.get("predicted_label", "unknown")) == predicted_label
+            ),
             default=0.0,
         )
 
         total_frames = len(frame_results)
         accepted_frames = sum(
             1
-            for label, conf in frame_results
-            if label == predicted_label
-            and label != "unknown"
-            and conf >= VERIFY_CONFIDENCE_THRESHOLD
+            for details in frame_results
+            if str(details.get("predicted_label", "unknown")) == predicted_label
+            and str(details.get("predicted_label", "unknown")) != "unknown"
+            and float(details.get("confidence", 0.0)) >= PREDICT_CONFIDENCE_THRESHOLD
         )
         strong_matches = sum(
             1
-            for label, conf in frame_results
-            if label == predicted_label
-            and label != "unknown"
-            and conf >= VERIFY_STRONG_CONFIDENCE_THRESHOLD
+            for details in frame_results
+            if str(details.get("predicted_label", "unknown")) == predicted_label
+            and str(details.get("predicted_label", "unknown")) != "unknown"
+            and float(details.get("confidence", 0.0)) >= PREDICT_STRONG_CONFIDENCE_THRESHOLD
         )
-        ratio_required = max(1, math.ceil(total_frames * VERIFY_MIN_ACCEPTED_RATIO))
-        min_required = max(1, min(VERIFY_MIN_ACCEPTED_FRAMES, total_frames))
+        ratio_required = max(1, math.ceil(total_frames * PREDICT_MIN_ACCEPTED_RATIO))
+        min_required = max(1, min(PREDICT_MIN_ACCEPTED_FRAMES, total_frames))
         required_votes = max(min_required, ratio_required)
         single_good_frame_verified = (
-            VERIFY_ALLOW_SINGLE_GOOD_FRAME
+            PREDICT_ALLOW_SINGLE_GOOD_FRAME
             and accepted_frames >= 1
-            and predicted_confidence >= VERIFY_CONFIDENCE_THRESHOLD
+            and predicted_confidence >= PREDICT_CONFIDENCE_THRESHOLD
         )
         is_consistent_prediction = (
             (accepted_frames >= required_votes)
@@ -318,18 +391,31 @@ async def predict_embedding(request: EmbeddingRequest):
             predicted_label = "unknown"
             predicted_confidence = 0.0
 
+        unknown_rate = _record_predict_outcome(predicted_label)
+
+        representative = None
+        for details in frame_results:
+            if str(details.get("predicted_label", "unknown")) == predicted_label:
+                representative = details
+                break
+        if representative is None and frame_results:
+            representative = frame_results[0]
+
         response = PredictionResponse(
             predicted_label=str(predicted_label),
             confidence=float(predicted_confidence),
+            decision=(
+                "inconsistent_frames"
+                if not is_consistent_prediction
+                else (representative.get("decision") if representative else None)
+            ),
+            best_score=(float(representative.get("best_score", 0.0)) if representative else None),
+            second_score=(float(representative.get("second_score", 0.0)) if representative else None),
+            tau_abs=(float(representative.get("tau_abs", 0.0)) if representative else None),
+            tau_margin=(float(representative.get("tau_margin", 0.0)) if representative else None),
+            top_k=(representative.get("top_k") if representative else None),
+            unknown_rate=float(unknown_rate),
         )
-        if request.user_id:
-            response.verified = (
-                str(predicted_label) == request.user_id
-                and str(predicted_label) != "unknown"
-                and float(predicted_confidence) >= VERIFY_CONFIDENCE_THRESHOLD
-                and is_consistent_prediction
-            )
-
         return response
 
     except HTTPException:
@@ -361,41 +447,51 @@ async def verify_identity(request: EmbeddingRequest):
     frame_results = []
     for embedding_item in embedding_batch:
         embedding = np.array(embedding_item, dtype=np.float32)
-        predicted_label, confidence = _predict_with_retry(
+        verify_details = _verify_with_retry(
             controller,
             embedding,
-            user_id=request.user_id,
+            request.user_id,
         )
-        guessed_label, guessed_confidence = _predict_with_retry(controller, embedding)
-        is_match = (
-            str(predicted_label) == request.user_id
-            and str(predicted_label) != "unknown"
-            and float(confidence) >= VERIFY_CONFIDENCE_THRESHOLD
+        confidence = float(verify_details.get("confidence", 0.0))
+        threshold = float(verify_details.get("threshold", VERIFY_CONFIDENCE_THRESHOLD))
+        margin_to_impostor = float(verify_details.get("margin_to_impostor", 0.0))
+        margin_threshold = float(verify_details.get("margin_threshold", 0.0))
+        decision = str(verify_details.get("decision", "unknown"))
+        impostor_best_score = float(verify_details.get("impostor_best_score", 0.0))
+        impostor_best_centroid_score = float(
+            verify_details.get("impostor_best_centroid_score", 0.0)
         )
+        is_match = bool(verify_details.get("verified", False))
         frame_results.append(
-            (
-                is_match,
-                float(confidence),
-                str(guessed_label),
-                float(guessed_confidence),
-            )
+            {
+                "is_match": is_match,
+                "confidence": float(confidence),
+                "threshold": threshold,
+                "margin_to_impostor": margin_to_impostor,
+                "margin_threshold": margin_threshold,
+                "decision": decision,
+                "impostor_best_score": impostor_best_score,
+                "impostor_best_centroid_score": impostor_best_centroid_score,
+            }
         )
 
     total_frames = len(frame_results)
-    accepted_frames = sum(1 for is_match, _, _, _ in frame_results if is_match)
+    accepted_frames = sum(1 for frame in frame_results if frame["is_match"])
     strong_matches = sum(
         1
-        for is_match, conf, _, _ in frame_results
-        if is_match and conf >= VERIFY_STRONG_CONFIDENCE_THRESHOLD
+        for frame in frame_results
+        if frame["is_match"] and frame["confidence"] >= VERIFY_STRONG_CONFIDENCE_THRESHOLD
     )
     ratio_required = max(1, math.ceil(total_frames * VERIFY_MIN_ACCEPTED_RATIO))
     min_required = max(1, min(VERIFY_MIN_ACCEPTED_FRAMES, total_frames))
     required_votes = max(min_required, ratio_required)
-    best_claimed_confidence = max((conf for _, conf, _, _ in frame_results), default=0.0)
+    best_claimed_confidence = max((frame["confidence"] for frame in frame_results), default=0.0)
+    best_threshold = min((frame["threshold"] for frame in frame_results), default=VERIFY_CONFIDENCE_THRESHOLD)
+    representative_frame = max(frame_results, key=lambda frame: frame["confidence"], default=None)
     single_good_frame_verified = (
         VERIFY_ALLOW_SINGLE_GOOD_FRAME
         and accepted_frames >= 1
-        and best_claimed_confidence >= VERIFY_CONFIDENCE_THRESHOLD
+        and best_claimed_confidence >= best_threshold
     )
     verified = (
         (accepted_frames >= required_votes)
@@ -404,17 +500,9 @@ async def verify_identity(request: EmbeddingRequest):
     )
 
     confidence = best_claimed_confidence
-    guessed_scores = {}
-    for _, _, guessed_label, guessed_confidence in frame_results:
-        guessed_scores[guessed_label] = guessed_scores.get(guessed_label, 0.0) + guessed_confidence
-    if guessed_scores:
-        predicted_user_id = max(guessed_scores.items(), key=lambda item: item[1])[0]
-    else:
-        predicted_user_id = "unknown"
-    predicted_user_confidence = max(
-        (conf for _, _, label, conf in frame_results if label == predicted_user_id),
-        default=0.0,
-    )
+    predicted_user_id = request.user_id if verified else "unknown"
+    predicted_user_confidence = confidence if verified else 0.0
+    verify_accept_rate = _record_verify_outcome(verified)
 
     return {
         "verified": verified,
@@ -422,6 +510,17 @@ async def verify_identity(request: EmbeddingRequest):
         "user_id": request.user_id,
         "predicted_user_id": predicted_user_id,
         "predicted_user_confidence": predicted_user_confidence,
+        "verify_threshold": float(best_threshold),
+        "verify_margin": float(representative_frame["margin_to_impostor"]) if representative_frame else 0.0,
+        "verify_margin_threshold": float(representative_frame["margin_threshold"]) if representative_frame else 0.0,
+        "verify_decision": str(representative_frame["decision"]) if representative_frame else "unknown",
+        "verify_impostor_best_score": float(representative_frame["impostor_best_score"]) if representative_frame else 0.0,
+        "verify_impostor_best_centroid_score": (
+            float(representative_frame["impostor_best_centroid_score"])
+            if representative_frame
+            else 0.0
+        ),
+        "verify_accept_rate": verify_accept_rate,
     }
 
 

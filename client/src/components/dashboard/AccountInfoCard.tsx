@@ -6,7 +6,10 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import {
   decryptWithHpkePrivateKey,
   getActiveHpkePrivateKeyJwkB64,
+  getUserHpkeBundleByPublicKey,
   importHpkePrivateKeyJwkB64,
+  setActiveHpkePrivateKey,
+  setActiveHpkePublicKey,
 } from '@/lib/encryption';
 import { useEffect, useState } from 'react';
 
@@ -46,7 +49,18 @@ export default function AccountInfoCard() {
       }
 
       try {
-        const privateKeyJwkB64 = await getActiveHpkePrivateKeyJwkB64();
+        let privateKeyJwkB64 = await getActiveHpkePrivateKeyJwkB64();
+        if (!privateKeyJwkB64) {
+          const matchedBundle = await getUserHpkeBundleByPublicKey(
+            user.hpkePublicKeyB64
+          );
+          if (matchedBundle) {
+            await setActiveHpkePrivateKey(matchedBundle.privateKeyJwkB64);
+            await setActiveHpkePublicKey(matchedBundle.publicKeyB64);
+            privateKeyJwkB64 = matchedBundle.privateKeyJwkB64;
+          }
+        }
+
         if (!privateKeyJwkB64) {
           setDecryptedData({ username: '', email: '' });
           setIsProfileLocked(true);
