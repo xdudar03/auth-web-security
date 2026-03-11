@@ -3,94 +3,31 @@ import { User } from 'lucide-react';
 import { useUser } from '@/hooks/useUserContext';
 import Link from 'next/link';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
-import {
-  decryptWithHpkePrivateKey,
-  getActiveHpkePrivateKeyJwkB64,
-  getUserHpkeBundleByPublicKey,
-  importHpkePrivateKeyJwkB64,
-  setActiveHpkePrivateKey,
-  setActiveHpkePublicKey,
-} from '@/lib/encryption';
 import { useEffect, useState } from 'react';
-
-type DecryptedPrivateProfile = {
-  username: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-  [key: string]: unknown;
-};
+import {
+  loadDecryptedUser,
+  DecryptedPrivateProfile,
+} from '@/lib/loadDecrypted';
 
 export default function AccountInfoCard() {
   const { user, privateData } = useUser();
-  const [decryptedData, setDecryptedData] = useState<DecryptedPrivateProfile>({
-    username: '',
-    email: '',
-  });
-  const [isProfileLocked, setIsProfileLocked] = useState(false);
+  const [decryptedData, setDecryptedData] =
+    useState<DecryptedPrivateProfile | null>(null);
 
   useEffect(() => {
     const loadDecryptedData = async () => {
-      if (!privateData || !user?.hpkePublicKeyB64) {
-        setDecryptedData({ username: '', email: '' });
-        setIsProfileLocked(false);
+      if (!user || !privateData) {
+        setDecryptedData(null);
         return;
       }
-
-      if (
-        !privateData.original_cipher ||
-        !privateData.original_iv ||
-        !privateData.original_encap_pubkey
-      ) {
-        setDecryptedData({ username: '', email: '' });
-        setIsProfileLocked(false);
+      const decryptedData = await loadDecryptedUser(user, privateData);
+      if (!decryptedData) {
         return;
       }
-
-      try {
-        let privateKeyJwkB64 = await getActiveHpkePrivateKeyJwkB64();
-        if (!privateKeyJwkB64) {
-          const matchedBundle = await getUserHpkeBundleByPublicKey(
-            user.hpkePublicKeyB64
-          );
-          if (matchedBundle) {
-            await setActiveHpkePrivateKey(matchedBundle.privateKeyJwkB64);
-            await setActiveHpkePublicKey(matchedBundle.publicKeyB64);
-            privateKeyJwkB64 = matchedBundle.privateKeyJwkB64;
-          }
-        }
-
-        if (!privateKeyJwkB64) {
-          setDecryptedData({ username: '', email: '' });
-          setIsProfileLocked(true);
-          return;
-        }
-        const privateKey = await importHpkePrivateKeyJwkB64(privateKeyJwkB64);
-        const decrypted = await decryptWithHpkePrivateKey(
-          privateKey,
-          privateData.original_cipher,
-          privateData.original_iv,
-          privateData.original_encap_pubkey
-        );
-
-        try {
-          const parsed = JSON.parse(decrypted) as DecryptedPrivateProfile;
-          setDecryptedData(parsed);
-          setIsProfileLocked(false);
-        } catch {
-          setDecryptedData({ username: '', email: decrypted });
-          setIsProfileLocked(false);
-        }
-      } catch (error) {
-        console.error('Failed to decrypt account data', error);
-        setDecryptedData({ username: '', email: '' });
-        setIsProfileLocked(true);
-      }
+      setDecryptedData(decryptedData);
     };
-
     void loadDecryptedData();
-  }, [privateData, user?.hpkePublicKeyB64]);
+  }, [privateData, user]);
 
   console.log('decryptedData', decryptedData);
   return (
@@ -108,22 +45,16 @@ export default function AccountInfoCard() {
           <h3 className="text-lg font-semibold text-center">Account Info</h3>
           <div className="flex flex-col gap-1">
             <p className="text-sm text-muted-foreground">
-              Username: {decryptedData.username}
+              Username: {decryptedData?.username ?? '-'}
             </p>
             <p className="text-sm text-muted-foreground">
               Full name: {decryptedData?.firstName ?? '-'}{' '}
-              {decryptedData?.lastName ?? ''}
+              {decryptedData?.lastName ?? '-'}
             </p>
             <p className="text-sm text-muted-foreground">
               Email: {decryptedData?.email ?? '-'}
             </p>
           </div>
-          {isProfileLocked && (
-            <p className="text-sm text-warning mt-2">
-              Encrypted profile is locked on this device. Sign in with your
-              recovery passphrase once to restore access.
-            </p>
-          )}
         </CardContent>
       </Card>
     </div>

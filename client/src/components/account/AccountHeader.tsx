@@ -7,6 +7,7 @@ interface AccountHeaderProps {
   username?: string;
   shops: Shop[] | null;
   isEditMode: boolean;
+  title: string;
   onModeToggle: () => void;
 }
 
@@ -14,11 +15,12 @@ export const AccountHeader = ({
   username,
   shops,
   isEditMode,
+  title,
   onModeToggle,
 }: AccountHeaderProps) => {
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-4">Account Information</h1>
+      <h1 className="text-2xl font-bold mb-4">{title}</h1>
       <div className="flex items-center justify-start flex-row gap-2 w-full">
         <User className="avatar-lg" />
         <div className="flex items-start justify-start flex-col gap-2">

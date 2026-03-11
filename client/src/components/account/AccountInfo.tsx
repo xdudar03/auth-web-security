@@ -201,7 +201,9 @@ export default function AccountInfo() {
 
             const parsedOriginal = parseDecryptedUserPayload(decryptedOriginal);
             resetWithValues(parsedOriginal);
-            setProviderVisibleValues(buildAccountFormValues(parsedOriginal, shops));
+            setProviderVisibleValues(
+              buildAccountFormValues(parsedOriginal, shops)
+            );
             return;
           }
         } catch (error) {
@@ -332,6 +334,7 @@ export default function AccountInfo() {
             username={form.watch('username')}
             shops={shops}
             isEditMode={mode === 'edit'}
+            title="Account Information"
             onModeToggle={() => setMode(mode === 'view' ? 'edit' : 'view')}
           />
           <PersonalDetailsSection
