@@ -27,9 +27,9 @@ type UseBiometricCaptureParams = {
   action: string;
   username: string;
   recoveryPassphrase?: string;
-  isModelTraining: boolean;
-  isModelStatusLoading: boolean;
-  isModelStatusError: boolean;
+  // isModelTraining: boolean;
+  // isModelStatusLoading: boolean;
+  // isModelStatusError: boolean;
 };
 
 const TARGET_SIZE = 100;
@@ -85,9 +85,9 @@ export default function useBiometricCapture({
   action,
   username,
   recoveryPassphrase,
-  isModelTraining,
-  isModelStatusLoading,
-  isModelStatusError,
+  // isModelTraining,
+  // isModelStatusLoading,
+  // isModelStatusError,
 }: UseBiometricCaptureParams) {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isCapturingStream, setIsCapturingStream] = useState(false);
@@ -153,11 +153,11 @@ export default function useBiometricCapture({
 
   const runBiometricAction = async (payload: User & { embedding: string }) => {
     if (action === 'login') {
-      if (isModelTraining) {
-        throw new Error(
-          'Biometric model training is in progress. Please try again shortly.'
-        );
-      }
+      // if (isModelTraining) {
+      //   throw new Error(
+      //     'Biometric model training is in progress. Please try again shortly.'
+      //   );
+      // }
       if (!username) {
         throw new Error('Username is required');
       }
@@ -378,21 +378,22 @@ export default function useBiometricCapture({
     ? isCapturingStream
       ? 'Capturing...'
       : 'Capture Stream'
-    : isModelStatusLoading
-      ? 'Checking model...'
-      : isModelTraining
-        ? 'Model Training...'
-        : isModelStatusError
-          ? 'Model Unavailable'
-          : 'Start Camera';
+    : 'Start Camera';
+  // : isModelStatusLoading
+  //   ? 'Checking model...'
+  //   : isModelTraining
+  //     ? 'Model Training...'
+  //     : isModelStatusError
+  //       ? 'Model Unavailable'
+  //       : 'Start Camera';
   const isButtonDisabled =
     register.isPending ||
     authenticate.isPending ||
     changeEmbedding.isPending ||
-    isCapturingStream ||
-    isModelTraining ||
-    isModelStatusLoading ||
-    isModelStatusError;
+    isCapturingStream;
+  // isModelTraining ||
+  // isModelStatusLoading ||
+  // isModelStatusError;
 
   return {
     videoRef,

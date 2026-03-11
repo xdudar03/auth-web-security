@@ -23,13 +23,13 @@ export default function BiometricAuth({
   const { role, isAuthenticated } = useUser();
   const router = useRouter();
   const trpc = useTRPC();
-  const modelStatusQuery = useQuery({
-    ...trpc.model.status.queryOptions(),
-    enabled: action === 'login',
-    refetchInterval: (query) => (query.state.data?.is_training ? 2000 : false),
-  });
-  const isModelTraining =
-    action === 'login' && modelStatusQuery.data?.is_training;
+  // const modelStatusQuery = useQuery({
+  //   ...trpc.model.status.queryOptions(),
+  //   enabled: action === 'login',
+  //   refetchInterval: (query) => (query.state.data?.is_training ? 2000 : false),
+  // });
+  // const isModelTraining =
+  //   action === 'login' && modelStatusQuery.data?.is_training;
   const {
     videoRef,
     ovalRef,
@@ -45,9 +45,9 @@ export default function BiometricAuth({
     action,
     username,
     recoveryPassphrase,
-    isModelTraining: Boolean(isModelTraining),
-    isModelStatusLoading: modelStatusQuery.isLoading,
-    isModelStatusError: modelStatusQuery.isError,
+    // isModelTraining: Boolean(isModelTraining),
+    // isModelStatusLoading: modelStatusQuery.isLoading,
+    // isModelStatusError: modelStatusQuery.isError,
   });
   const maskId = useId();
   const overlayMaskId = `biometric-mask-${maskId.replace(/:/g, '')}`;
@@ -124,8 +124,8 @@ export default function BiometricAuth({
       )}
       <BiometricAlerts
         action={action}
-        isModelTraining={Boolean(isModelTraining)}
-        isModelStatusError={modelStatusQuery.isError}
+        // isModelTraining={Boolean(isModelTraining)}
+        // isModelStatusError={modelStatusQuery.isError}
         feedbackMessage={feedbackMessage}
       />
       <BiometricCameraSection

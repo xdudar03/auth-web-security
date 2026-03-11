@@ -229,7 +229,7 @@ body {
   }
 
   .card-content {
-    @apply flex flex-col gap-2 flex-1 box-border p-2;
+    @apply block box-border p-2;
   }
 
   .privacy-toggle-button {

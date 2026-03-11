@@ -106,16 +106,18 @@ export default function AccountInfoCard() {
         </CardHeader>
         <CardContent>
           <h3 className="text-lg font-semibold text-center">Account Info</h3>
-          <p className="text-sm text-muted-foreground">
-            Username: {decryptedData.username}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Full name: {decryptedData?.firstName ?? '-'}{' '}
-            {decryptedData?.lastName ?? ''}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Email: {decryptedData?.email ?? '-'}
-          </p>
+          <div className="flex flex-col gap-1">
+            <p className="text-sm text-muted-foreground">
+              Username: {decryptedData.username}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Full name: {decryptedData?.firstName ?? '-'}{' '}
+              {decryptedData?.lastName ?? ''}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Email: {decryptedData?.email ?? '-'}
+            </p>
+          </div>
           {isProfileLocked && (
             <p className="text-sm text-warning mt-2">
               Encrypted profile is locked on this device. Sign in with your

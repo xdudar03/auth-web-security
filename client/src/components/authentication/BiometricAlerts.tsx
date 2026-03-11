@@ -5,8 +5,8 @@ type FeedbackMessage = {
 
 type BiometricAlertsProps = {
   action: string;
-  isModelTraining: boolean;
-  isModelStatusError: boolean;
+  // isModelTraining: boolean;
+  // isModelStatusError: boolean;
   feedbackMessage: FeedbackMessage | null;
 };
 
@@ -14,13 +14,13 @@ export type { FeedbackMessage };
 
 export default function BiometricAlerts({
   action,
-  isModelTraining,
-  isModelStatusError,
+  // isModelTraining,
+  // isModelStatusError,
   feedbackMessage,
 }: BiometricAlertsProps) {
   return (
     <>
-      {action === 'login' && isModelTraining && (
+      {/* {action === 'login' && isModelTraining && (
         <div className="alert alert-warning w-full">
           Your biometric model is training right now. Biometric sign-in is
           temporarily unavailable.
@@ -31,7 +31,7 @@ export default function BiometricAlerts({
         <div className="alert alert-warning w-full">
           We could not confirm model status right now. Please retry in a moment.
         </div>
-      )}
+      )} */}
 
       {feedbackMessage && (
         <div

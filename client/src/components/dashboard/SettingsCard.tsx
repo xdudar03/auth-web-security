@@ -19,22 +19,24 @@ export default function SettingsCard() {
         </CardHeader>
         <CardContent>
           <h3 className="text-lg font-semibold text-center">Settings</h3>
-          {user?.isBiometric ? (
-            <p className="settings-warning">Biometric data registered</p>
-          ) : (
-            <p className="settings-warning">
-              <TriangleAlert className="w-4 h-4 text-warning" />
-              Please register biometric data
-            </p>
-          )}
-          {user?.credentials ? (
-            <p className="settings-warning">Passkey is set</p>
-          ) : (
-            <p className="settings-warning">
-              <TriangleAlert className="w-4 h-4 text-warning" />
-              Please set passkey
-            </p>
-          )}
+          <div className="flex flex-col gap-1">
+            {user?.isBiometric ? (
+              <p className="settings-warning">Biometric data registered</p>
+            ) : (
+              <p className="settings-warning">
+                <TriangleAlert className="w-4 h-4 text-warning" />
+                Please register biometric data
+              </p>
+            )}
+            {user?.credentials ? (
+              <p className="settings-warning">Passkey is set</p>
+            ) : (
+              <p className="settings-warning">
+                <TriangleAlert className="w-4 h-4 text-warning" />
+                Please set passkey
+              </p>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

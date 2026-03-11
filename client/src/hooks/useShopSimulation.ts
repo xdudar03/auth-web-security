@@ -24,7 +24,9 @@ export function useShopSimulation() {
   const shopName = shops?.[0]?.shopName;
   const shopId = shops?.[0]?.shopId;
   const [isRunning, setIsRunning] = useState(false);
-  const [progress, setProgress] = useState<ProgressState>(createInitialProgress());
+  const [progress, setProgress] = useState<ProgressState>(
+    createInitialProgress()
+  );
   const [runEvents, setRunEvents] = useState<SimulationEvent[]>([]);
   const [allEvents, setAllEvents] = useState<SimulationEvent[]>([]);
 
@@ -39,7 +41,10 @@ export function useShopSimulation() {
     })
   );
 
-  const users = useMemo(() => allUsersQuery.data?.users ?? [], [allUsersQuery.data]);
+  const users = useMemo(
+    () => allUsersQuery.data?.users ?? [],
+    [allUsersQuery.data]
+  );
   const biometricUsers = useMemo(
     () => users.filter((user) => user.user.isBiometric),
     [users]
@@ -73,6 +78,7 @@ export function useShopSimulation() {
 
     const sampleSize = Math.max(1, Math.floor(biometricUsers.length / 2));
     const selectedUsers = randomizeArray(biometricUsers).slice(0, sampleSize);
+    console.log('selectedUsers', selectedUsers);
 
     if (selectedUsers.length === 0) {
       setProgress(createInitialProgress());
@@ -130,9 +136,18 @@ export function useShopSimulation() {
     await shopVisitsQuery.refetch();
   };
 
-  const runRegisteredRate = useMemo(() => calculateRegisteredRate(runEvents), [runEvents]);
-  const allRegisteredRate = useMemo(() => calculateRegisteredRate(allEvents), [allEvents]);
-  const progressPercent = useMemo(() => getProgressPercent(progress), [progress]);
+  const runRegisteredRate = useMemo(
+    () => calculateRegisteredRate(runEvents),
+    [runEvents]
+  );
+  const allRegisteredRate = useMemo(
+    () => calculateRegisteredRate(allEvents),
+    [allEvents]
+  );
+  const progressPercent = useMemo(
+    () => getProgressPercent(progress),
+    [progress]
+  );
   const recentRunEvents = useMemo(() => runEvents.slice(0, 12), [runEvents]);
 
   const dbRegisteredEvents = useMemo(
