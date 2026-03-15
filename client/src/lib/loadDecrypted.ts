@@ -13,6 +13,8 @@ export type DecryptedPrivateProfile = {
   firstName?: string;
   lastName?: string;
   phoneNumber?: string;
+  shoppingHistory?: unknown;
+  shops?: unknown;
 };
 
 export async function loadDecryptedUser(

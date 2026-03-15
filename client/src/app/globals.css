@@ -225,7 +225,7 @@ body {
   }
 
   .card-header {
-    @apply flex items-center justify-center gap-2 p-2 w-full mx-auto md:h-2/3 bg-muted/20;
+    @apply flex items-center justify-center gap-2 p-2 w-full mx-auto md:h-2/3 bg-muted/20 rounded-t-lg;
   }
 
   .card-content {
@@ -234,5 +234,37 @@ body {
 
   .privacy-toggle-button {
     @apply min-w-[3.25rem] border border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-muted transition-colors hover:bg-muted/20 hover:text-foreground;
+  }
+  /* Reusable custom scrollbar */
+  .scrollbar-soft {
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: color-mix(in oklab, var(--muted) 65%, transparent)
+      transparent;
+  }
+
+  /* WebKit browsers */
+  .scrollbar-soft::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .scrollbar-soft::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 999px;
+  }
+
+  .scrollbar-soft::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--muted) 70%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent; /* creates breathing room */
+    background-clip: padding-box;
+  }
+
+  .scrollbar-soft:hover::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--border) 45%, var(--muted) 55%);
+  }
+
+  .scrollbar-soft::-webkit-scrollbar-thumb:active {
+    background: var(--primary);
   }
 }
