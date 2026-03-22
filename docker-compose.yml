@@ -9,7 +9,7 @@ services:
       - sqlite_db:/app/data
       - model_data:/app/model-data
       - ./server/data:/assets/sqlite:ro
-      - ./model/data/ml_models/trained:/assets/model:ro
+      - ./model/prebuilt/trained:/assets/model:ro
     command:
       - bash
       - -c
@@ -26,6 +26,17 @@ services:
           rm -f /app/data/users.db /app/data/users.db-wal /app/data/users.db-shm
           cp /assets/sqlite/users.db /app/data/users.db
           echo "Seeded sqlite volume from prebuilt ./server/data/users.db"
+          embedding_count="$(
+            node -e "const { DatabaseSync } = require('node:sqlite'); const db = new DatabaseSync('/app/data/users.db'); const row = db.prepare('SELECT COUNT(*) AS c FROM user_embeddings').get(); db.close(); process.stdout.write(String((row && row.c) || 0));" 2>/dev/null || true
+          )"
+          if ! [[ "$$embedding_count" =~ ^[0-9]+$ ]] || [ "$$embedding_count" -eq 0 ]; then
+            echo "Prebuilt DB validation failed (user_embeddings=$$embedding_count); generating seeded DB..."
+            rm -f /app/data/users.db /app/data/users.db-wal /app/data/users.db-shm
+            /app/seedDbGit.sh
+            echo "Generated sqlite DB from seed scripts"
+          else
+            echo "Verified prebuilt sqlite DB (user_embeddings=$$embedding_count)"
+          fi
         else
           echo "No prebuilt DB found at ./server/data/users.db; generating seeded DB..."
           rm -f /app/data/users.db /app/data/users.db-wal /app/data/users.db-shm
@@ -39,7 +50,7 @@ services:
           cp -R /assets/model/. /app/model-data/ml_models/trained/
           echo "Seeded model volume with prebuilt artifacts"
         else
-          echo "No prebuilt model artifacts found in ./model/data/ml_models/trained"
+          echo "No prebuilt model artifacts found in ./model/prebuilt/trained"
           echo "Model will be trained from DB on first prod startup"
         fi
 

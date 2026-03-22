@@ -2,7 +2,7 @@
 set -euo pipefail
 
 MODE="${1:-dev}"
-PREBUILT_MODEL_FILE="./model/data/ml_models/trained/arcface_yale_anony_v1_label_encoder.joblib"
+PREBUILT_MODEL_FILE="./model/prebuilt/trained/arcface_yale_anony_v1_label_encoder.joblib"
 
 if [ "$MODE" = "prod" ]; then
   export SERVER_ENV_FILE="./server/.env.prod"

@@ -38,13 +38,13 @@ What it does:
 
 - refreshes Docker volumes from prebuilt assets when available
 - if `server/data/users.db` is missing, it auto-generates a seeded DB from `server/src/seed/*`
-- if `model/data/ml_models/trained/*` is present, it uses that prebuilt model
+- if `server/data/users.db` exists but is empty/invalid (`user_embeddings=0`), it auto-regenerates the DB from seed scripts
+- if `model/prebuilt/trained/*` is present, it uses that prebuilt model
 - if prebuilt model files are missing, it auto-triggers initial model training from DB embeddings
 - tails logs
 
 For a clean clone from GitHub (no DB and no trained model files), `./run-docker.sh prod` still works and performs the first-time seeding/training flow automatically.
 The first prod run can take longer when training is required.
-If you see a log about missing `/app/yalefaces`, that is expected on clean clones (the dataset is optional).
 
 ### Service URLs
 
@@ -135,7 +135,7 @@ npm install
 
 ```bash
 cd model
-pip install -r requirements.txt
+./setup.sh
 ```
 
 ### 2. Set up Environment Variables
