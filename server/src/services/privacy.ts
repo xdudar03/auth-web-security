@@ -14,7 +14,7 @@ import { updateUser } from "../database.ts";
 export function toggleUserPrivacyService(
   userId: string,
   field: string,
-  visibility: Visibility
+  visibility: Visibility,
 ) {
   const result = getUserPrivacyByUserIdAndField(userId, field);
   if (!result) {
@@ -33,7 +33,7 @@ export function toggleUserPrivacyService(
 }
 
 export function getUsersPrivacy(
-  userFields: { pseudoId: string; field: string }[]
+  userFields: { pseudoId: string; field: string }[],
 ) {
   const results: {
     pseudoId: string;
@@ -41,15 +41,12 @@ export function getUsersPrivacy(
     visibility: string;
     userId: string;
   }[] = [];
-  console.log("userFields: ", userFields);
   for (const { pseudoId, field } of userFields) {
     const userId = getUserIdByPseudoId(pseudoId);
-    console.log("userId: ", userId);
     if (!userId) {
       throw new HttpError(404, "User not found for pseudoId: " + pseudoId);
     }
     const result = getUserPrivacyFieldByUserId(userId, field);
-    console.log("result: ", result);
     // If privacy setting exists, use it; otherwise default to 'hidden'
     const visibility = result?.visibility ?? "hidden";
     results.push({
@@ -59,7 +56,6 @@ export function getUsersPrivacy(
       userId: userId,
     });
   }
-  console.log("results: ", results);
   return results;
 }
 
@@ -83,13 +79,11 @@ export function applyPrivacyPreset(userId: string, preset: string) {
     result.push({ field: field, visibility: visibility });
   }
   updateUser(userId, { privacyPreset: preset });
-  console.log("result: ", result);
   return result;
 }
 
 export function getUserPrivacyPreset(userId: string) {
   const privacyPreset = getUserPrivacyPresetById(userId) as string;
-  console.log("privacyPreset", privacyPreset);
   if (!privacyPreset) {
     throw new HttpError(404, "Privacy preset not found");
   }

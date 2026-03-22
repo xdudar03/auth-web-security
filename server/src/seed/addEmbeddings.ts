@@ -190,7 +190,9 @@ const addEmbeddings = async () => {
   const datasetDir = path.resolve(process.cwd(), "yalefaces");
   const images = collectImages(datasetDir);
   if (!images.length) {
-    console.warn(`No images found in ${datasetDir}`);
+    console.log(
+      `Optional dataset not found at ${datasetDir}; skipping yalefaces image embedding seed.`,
+    );
     return;
   }
 

@@ -56,7 +56,6 @@ export function generateJwt(userId: string) {
 }
 
 export async function registerBiometricUser(input: RegistrationInput) {
-  console.log("registerBiometricUser input: ", input);
   const {
     userId,
     privateData,
@@ -70,7 +69,6 @@ export async function registerBiometricUser(input: RegistrationInput) {
     roleId,
     shopIds,
   } = input;
-  console.log("shopIds: ", shopIds.length);
   const existingUserByUsername = getUserByUsername(username);
 
   if (existingUserByUsername) {
@@ -119,8 +117,6 @@ export async function registerBiometricUser(input: RegistrationInput) {
 
 export async function authenticateBiometricUser(input: AuthenticationInput) {
   const { username, password, hpkePublicKeyB64 } = input;
-  console.log("username: ", username);
-  console.log("password: ", password);
 
   const user = getUserForAuthentication(username);
 
@@ -141,7 +137,6 @@ export async function authenticateBiometricUser(input: AuthenticationInput) {
   }
 
   const jwt = generateJwt(user.userId as string);
-  console.log("jwt in authenticateBiometricUser: ", jwt);
   return {
     jwt,
     hpkePublicKeyB64: user.hpkePublicKeyB64 ?? null,
@@ -172,7 +167,6 @@ export async function changeBiometricEmbedding(
     existingUser.userId,
     serializedEmbedding,
   );
-  console.log("response from addNewEmbedding: ", response);
 
   updateUser(existingUser.userId, { isBiometric: true });
   // addNewEmbedding throws on non-2xx; response message text can vary.
@@ -190,7 +184,6 @@ export async function changeBiometricPassword(
   user: User,
 ) {
   const { oldPassword, newPassword } = input;
-  console.log("user jwt: ", user);
 
   if (!user.userId) {
     throw new HttpError(401, "Unauthorized");

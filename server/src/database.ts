@@ -24,7 +24,6 @@ const dbPath = isAbsolute(rawDbPath)
   ? rawDbPath
   : resolve(process.cwd(), rawDbPath);
 
-console.log("dbPath", dbPath);
 mkdirSync(dirname(dbPath), { recursive: true });
 
 const db = new DatabaseSync(dbPath);
@@ -462,7 +461,6 @@ const getUserPrivacyPresetQuery = db.prepare(
 
 const getUserPrivacyPresetById = (userId: string) => {
   const userData = getUserPrivacyPresetQuery.get(userId);
-  console.log("userData", userData);
   return userData?.privacyPreset;
 };
 
@@ -988,7 +986,6 @@ const deleteUser = (userId: string) => {
 };
 
 const updateUser = (userId: string, updates: Partial<User>) => {
-  console.log("updates: ", updates);
   updateUserQuery(userId, updates);
 };
 
@@ -1177,7 +1174,6 @@ const getShopUsers = (shopId: number) => {
   const users = usersData.filter(
     (user) => user.roleName !== "admin" && user.roleName !== "provider",
   );
-  console.log("users: ", users);
   return users;
 };
 
@@ -1267,7 +1263,6 @@ const updateUserPrivacy = (
   privacySetting: Omit<PrivacySettingRecord, "privacyId">,
 ) => {
   const settingWithoutId = mapUndefinedToNull(privacySetting);
-  console.log("settingWithoutId: ", settingWithoutId);
   return updateUserPrivacyQuery.run(
     settingWithoutId.visibility,
     settingWithoutId.userId,

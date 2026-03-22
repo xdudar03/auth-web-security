@@ -1,19 +1,63 @@
 services:
+  prod-assets-init:
+    build:
+      context: ./server
+    environment:
+      - APP_MODE=${APP_MODE:-dev}
+      - SQLITE_DB_PATH=/app/data/users.db
+    volumes:
+      - sqlite_db:/app/data
+      - model_data:/app/model-data
+      - ./server/data:/assets/sqlite:ro
+      - ./model/data/ml_models/trained:/assets/model:ro
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        if [ "${APP_MODE:-dev}" != "prod" ]; then
+          echo "Skipping prod asset bootstrap (APP_MODE=${APP_MODE:-dev})"
+          exit 0
+        fi
+
+        mkdir -p /app/data /app/model-data/ml_models/trained
+
+        if [ -f /assets/sqlite/users.db ]; then
+          rm -f /app/data/users.db /app/data/users.db-wal /app/data/users.db-shm
+          cp /assets/sqlite/users.db /app/data/users.db
+          echo "Seeded sqlite volume from prebuilt ./server/data/users.db"
+        else
+          echo "No prebuilt DB found at ./server/data/users.db; generating seeded DB..."
+          rm -f /app/data/users.db /app/data/users.db-wal /app/data/users.db-shm
+          /app/seedDbGit.sh
+          echo "Generated sqlite DB from seed scripts"
+        fi
+
+        if [ -f /assets/model/arcface_yale_anony_v1_label_encoder.joblib ]; then
+          rm -rf /app/model-data/ml_models/trained
+          mkdir -p /app/model-data/ml_models/trained
+          cp -R /assets/model/. /app/model-data/ml_models/trained/
+          echo "Seeded model volume with prebuilt artifacts"
+        else
+          echo "No prebuilt model artifacts found in ./model/data/ml_models/trained"
+          echo "Model will be trained from DB on first prod startup"
+        fi
+
   server:
     build:
       context: ./server
     env_file:
-      - ./server/.env
+      - ${SERVER_ENV_FILE:-./server/.env}
     environment:
-      - MODEL_BASE_URL=http://model:5000
-      - SESSION_SECRET=${SESSION_SECRET}
-      - CORS_ORIGIN=${CORS_ORIGIN}
+      - MODEL_BASE_URL=${MODEL_BASE_URL:-http://model:5000}
       - SQLITE_DB_PATH=/app/data/users.db
     ports:
       - "4000:4000"
     volumes:
       - sqlite_db:/app/data
     depends_on:
+      prod-assets-init:
+        condition: service_completed_successfully
       model:
         condition: service_healthy
     healthcheck:
@@ -56,10 +100,15 @@ services:
       context: ./model
     environment:
       - EXPRESS_BASE_URL=http://server:4000
+      - SQLITE_DB_PATH=/app/shared-db/users.db
     ports:
       - "5000:5000"
     volumes:
       - model_data:/app/data
+      - sqlite_db:/app/shared-db
+    depends_on:
+      prod-assets-init:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [

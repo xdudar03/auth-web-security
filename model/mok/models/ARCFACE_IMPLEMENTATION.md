@@ -236,6 +236,3 @@ model/mok/api/server.py
 ```
 
 ---
-
-**Last Updated**: 2026-03-09  
-**Status**: In active migration hardening

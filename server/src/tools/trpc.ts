@@ -15,10 +15,8 @@ async function createContext({
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.split(" ")[1];
-    console.log("token in trpc context server: ", token);
     try {
       const decoded = jwt.verify(token as string, jwtSecret);
-      console.log("decoded: ", decoded);
 
       // If decoded is an object (JwtPayload), extract userId. If it's a string, ignore.
       if (
@@ -29,7 +27,6 @@ async function createContext({
         userId = decoded.userId;
         user = getUserById(userId);
       }
-      console.log("user: ", user);
     } catch (error) {
       console.error("Error verifying token", error);
     }

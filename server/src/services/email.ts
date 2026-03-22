@@ -10,10 +10,9 @@ import bcrypt from "bcryptjs";
 export async function sendEmailWithToken(
   to: string,
   userId: string,
-  purpose: string
+  purpose: string,
 ) {
   const token = crypto.randomBytes(32).toString("hex");
-  console.log("token for ", purpose, token);
   const result = addToken({
     token,
     expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(),
@@ -21,7 +20,6 @@ export async function sendEmailWithToken(
     userId,
   });
 
-  console.log("result of adding token for ", purpose, result);
   if (!result) {
     throw new Error(`Failed to add token for ${purpose}`);
   }
@@ -40,7 +38,7 @@ export async function sendEmailWithToken(
   const email = await sendEmail(
     to,
     subject,
-    `Click here to ${subject.toLowerCase()}: <a href="${link}">${subject}</a>`
+    `Click here to ${subject.toLowerCase()}: <a href="${link}">${subject}</a>`,
   );
   if (!email) {
     throw new Error(`Failed to send email for ${purpose}`);
@@ -50,7 +48,6 @@ export async function sendEmailWithToken(
 
 export async function verifyToken(token: string, purpose: string) {
   const result = getToken(token, purpose);
-  console.log("result of verifying token for ", purpose, result);
   if (!result) {
     throw new HttpError(400, "Invalid token");
   }
@@ -60,7 +57,6 @@ export async function verifyToken(token: string, purpose: string) {
   // If it's a confirmation token, issue JWT and delete token
   if (purpose === "confirmation") {
     const jwt = generateJwt(String(result.userId));
-    console.log("jwt in verifyToken: ", jwt);
     deleteToken(token, purpose);
     return { userId: result.userId, jwt: jwt };
   }
@@ -70,7 +66,7 @@ export async function verifyToken(token: string, purpose: string) {
 export async function resetPassword(
   token: string,
   newPassword: string,
-  userId: string
+  userId: string,
 ) {
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(newPassword, salt);
