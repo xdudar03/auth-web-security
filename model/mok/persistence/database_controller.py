@@ -64,9 +64,6 @@ class DatabaseController:
         self.conn.close()
 
     def add_embedding(self, user_id: str, embedding):
-        print(f"Adding embedding to database at {self.path}")
-        print(f"Embedding: {embedding}")
-        print(f"User ID: {user_id}")
         if isinstance(embedding, np.ndarray):
             serialized = json.dumps(embedding.tolist())
         elif isinstance(embedding, (list, tuple)):

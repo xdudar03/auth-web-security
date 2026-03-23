@@ -9,7 +9,6 @@ coverage
 .cache
 *.tsbuildinfo
 **/*.map
-Dockerfile*
 docker-compose*
 
 

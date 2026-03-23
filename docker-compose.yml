@@ -1,35 +1,4 @@
 services:
-  model-artifacts-init:
-    image: ${MODEL_ARTIFACT_IMAGE:-busybox:1.36}
-    environment:
-      - APP_MODE=${APP_MODE:-dev}
-      - MODEL_ARTIFACTS_PATH=${MODEL_ARTIFACTS_PATH:-/artifacts}
-    volumes:
-      - model_artifacts:/model-artifacts
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        if [ "${APP_MODE:-dev}" != "prod" ]; then
-          echo "Skipping model artifact import (APP_MODE=${APP_MODE:-dev})"
-          exit 0
-        fi
-
-        if [ "${MODEL_ARTIFACT_IMAGE:-}" = "" ]; then
-          echo "MODEL_ARTIFACT_IMAGE not set; skipping artifact image import."
-          exit 0
-        fi
-
-        if [ ! -d "${MODEL_ARTIFACTS_PATH:-/artifacts}" ]; then
-          echo "MODEL_ARTIFACTS_PATH not found inside artifact image: ${MODEL_ARTIFACTS_PATH:-/artifacts}"
-          exit 1
-        fi
-
-        rm -rf /model-artifacts/*
-        cp -R "${MODEL_ARTIFACTS_PATH:-/artifacts}/". /model-artifacts/
-        echo "Imported model artifacts from ${MODEL_ARTIFACT_IMAGE}:${MODEL_ARTIFACTS_PATH:-/artifacts}"
-
   prod-assets-init:
     build:
       context: ./server
@@ -39,12 +8,7 @@ services:
     volumes:
       - sqlite_db:/app/data
       - model_data:/app/model-data
-      - model_artifacts:/assets/model-image:ro
       - ./server/data:/assets/sqlite:ro
-      - ./model/prebuilt/trained:/assets/model:ro
-    depends_on:
-      model-artifacts-init:
-        condition: service_completed_successfully
     command:
       - bash
       - -c
@@ -79,24 +43,8 @@ services:
           echo "Generated sqlite DB from seed scripts"
         fi
 
-        if [ -f /assets/model-image/arcface_yale_anony_v1_label_encoder.joblib ]; then
-          rm -rf /app/model-data/ml_models/trained
-          mkdir -p /app/model-data/ml_models/trained
-          cp -R /assets/model-image/. /app/model-data/ml_models/trained/
-          echo "Seeded model volume from MODEL_ARTIFACT_IMAGE"
-        elif [ -f /assets/model/arcface_yale_anony_v1_label_encoder.joblib ]; then
-          rm -rf /app/model-data/ml_models/trained
-          mkdir -p /app/model-data/ml_models/trained
-          cp -R /assets/model/. /app/model-data/ml_models/trained/
-          echo "Seeded model volume from local ./model/prebuilt/trained"
-        else
-          if [ "${APP_MODE:-dev}" = "prod" ]; then
-            echo "No prebuilt model artifacts found."
-            echo "In prod mode, provide MODEL_ARTIFACT_IMAGE or ./model/prebuilt/trained artifacts."
-            exit 1
-          fi
-          echo "No prebuilt model artifacts found (non-prod mode)."
-        fi
+        echo "Prebuilt model loading disabled."
+        echo "Run initial model training from seeded DB."
 
   server:
     build:
@@ -179,4 +127,3 @@ services:
 volumes:
   sqlite_db:
   model_data:
-  model_artifacts:

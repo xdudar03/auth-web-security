@@ -8,7 +8,7 @@ import {
 } from "../types/model.ts";
 import { getUserIdByUsername } from "../database.ts";
 
-const MODEL_BASE_URL = "http://localhost:5000"; // TODO: change to env variable
+const MODEL_BASE_URL = process.env.MODEL_BASE_URL || "http://localhost:5000";
 
 async function fetchModel<T>(
   endpoint: string,

@@ -27,7 +27,6 @@ share/python-wheels
 *.sqlite
 *.db
 .env
-Dockerfile*
 docker-compose*
 
 
