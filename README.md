@@ -39,12 +39,40 @@ What it does:
 - refreshes Docker volumes from prebuilt assets when available
 - if `server/data/users.db` is missing, it auto-generates a seeded DB from `server/src/seed/*`
 - if `server/data/users.db` exists but is empty/invalid (`user_embeddings=0`), it auto-regenerates the DB from seed scripts
-- if `model/prebuilt/trained/*` is present, it uses that prebuilt model
-- if prebuilt model files are missing, it auto-triggers initial model training from DB embeddings
+- in prod, it requires a prebuilt model and fails fast if one is not available
+- it first tries `MODEL_ARTIFACT_IMAGE` (recommended for deployment), then falls back to local `model/prebuilt/trained/*`
 - tails logs
 
-For a clean clone from GitHub (no DB and no trained model files), `./run-docker.sh prod` still works and performs the first-time seeding/training flow automatically.
-The first prod run can take longer when training is required.
+For production deployments, runtime model training is disabled. Build/train artifacts ahead of time and provide them via `MODEL_ARTIFACT_IMAGE` or local `model/prebuilt/trained/*`.
+
+`MODEL_ARTIFACT_IMAGE` contract:
+
+- image must contain trained model files at `MODEL_ARTIFACTS_PATH` (default `/artifacts`)
+- required file check: `arcface_yale_anony_v1_label_encoder.joblib`
+- startup imports those files into the `model_data` Docker volume before app services start
+
+### Build prebuilt model image in CI
+
+Use GitHub Actions workflow `Build Model Artifact Image` to train and publish model artifacts to GHCR.
+
+What it does:
+
+- starts `server` + `model` in Docker Compose
+- runs `/app/seedDbGit.sh` (seeds DB and requests initial model training)
+- waits until trained model artifacts exist
+- packages trained files into image: `ghcr.io/<owner>/auth-model-artifacts:<tag>`
+- pushes the image to GHCR
+
+How to trigger:
+
+- GitHub -> Actions -> `Build Model Artifact Image` -> `Run workflow`
+- optional input: `image_tag` (if omitted, commit SHA is used)
+
+Then deploy with:
+
+```bash
+MODEL_ARTIFACT_IMAGE=ghcr.io/<owner>/auth-model-artifacts:<tag> ./run-docker.sh prod
+```
 
 ### Service URLs
 
@@ -83,10 +111,21 @@ cp .env.example .env
 The root `.env` file is optional and only used for Docker Compose overrides.
 App credentials/secrets still live in `server/.env` and `server/.env.prod`.
 
+Prod-only model artifact envs (set in root `.env` or deployment env):
+
+- `MODEL_ARTIFACT_IMAGE` (recommended): container image that contains prebuilt model files
+- `MODEL_ARTIFACTS_PATH` path inside artifact image (default: `/artifacts`)
+
 Docker startup reads:
 
 - dev mode: `server/.env`
 - prod mode: `server/.env.prod`
+
+In prod mode, startup also validates that a prebuilt model exists:
+
+- preferred: `MODEL_ARTIFACT_IMAGE` + `MODEL_ARTIFACTS_PATH`
+- fallback: local `model/prebuilt/trained/*`
+- if neither exists, startup exits with an error
 
 Required server envs:
 
