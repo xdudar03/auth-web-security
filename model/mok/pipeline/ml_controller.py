@@ -52,6 +52,10 @@ OPENSET_TAU_MARGIN = _get_env_float("MODEL_OPENSET_TAU_MARGIN", 0.02)
 VERIFY_COSINE_THRESHOLD = _get_env_float("MODEL_VERIFY_COSINE_THRESHOLD", 0.52)
 VERIFY_COSINE_MARGIN = _get_env_float("MODEL_VERIFY_COSINE_MARGIN", 0.015)
 VERIFY_MARGIN_BYPASS_DELTA = _get_env_float("MODEL_VERIFY_MARGIN_BYPASS_DELTA", 0.03)
+VERIFY_TOP_M_MIN_SCORE = _get_env_float("MODEL_VERIFY_TOP_M_MIN_SCORE", 0.50)
+VERIFY_CENTROID_MIN_SCORE = _get_env_float("MODEL_VERIFY_CENTROID_MIN_SCORE", 0.50)
+VERIFY_TEMPLATE_DOMINANCE_MARGIN = _get_env_float("MODEL_VERIFY_TEMPLATE_DOMINANCE_MARGIN", 0.005)
+VERIFY_CENTROID_DOMINANCE_MARGIN = _get_env_float("MODEL_VERIFY_CENTROID_DOMINANCE_MARGIN", 0.01)
 RETRIEVAL_TOP_K = _get_env_int("MODEL_RETRIEVAL_TOP_K", 80)
 RETRIEVAL_NPROBE = _get_env_int("MODEL_RETRIEVAL_NPROBE", 8)
 RETRIEVAL_IVF_NLIST = _get_env_int("MODEL_RETRIEVAL_IVF_NLIST", 8)
@@ -212,7 +216,6 @@ class MLController:
         embeddings_result = db.get_embeddings_table()
         print(f"Embeddings rows fetched: {len(embeddings_result)}")
         for user_id, raw_value in embeddings_result:
-            print(f"Parsing embeddings for user_id={user_id} (raw_type={type(raw_value).__name__})")
             parsed_vectors = _parse_embedding_payload(raw_value, subject_id=str(user_id))
             image_dict.setdefault(user_id, []).extend(parsed_vectors)
         X, y = [], []
@@ -1285,22 +1288,50 @@ def verify_claimed_identity(
 
     effective_impostor = impostor_best_centroid if impostor_best_centroid >= 0.0 else impostor_best
     margin_to_impostor = float(fused_score - effective_impostor) if effective_impostor >= 0.0 else 1.0
+    template_margin_to_impostor = (
+        float(best_score - impostor_best) if impostor_best >= 0.0 else 1.0
+    )
+    centroid_margin_to_impostor = (
+        float(centroid_score - impostor_best_centroid) if impostor_best_centroid >= 0.0 else 1.0
+    )
     threshold_pass = bool(fused_score >= float(VERIFY_COSINE_THRESHOLD))
     margin_pass = bool(margin_to_impostor >= float(VERIFY_COSINE_MARGIN))
-    high_confidence_bypass = bool(
+    top_m_floor_pass = bool(top_m_mean >= float(VERIFY_TOP_M_MIN_SCORE))
+    centroid_floor_pass = bool(centroid_score >= float(VERIFY_CENTROID_MIN_SCORE))
+    template_dominance_pass = bool(
+        template_margin_to_impostor >= float(VERIFY_TEMPLATE_DOMINANCE_MARGIN)
+    )
+    centroid_dominance_pass = bool(
+        centroid_margin_to_impostor >= float(VERIFY_CENTROID_DOMINANCE_MARGIN)
+    )
+    high_confidence_bypass_candidate = bool(
         fused_score >= float(VERIFY_COSINE_THRESHOLD + VERIFY_MARGIN_BYPASS_DELTA)
     )
-    verified = bool(threshold_pass and (margin_pass or high_confidence_bypass))
+    verified = bool(
+        threshold_pass
+        and margin_pass
+        and top_m_floor_pass
+        and centroid_floor_pass
+        and template_dominance_pass
+        and centroid_dominance_pass
+    )
     if verified:
-        if margin_pass:
-            decision = "accepted"
-        else:
-            decision = "accepted_high_confidence_bypass"
+        decision = "accepted"
     else:
         if not threshold_pass:
             decision = "rejected_below_threshold"
-        else:
+        elif not margin_pass:
             decision = "rejected_low_margin"
+        elif not top_m_floor_pass:
+            decision = "rejected_low_top_m_mean"
+        elif not centroid_floor_pass:
+            decision = "rejected_low_centroid_score"
+        elif not template_dominance_pass:
+            decision = "rejected_impostor_template_too_close"
+        elif not centroid_dominance_pass:
+            decision = "rejected_impostor_centroid_too_close"
+        else:
+            decision = "rejected"
 
     return {
         "verified": verified,
@@ -1312,9 +1343,22 @@ def verify_claimed_identity(
         "impostor_best_score": float(impostor_best),
         "impostor_best_centroid_score": float(impostor_best_centroid),
         "margin_to_impostor": float(margin_to_impostor),
+        "template_margin_to_impostor": float(template_margin_to_impostor),
+        "centroid_margin_to_impostor": float(centroid_margin_to_impostor),
         "threshold": float(VERIFY_COSINE_THRESHOLD),
         "margin_threshold": float(VERIFY_COSINE_MARGIN),
+        "top_m_min_score": float(VERIFY_TOP_M_MIN_SCORE),
+        "centroid_min_score": float(VERIFY_CENTROID_MIN_SCORE),
+        "template_dominance_margin_threshold": float(VERIFY_TEMPLATE_DOMINANCE_MARGIN),
+        "centroid_dominance_margin_threshold": float(VERIFY_CENTROID_DOMINANCE_MARGIN),
+        "passes_threshold": bool(threshold_pass),
+        "passes_margin": bool(margin_pass),
+        "passes_top_m_floor": bool(top_m_floor_pass),
+        "passes_centroid_floor": bool(centroid_floor_pass),
+        "passes_template_dominance": bool(template_dominance_pass),
+        "passes_centroid_dominance": bool(centroid_dominance_pass),
         "margin_bypass_delta": float(VERIFY_MARGIN_BYPASS_DELTA),
+        "high_confidence_bypass_candidate": bool(high_confidence_bypass_candidate),
         "template_count": int(claimed_vectors.shape[0]),
         "decision": decision,
         "rp_version": RP_VERSION,

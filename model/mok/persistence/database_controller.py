@@ -70,7 +70,6 @@ class DatabaseController:
             serialized = json.dumps(list(embedding))
         else:
             serialized = str(embedding)
-        print(f"Serialized embedding: {serialized}")
         is_customer = isinstance(user_id, str) and user_id.startswith("c")
         target_column = (
             self._embeddings_customer_id if is_customer else self._embeddings_user_id
