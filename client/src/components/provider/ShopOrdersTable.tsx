@@ -15,7 +15,7 @@ import {
 } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
 import { useTRPC } from '@/hooks/TrpcContext';
-import { formatPaymentMethod } from '@/lib/shopping-history/utils';
+import { formatPaymentMethod } from '@/lib/shopping-history/format';
 import { BackendTransaction, HistoryEntry } from '../../types/shoppingHistory';
 import {
   itemsColumn,

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   loadDecryptedUser,
   DecryptedPrivateProfile,
-} from '@/lib/loadDecrypted';
+} from '@/lib/encryption/loadDecrypted';
 import ShopInfo from './ShopInfo';
 
 export default function ProviderAccount() {
@@ -29,7 +29,9 @@ export default function ProviderAccount() {
     void loadDecryptedData();
   }, [privateData, user]);
 
-  const handleProviderFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleProviderFormSubmit = (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
     event.preventDefault();
     setMode((previousMode) => (previousMode === 'view' ? 'edit' : 'view'));
   };

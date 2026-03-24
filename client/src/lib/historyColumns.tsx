@@ -1,7 +1,7 @@
 import { AssociationChoice, HistoryEntry } from '@/types/shoppingHistory';
 import { Badge } from '@/components/ui/badge';
 import { PrivacySettings } from '@/hooks/useUserContext';
-import { formatCurrency, formatDate } from '@/lib/shopping-history/utils';
+import { formatCurrency, formatDate } from '@/lib/shopping-history/format';
 import { CellContext, ColumnDef } from '@tanstack/react-table';
 import { HistoryEntryProvider } from '@/components/provider/ShopOrdersTable';
 

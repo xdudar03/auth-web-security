@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import useJwt from '@/hooks/useJwt';
-import { deleteActiveHpkeKey } from '@/lib/encryption';
+import { deleteActiveHpkeKey } from '@/lib/encryption/encryption';
 
 export default function MobileBottomBar() {
   const [isActive, setIsActive] = useState('');
@@ -53,8 +53,8 @@ export default function MobileBottomBar() {
             role?.canAccessAdminPanel
               ? '/admin-dashboard'
               : role?.canAccessProviderPanel
-              ? '/provider-dashboard'
-              : '/dashboard'
+                ? '/provider-dashboard'
+                : '/dashboard'
           }
           aria-label="Dashboard"
         >

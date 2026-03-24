@@ -8,7 +8,7 @@ import type { PrivacySettings } from '@/hooks/useUserContext';
 import {
   loadDecryptedUser,
   type DecryptedPrivateProfile,
-} from '@/lib/loadDecrypted';
+} from '@/lib/encryption/loadDecrypted';
 
 type Visibility = 'hidden' | 'anonymized' | 'visible';
 
@@ -69,11 +69,19 @@ function getTopShopName(shoppingHistory: unknown): string | null {
 
     const shopNameCandidate =
       record.shopName ?? record.shop ?? record.name ?? record.store;
-    if (typeof shopNameCandidate !== 'string' || shopNameCandidate.trim() === '') {
+    if (
+      typeof shopNameCandidate !== 'string' ||
+      shopNameCandidate.trim() === ''
+    ) {
       return;
     }
 
-    const scoreCandidate = [record.visits, record.count, record.total, record.amount]
+    const scoreCandidate = [
+      record.visits,
+      record.count,
+      record.total,
+      record.amount,
+    ]
       .map((value) => {
         if (typeof value === 'number' && Number.isFinite(value)) return value;
         if (typeof value === 'string') {

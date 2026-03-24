@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { useTRPC } from './TrpcContext';
 import { useQuery } from '@tanstack/react-query';
 import useJwt from './useJwt';
-import { deleteActiveHpkeKey } from '@/lib/encryption';
+import { deleteActiveHpkeKey } from '@/lib/encryption/encryption.ts';
 import type { User } from '../../../server/src/types/user.ts';
 import type { UserPrivateData } from '../../../server/src/types/user.ts';
 import type { Role } from '../../../server/src/types/role.ts';

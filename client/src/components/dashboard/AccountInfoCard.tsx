@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import {
   loadDecryptedUser,
   DecryptedPrivateProfile,
-} from '@/lib/loadDecrypted';
+} from '@/lib/encryption/loadDecrypted';
 
 export default function AccountInfoCard() {
   const { user, privateData } = useUser();

@@ -16,7 +16,7 @@ import { useUser } from '@/hooks/useUserContext';
 import MobileBottomBar from './MobileBottomBar';
 import useJwt from '@/hooks/useJwt';
 import { useQueryClient } from '@tanstack/react-query';
-import { deleteActiveHpkeKey } from '@/lib/encryption';
+import { deleteActiveHpkeKey } from '@/lib/encryption/encryption';
 
 export default function SideBar() {
   // get current path

@@ -12,7 +12,7 @@ import {
   decryptWithHpkePrivateKey,
   getActiveHpkePrivateKeyJwkB64,
   importHpkePrivateKeyJwkB64,
-} from '@/lib/encryption';
+} from '@/lib/encryption/encryption';
 
 interface UserInfoModalProps {
   activeUser: User;

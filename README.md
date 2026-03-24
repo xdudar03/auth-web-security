@@ -6,6 +6,7 @@
 
 - Node.js 18+ (for local development)
 - Docker & Docker Compose (for containerized deployment)
+- Python 3.12+ (for model training)
 
 ### Quick Start with Docker Compose
 
@@ -180,6 +181,7 @@ npm run dev
 
 ```bash
 cd model
+source venv/bin/activate
 uvicorn mok.api.server:app --host 0.0.0.0 --port 5000
 # Runs on http://localhost:5000
 ```

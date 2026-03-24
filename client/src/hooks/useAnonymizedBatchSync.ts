@@ -1,4 +1,4 @@
-import { encryptWithHpkePublicKey } from '@/lib/encryption';
+import { encryptWithHpkePublicKey } from '@/lib/encryption/encryption';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormValues } from '@/lib/anonymization/anonymizationHandlers';
 

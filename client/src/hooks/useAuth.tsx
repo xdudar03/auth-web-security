@@ -23,8 +23,8 @@ import {
   saveUserHpkeBundle,
   setActiveHpkePrivateKey,
   setActiveHpkePublicKey,
-} from '@/lib/encryption';
-import { hashEmail } from '@/lib/emailHash';
+} from '@/lib/encryption/encryption';
+import { hashString } from '@/lib/encryption/hash';
 
 export type SuccessData = {
   jwt: string;
@@ -88,10 +88,10 @@ export async function ensureEncryptedDataAccessForLogin({
 
   const hasPasskeyWrappedMaterial = Boolean(
     passkeyPrfOutputB64 &&
-      passkeyWrappedPrivateKey &&
-      passkeyWrappedPrivateKeyIv &&
-      passkeyWrapSaltB64 &&
-      hpkePublicKeyB64
+    passkeyWrappedPrivateKey &&
+    passkeyWrappedPrivateKeyIv &&
+    passkeyWrapSaltB64 &&
+    hpkePublicKeyB64
   );
 
   if (hasPasskeyWrappedMaterial) {
@@ -119,16 +119,15 @@ export async function ensureEncryptedDataAccessForLogin({
 
   const hasRecoveryMaterial = Boolean(
     hpkePublicKeyB64 &&
-      recoverySaltB64 &&
-      encryptedPrivateKey &&
-      encryptedPrivateKeyIv
+    recoverySaltB64 &&
+    encryptedPrivateKey &&
+    encryptedPrivateKeyIv
   );
 
   if (!hasRecoveryMaterial) {
     return {
       hasAccess: false,
-      message:
-        `Login succeeded, but encrypted profile data is locked on this device. ${FIRST_LOGIN_RECOVERY_MESSAGE}`,
+      message: `Login succeeded, but encrypted profile data is locked on this device. ${FIRST_LOGIN_RECOVERY_MESSAGE}`,
     };
   }
 
@@ -159,8 +158,7 @@ export async function ensureEncryptedDataAccessForLogin({
   } catch {
     return {
       hasAccess: false,
-      message:
-        `Login succeeded, but encrypted profile data could not be unlocked. ${FIRST_LOGIN_RECOVERY_MESSAGE}`,
+      message: `Login succeeded, but encrypted profile data could not be unlocked. ${FIRST_LOGIN_RECOVERY_MESSAGE}`,
     };
   }
 }
@@ -352,7 +350,7 @@ export default function useAuth({
           username: values.username,
         })
       );
-      const emailHash = await hashEmail(values.email);
+      const emailHash = await hashString(values.email);
 
       const result = await registerMutation.mutateAsync({
         username: values.username,

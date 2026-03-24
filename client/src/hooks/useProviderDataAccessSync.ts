@@ -11,7 +11,7 @@ import {
   base64ToBytes,
   bytesToBase64,
   encryptWithHpkePublicKey,
-} from '@/lib/encryption';
+} from '@/lib/encryption/encryption';
 import type { FormValues } from '@/lib/anonymization/anonymizationHandlers';
 import type { Visibility } from '../../../server/src/types/privacySetting';
 import { useMutation, useQuery } from '@tanstack/react-query';

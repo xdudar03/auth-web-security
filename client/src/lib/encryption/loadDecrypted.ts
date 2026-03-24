@@ -5,7 +5,7 @@ import { setActiveHpkePrivateKey } from './encryption';
 import { setActiveHpkePublicKey } from './encryption';
 import { importHpkePrivateKeyJwkB64 } from './encryption';
 import { decryptWithHpkePrivateKey } from './encryption';
-import { UserPrivateData } from '../../../server/src/types/user';
+import { UserPrivateData } from '../../../../server/src/types/user';
 
 export type DecryptedPrivateProfile = {
   username: string;

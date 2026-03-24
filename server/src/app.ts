@@ -2,10 +2,6 @@ import express from "express";
 import session from "express-session";
 import cors from "cors";
 import { CORS_ORIGINS, SESSION_SECRET } from "./config.ts";
-import passwordlessRoutes from "./routes/passwordless.ts";
-import biometricRouter from "./routes/biometric.ts";
-import adminRouter from "./routes/admin.ts";
-import healthRouter from "./routes/health.ts";
 import { createContext } from "./tools/trpc.ts";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import { appRouter } from "./router.ts";
@@ -42,9 +38,8 @@ app.use(
   }),
 );
 
-app.use("/passwordless", passwordlessRoutes);
-app.use("/biometric", biometricRouter);
-app.use("/admin", adminRouter);
-app.use("/", healthRouter);
+app.get("/health", (_req, res) => {
+  res.status(200).json({ ok: true });
+});
 
 export default app;

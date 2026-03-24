@@ -19,7 +19,7 @@ import {
   encryptWithHpkePublicKey,
   getActiveHpkePrivateKeyJwkB64,
   importHpkePrivateKeyJwkB64,
-} from '@/lib/encryption';
+} from '@/lib/encryption/encryption';
 import {
   buildAccountFormValues,
   parseDecryptedAnonymizedPayload,

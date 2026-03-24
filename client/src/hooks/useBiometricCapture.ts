@@ -14,9 +14,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import useJwt from '@/hooks/useJwt';
 import { ensureEncryptedDataAccessForLogin } from '@/hooks/useAuth';
 import type { FeedbackMessage } from '../components/authentication/BiometricAlerts';
-import { getUserHpkeBundle } from '@/lib/encryption';
+import { getUserHpkeBundle } from '@/lib/encryption/encryption';
 import { Matrix } from 'ml-matrix';
-import { getProjectionMatrix, l2NormalizeVector } from '@/lib/randomProjection';
+import {
+  getProjectionMatrix,
+  l2NormalizeVector,
+} from '@/lib/encryption/randomProjection';
 
 type CapturedFrame = {
   data: Uint8ClampedArray;

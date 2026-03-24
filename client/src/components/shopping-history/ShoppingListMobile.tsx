@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { formatCurrency, formatDate } from '@/lib/shopping-history/utils';
+import { formatCurrency, formatDate } from '@/lib/shopping-history/format';
 import { AssociationChoice, HistoryEntry } from '@/types/shoppingHistory';
 
 export default function ShoppingListMobile({

@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import ShoppingListMobile from './ShoppingListMobile';
-import { formatPaymentMethod } from '@/lib/shopping-history/utils';
+import { formatPaymentMethod } from '@/lib/shopping-history/format';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { PrivacySettings, useUser } from '@/hooks/useUserContext';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';

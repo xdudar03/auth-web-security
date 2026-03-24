@@ -4,8 +4,17 @@ set -euo pipefail
 if [ -z "${SQLITE_DB_PATH:-}" ]; then
   SQLITE_DB_PATH="./data/users.db"
 fi
-MODEL_BASE_URL="${MODEL_BASE_URL:-http://model:5000}"
-MODEL_INIT_TRAINING_URL="${MODEL_INIT_TRAINING_URL:-${MODEL_BASE_URL%/}/initial_training}"
+
+MODE="${1:-"docker"}"
+if [ "$MODE" = "docker" ]; then
+  MODEL_BASE_URL="http://model:5000"
+elif [ "$MODE" = "localhost" ]; then
+  MODEL_BASE_URL="http://localhost:5000"
+else
+  echo "Invalid MODE: $MODE"
+  exit 1
+fi
+MODEL_INIT_TRAINING_URL="${MODEL_BASE_URL%/}/initial_training"
 
 rm -f "$SQLITE_DB_PATH"
 
