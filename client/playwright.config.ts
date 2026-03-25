@@ -81,7 +81,7 @@ export default defineConfig({
     {
       cwd: path.resolve(__dirname, '../server'),
       command: 'npm run dev',
-      url: 'http://localhost:4000',
+      url: 'http://localhost:4000/health',
       stdout: 'ignore',
       stderr: 'pipe',
     },
