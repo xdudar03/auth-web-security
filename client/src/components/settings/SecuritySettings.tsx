@@ -77,7 +77,7 @@ export default function SecuritySettings() {
             }
             onClick={() => setShowChangeBiometricModal(true)}
           >
-            {isBiometric ? 'Change biometric' : 'Set up biometric'}
+            {isBiometric ? 'Add another biometric' : 'Set up biometric'}
           </Button>
         </div>
       </div>

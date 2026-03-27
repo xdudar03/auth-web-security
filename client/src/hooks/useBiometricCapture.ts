@@ -33,6 +33,7 @@ type UseBiometricCaptureParams = {
   // isModelTraining: boolean;
   // isModelStatusLoading: boolean;
   // isModelStatusError: boolean;
+  anonymizeImage: boolean;
 };
 
 const TARGET_SIZE = 100;
@@ -91,6 +92,7 @@ export default function useBiometricCapture({
   // isModelTraining,
   // isModelStatusLoading,
   // isModelStatusError,
+  anonymizeImage,
 }: UseBiometricCaptureParams) {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isCapturingStream, setIsCapturingStream] = useState(false);
@@ -264,6 +266,20 @@ export default function useBiometricCapture({
     return frames;
   };
 
+  const anonymizeFrames = (flattenedFrames: number[][]) => {
+    const projections = flattenedFrames
+      .map((flattened, index) => {
+        try {
+          return dpSvdEmbeddingFromFlattened(flattened, DP_SVD_OPTIONS);
+        } catch (error) {
+          console.error(`DP-SVD embedding failed for frame ${index}`, error);
+          return null;
+        }
+      })
+      .filter((projection): projection is number[] => projection !== null);
+    return projections;
+  };
+
   const handleCaptureClick = async () => {
     if (isCameraActive) {
       setIsCapturingStream(true);
@@ -288,16 +304,10 @@ export default function useBiometricCapture({
         const matrix = imageToMatrix(frame.data, TARGET_SIZE);
         return matrix.flat();
       });
-      const projections = flattenedFrames
-        .map((flattened, index) => {
-          try {
-            return dpSvdEmbeddingFromFlattened(flattened, DP_SVD_OPTIONS);
-          } catch (error) {
-            console.error(`DP-SVD embedding failed for frame ${index}`, error);
-            return null;
-          }
-        })
-        .filter((projection): projection is number[] => projection !== null);
+
+      const projections = anonymizeImage
+        ? anonymizeFrames(flattenedFrames)
+        : flattenedFrames;
 
       if (!projections.length) {
         console.error('No valid DP-SVD embeddings generated.');
@@ -327,12 +337,13 @@ export default function useBiometricCapture({
           .to1DArray();
         return l2NormalizeVector(projected);
       });
-
       try {
-        const reconstructed = dpSvdReconstructFromFlattened(
-          flattenedFrames[flattenedFrames.length - 1],
-          DP_SVD_OPTIONS
-        );
+        const reconstructed = anonymizeImage
+          ? dpSvdReconstructFromFlattened(
+              flattenedFrames[flattenedFrames.length - 1],
+              DP_SVD_OPTIONS
+            )
+          : flattenedFrames[flattenedFrames.length - 1];
         const reconstructedUrl = createImageUrlFromPixels(
           reconstructed.flat(),
           TARGET_SIZE

@@ -1,13 +1,13 @@
+'use client';
 import { useCallback, useEffect, useId, useState } from 'react';
 import { useUser } from '@/hooks/useUserContext';
-import { useTRPC } from '@/hooks/TrpcContext';
-import { useQuery } from '@tanstack/react-query';
 import { Input } from '../ui/input';
 import { useRouter } from 'next/navigation';
 import BiometricAlerts from './BiometricAlerts';
 import BiometricCameraSection from './BiometricCameraSection';
 import BiometricImagePreviews from './BiometricImagePreviews';
 import useBiometricCapture from '@/hooks/useBiometricCapture';
+import AnonymizationSwitch from './AnonymizationSwitch';
 
 export default function BiometricAuth({
   title,
@@ -20,16 +20,10 @@ export default function BiometricAuth({
   const [recoveryPassphrase, setRecoveryPassphrase] = useState('');
   const [showRecoveryPassphraseInput, setShowRecoveryPassphraseInput] =
     useState(false);
+  const [anonymizeImage, setAnonymizeImage] = useState(true);
   const { role, isAuthenticated } = useUser();
+
   const router = useRouter();
-  const trpc = useTRPC();
-  // const modelStatusQuery = useQuery({
-  //   ...trpc.model.status.queryOptions(),
-  //   enabled: action === 'login',
-  //   refetchInterval: (query) => (query.state.data?.is_training ? 2000 : false),
-  // });
-  // const isModelTraining =
-  //   action === 'login' && modelStatusQuery.data?.is_training;
   const {
     videoRef,
     ovalRef,
@@ -45,9 +39,7 @@ export default function BiometricAuth({
     action,
     username,
     recoveryPassphrase,
-    // isModelTraining: Boolean(isModelTraining),
-    // isModelStatusLoading: modelStatusQuery.isLoading,
-    // isModelStatusError: modelStatusQuery.isError,
+    anonymizeImage,
   });
   const maskId = useId();
   const overlayMaskId = `biometric-mask-${maskId.replace(/:/g, '')}`;
@@ -81,7 +73,7 @@ export default function BiometricAuth({
   }, [action, feedbackMessage]);
 
   return (
-    <div className="flex flex-col items-center justify-center p-6 bg-surface rounded gap-6">
+    <div className="flex flex-col items-center justify-center p-6 bg-surface rounded gap-2">
       {title !== '' && (
         <h2 className="text-xl font-semibold">
           Biometric {title.toLowerCase()}
@@ -122,11 +114,10 @@ export default function BiometricAuth({
           )}
         </>
       )}
-      <BiometricAlerts
-        action={action}
-        // isModelTraining={Boolean(isModelTraining)}
-        // isModelStatusError={modelStatusQuery.isError}
-        feedbackMessage={feedbackMessage}
+      <BiometricAlerts action={action} feedbackMessage={feedbackMessage} />
+      <AnonymizationSwitch
+        anonymizeImage={anonymizeImage}
+        setAnonymizeImage={setAnonymizeImage}
       />
       <BiometricCameraSection
         videoRef={videoRef}

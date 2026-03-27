@@ -14,7 +14,7 @@ export default function LoginPage() {
     if (tab === 'multi-factor') {
       setTab('login');
     } else {
-      router.push('/loyality-platform');
+      router.push('/');
     }
   };
   return (
