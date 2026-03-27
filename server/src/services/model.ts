@@ -10,6 +10,11 @@ import { getUserIdByUsername } from "../database.ts";
 
 const DEFAULT_MODEL_BASE_URL = "http://localhost:5000";
 const MODEL_BASE_URL = process.env.MODEL_BASE_URL || DEFAULT_MODEL_BASE_URL;
+const APPEND_EMBEDDING_AFTER_VERIFY =
+  process.env.APPEND_EMBEDDING_AFTER_VERIFY !== "false";
+const MODEL_REQUEST_TIMEOUT_MS = Number(
+  process.env.MODEL_REQUEST_TIMEOUT_MS ?? "1500",
+);
 
 function normalizeBaseUrl(url: string): string {
   return url.replace(/\/+$/, "");
@@ -52,15 +57,28 @@ async function fetchModel<T>(
   let lastError: unknown;
 
   for (const baseUrl of candidateUrls) {
+    const requestStartedAt = Date.now();
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => {
+      controller.abort();
+    }, MODEL_REQUEST_TIMEOUT_MS);
     try {
       console.log("Fetching model from: ", `${baseUrl}${endpoint}`);
       const response = await fetch(`${baseUrl}${endpoint}`, {
         ...options,
+        signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
           ...options?.headers,
         },
       });
+      clearTimeout(timeoutHandle);
+      console.log(
+        "Model fetch succeeded:",
+        `${baseUrl}${endpoint}`,
+        "elapsed_ms=",
+        Date.now() - requestStartedAt,
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -72,14 +90,26 @@ async function fetchModel<T>(
 
       return response.json();
     } catch (error) {
+      clearTimeout(timeoutHandle);
       if (error instanceof HttpError) {
         throw error;
       }
 
       lastError = error;
+      const elapsedMs = Date.now() - requestStartedAt;
+      const isAbortError =
+        error instanceof Error && error.name === "AbortError";
+      console.warn(
+        "Model fetch failed:",
+        `${baseUrl}${endpoint}`,
+        "elapsed_ms=",
+        elapsedMs,
+        "reason=",
+        isAbortError ? "timeout" : (error as Error)?.message ?? "unknown",
+      );
 
       // Retry only for network-level failures on fallback hosts.
-      if (!isRecoverableNetworkError(error)) {
+      if (!isRecoverableNetworkError(error) && !isAbortError) {
         break;
       }
     }
@@ -154,8 +184,11 @@ export async function verifyIdentity(
     }),
   });
   console.log("response from verify: ", response);
-  if (response.verified) {
-    await addNewEmbedding(userToVerify, embedding);
+  if (response.verified && APPEND_EMBEDDING_AFTER_VERIFY) {
+    // Do not block login on embedding refresh; schedule in background.
+    void addNewEmbedding(userToVerify, embedding).catch((error) => {
+      console.error("Failed to append fresh embedding after verification", error);
+    });
   }
   return response;
 }

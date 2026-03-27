@@ -36,8 +36,16 @@ type UseBiometricCaptureParams = {
   anonymizeImage: boolean;
 };
 
+type VerificationPhase =
+  | 'idle'
+  | 'capturing'
+  | 'processing'
+  | 'verifying'
+  | 'unlocking';
+
 const TARGET_SIZE = 100;
-const STREAM_FRAME_COUNT = 11;
+const LOGIN_STREAM_FRAME_COUNT = 3;
+const ENROLL_STREAM_FRAME_COUNT = 11;
 const STREAM_INTERVAL_MS = 50;
 const DP_SVD_OPTIONS: DpSvdOptions = {
   epsilon: 0.4,
@@ -47,6 +55,19 @@ const DP_SVD_OPTIONS: DpSvdOptions = {
 };
 const RP_TARGET_DIMENSION = 1024;
 const RP_VERSION = 'rp-v1';
+const BIOMETRIC_TIMING_LOGS_ENABLED =
+  process.env.NEXT_PUBLIC_BIOMETRIC_TIMING_LOGS !== 'false';
+
+const timingMs = (startedAt: number) =>
+  Math.round((performance.now() - startedAt) * 100) / 100;
+
+const logTiming = (event: string, metrics: Record<string, unknown>) => {
+  if (!BIOMETRIC_TIMING_LOGS_ENABLED) return;
+  const payload = Object.entries(metrics)
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join(' ');
+  console.info(`[timing][${event}] ${payload}`.trim());
+};
 
 const createImageUrlFromPixels = (
   pixels: number[],
@@ -104,6 +125,8 @@ export default function useBiometricCapture({
   const [reconstructedImageUrl, setReconstructedImageUrl] = useState<string>();
   const [feedbackMessage, setFeedbackMessage] =
     useState<FeedbackMessage | null>(null);
+  const [verificationPhase, setVerificationPhase] =
+    useState<VerificationPhase>('idle');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const ovalRef = useRef<SVGEllipseElement | null>(null);
   const { user } = useUser();
@@ -158,6 +181,7 @@ export default function useBiometricCapture({
 
   const runBiometricAction = async (payload: User & { embedding: string }) => {
     if (action === 'login') {
+      const actionStartedAt = performance.now();
       // if (isModelTraining) {
       //   throw new Error(
       //     'Biometric model training is in progress. Please try again shortly.'
@@ -168,17 +192,24 @@ export default function useBiometricCapture({
       }
       const parsed = JSON.parse(payload.embedding);
       const embeddingBatch = Array.isArray(parsed[0]) ? parsed : [parsed];
+      const hpkeBundleStartedAt = performance.now();
       const hpkeBundle = await getUserHpkeBundle(username);
+      const hpkeBundleMs = timingMs(hpkeBundleStartedAt);
 
+      setVerificationPhase('verifying');
+      const verifyStartedAt = performance.now();
       const response = await verify.mutateAsync({
         embedding: JSON.stringify(embeddingBatch),
         username,
         hpkePublicKeyB64: hpkeBundle?.publicKeyB64,
       });
+      const verifyMs = timingMs(verifyStartedAt);
       if (!response.verified || !response.jwt) {
         throw new Error('Biometric verification failed');
       }
 
+      setVerificationPhase('unlocking');
+      const unlockStartedAt = performance.now();
       const encryptedAccess = await ensureEncryptedDataAccessForLogin({
         username,
         recoveryPassphrase,
@@ -187,6 +218,7 @@ export default function useBiometricCapture({
         encryptedPrivateKey: response.encryptedPrivateKey ?? null,
         encryptedPrivateKeyIv: response.encryptedPrivateKeyIv ?? null,
       });
+      const unlockMs = timingMs(unlockStartedAt);
 
       if (!encryptedAccess.hasAccess) {
         throw new Error(
@@ -197,6 +229,13 @@ export default function useBiometricCapture({
 
       queryClient.clear();
       setJwt(response.jwt);
+      logTiming('biometric_login_action', {
+        frames: embeddingBatch.length,
+        hpke_bundle_ms: hpkeBundleMs,
+        verify_api_ms: verifyMs,
+        unlock_ms: unlockMs,
+        total_ms: timingMs(actionStartedAt),
+      });
     } else if (action === 'change') {
       await changeEmbedding.mutateAsync({
         embedding: payload.embedding ?? '',
@@ -282,35 +321,48 @@ export default function useBiometricCapture({
 
   const handleCaptureClick = async () => {
     if (isCameraActive) {
+      const captureFlowStartedAt = performance.now();
+      setVerificationPhase('capturing');
       setIsCapturingStream(true);
+      const frameCount =
+        action === 'login' ? LOGIN_STREAM_FRAME_COUNT : ENROLL_STREAM_FRAME_COUNT;
+      const streamStartedAt = performance.now();
       const frames = await captureStream(
-        STREAM_FRAME_COUNT,
+        frameCount,
         STREAM_INTERVAL_MS
       );
+      const streamMs = timingMs(streamStartedAt);
       setIsCapturingStream(false);
       stopCamera();
       setIsCameraActive(false);
       setIsOvalVisible(false);
 
       if (!frames.length) {
+        setVerificationPhase('idle');
         return;
       }
 
+      setVerificationPhase('processing');
       const latestFrame = frames[frames.length - 1];
       setCapturedImage(latestFrame.data);
       setCapturedImageUrl(latestFrame.imageUrl);
 
+      const flattenStartedAt = performance.now();
       const flattenedFrames = frames.map((frame) => {
         const matrix = imageToMatrix(frame.data, TARGET_SIZE);
         return matrix.flat();
       });
+      const flattenMs = timingMs(flattenStartedAt);
 
+      const anonymizeStartedAt = performance.now();
       const projections = anonymizeImage
         ? anonymizeFrames(flattenedFrames)
         : flattenedFrames;
+      const anonymizeMs = timingMs(anonymizeStartedAt);
 
       if (!projections.length) {
         console.error('No valid DP-SVD embeddings generated.');
+        setVerificationPhase('idle');
         return;
       }
 
@@ -322,6 +374,7 @@ export default function useBiometricCapture({
         console.error(
           'Inconsistent projection dimensions across captured frames.'
         );
+        setVerificationPhase('idle');
         return;
       }
 
@@ -330,6 +383,7 @@ export default function useBiometricCapture({
         RP_TARGET_DIMENSION,
         RP_VERSION
       );
+      const projectStartedAt = performance.now();
       const projectedProjections = projections.map((projection) => {
         const normalizedInput = l2NormalizeVector(projection);
         const projected = projectionMatrix
@@ -337,20 +391,26 @@ export default function useBiometricCapture({
           .to1DArray();
         return l2NormalizeVector(projected);
       });
-      try {
-        const reconstructed = anonymizeImage
-          ? dpSvdReconstructFromFlattened(
-              flattenedFrames[flattenedFrames.length - 1],
-              DP_SVD_OPTIONS
-            )
-          : flattenedFrames[flattenedFrames.length - 1];
-        const reconstructedUrl = createImageUrlFromPixels(
-          reconstructed.flat(),
-          TARGET_SIZE
-        );
-        setReconstructedImageUrl(reconstructedUrl);
-      } catch (error) {
-        console.error('DP-SVD embedding failed', error);
+      const projectMs = timingMs(projectStartedAt);
+      // Skip reconstruction in login flow to avoid extra client-side latency.
+      if (action !== 'login') {
+        try {
+          const reconstructed = anonymizeImage
+            ? dpSvdReconstructFromFlattened(
+                flattenedFrames[flattenedFrames.length - 1],
+                DP_SVD_OPTIONS
+              )
+            : flattenedFrames[flattenedFrames.length - 1];
+          const reconstructedUrl = createImageUrlFromPixels(
+            reconstructed.flat(),
+            TARGET_SIZE
+          );
+          setReconstructedImageUrl(reconstructedUrl);
+        } catch (error) {
+          console.error('DP-SVD embedding failed', error);
+          setReconstructedImageUrl(undefined);
+        }
+      } else {
         setReconstructedImageUrl(undefined);
       }
 
@@ -361,12 +421,27 @@ export default function useBiometricCapture({
       } as User & { embedding: string };
 
       try {
+        const actionStartedAt = performance.now();
         await runBiometricAction(userWithEmbedding);
+        const actionMs = timingMs(actionStartedAt);
+        setVerificationPhase('idle');
         if (action === 'login') {
           setFeedbackMessage(null);
         }
+        logTiming('biometric_capture_flow', {
+          action,
+          requested_frames: frameCount,
+          captured_frames: frames.length,
+          stream_ms: streamMs,
+          flatten_ms: flattenMs,
+          anonymize_ms: anonymizeMs,
+          project_ms: projectMs,
+          action_ms: actionMs,
+          total_ms: timingMs(captureFlowStartedAt),
+        });
       } catch (error) {
         console.error('Biometric action failed', error);
+        setVerificationPhase('idle');
         setFeedbackMessage({
           type: 'error',
           text:
@@ -386,13 +461,21 @@ export default function useBiometricCapture({
     setIsCapturingStream(false);
     setReconstructedImageUrl(undefined);
     setFeedbackMessage(null);
+    setVerificationPhase('idle');
   };
 
-  const buttonLabel = isCameraActive
-    ? isCapturingStream
+  const buttonLabel =
+    verificationPhase === 'capturing'
       ? 'Capturing...'
-      : 'Capture Stream'
-    : 'Start Camera';
+      : verificationPhase === 'processing'
+        ? 'Processing...'
+        : verificationPhase === 'verifying'
+          ? 'Verifying...'
+          : verificationPhase === 'unlocking'
+            ? 'Unlocking profile...'
+            : isCameraActive
+              ? 'Capture Stream'
+              : 'Start Camera';
   // : isModelStatusLoading
   //   ? 'Checking model...'
   //   : isModelTraining
@@ -404,7 +487,8 @@ export default function useBiometricCapture({
     register.isPending ||
     authenticate.isPending ||
     changeEmbedding.isPending ||
-    isCapturingStream;
+    isCapturingStream ||
+    verificationPhase !== 'idle';
   // isModelTraining ||
   // isModelStatusLoading ||
   // isModelStatusError;
@@ -420,5 +504,15 @@ export default function useBiometricCapture({
     buttonLabel,
     isButtonDisabled,
     handleCaptureClick,
+    verificationInProgressMessage:
+      verificationPhase === 'capturing'
+        ? 'Verification in progress: capturing biometric frames...'
+        : verificationPhase === 'processing'
+          ? 'Verification in progress: processing biometric data...'
+          : verificationPhase === 'verifying'
+            ? 'Verification in progress: matching biometric signature...'
+            : verificationPhase === 'unlocking'
+              ? 'Verification in progress: unlocking encrypted profile data...'
+              : null,
   };
 }

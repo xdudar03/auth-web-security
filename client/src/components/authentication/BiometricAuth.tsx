@@ -32,6 +32,7 @@ export default function BiometricAuth({
     capturedImageUrl,
     reconstructedImageUrl,
     feedbackMessage,
+    verificationInProgressMessage,
     buttonLabel,
     isButtonDisabled,
     handleCaptureClick,
@@ -114,7 +115,11 @@ export default function BiometricAuth({
           )}
         </>
       )}
-      <BiometricAlerts action={action} feedbackMessage={feedbackMessage} />
+      <BiometricAlerts
+        action={action}
+        feedbackMessage={feedbackMessage}
+        verificationInProgressMessage={verificationInProgressMessage}
+      />
       <AnonymizationSwitch
         anonymizeImage={anonymizeImage}
         setAnonymizeImage={setAnonymizeImage}

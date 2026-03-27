@@ -31,6 +31,19 @@ export type SuccessData = {
 };
 
 const PASSKEY_PRF_EVAL_LABEL = 'auth-web-security:hpke-unlock-v1';
+const AUTH_TIMING_LOGS_ENABLED =
+  process.env.NEXT_PUBLIC_BIOMETRIC_TIMING_LOGS !== 'false';
+
+const authTimingMs = (startedAt: number) =>
+  Math.round((performance.now() - startedAt) * 100) / 100;
+
+const logAuthTiming = (event: string, metrics: Record<string, unknown>) => {
+  if (!AUTH_TIMING_LOGS_ENABLED) return;
+  const payload = Object.entries(metrics)
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join(' ');
+  console.info(`[timing][${event}] ${payload}`.trim());
+};
 
 type EncryptedAccessInput = {
   username: string;
@@ -67,22 +80,36 @@ export async function ensureEncryptedDataAccessForLogin({
   encryptedPrivateKey,
   encryptedPrivateKeyIv,
 }: EncryptedAccessInput): Promise<EncryptedAccessResult> {
+  const totalStartedAt = performance.now();
+  const bundleLookupStartedAt = performance.now();
   let storedBundle = await getUserHpkeBundle(username);
+  let bundleLookupMs = authTimingMs(bundleLookupStartedAt);
 
   if (!storedBundle && hpkePublicKeyB64) {
+    const publicKeyMatchStartedAt = performance.now();
     const matchedBundle = await getUserHpkeBundleByPublicKey(hpkePublicKeyB64);
+    const publicKeyMatchMs = authTimingMs(publicKeyMatchStartedAt);
     if (matchedBundle) {
       await saveUserHpkeBundle(username, matchedBundle);
       storedBundle = matchedBundle;
     }
+    bundleLookupMs += publicKeyMatchMs;
   }
 
   if (
     storedBundle &&
     (!hpkePublicKeyB64 || storedBundle.publicKeyB64 === hpkePublicKeyB64)
   ) {
+    const activateStoredStartedAt = performance.now();
     await setActiveHpkePrivateKey(storedBundle.privateKeyJwkB64);
     await setActiveHpkePublicKey(storedBundle.publicKeyB64);
+    logAuthTiming('ensure_encrypted_access', {
+      username,
+      path: 'stored_bundle',
+      bundle_lookup_ms: bundleLookupMs,
+      activate_ms: authTimingMs(activateStoredStartedAt),
+      total_ms: authTimingMs(totalStartedAt),
+    });
     return { hasAccess: true };
   }
 
@@ -96,6 +123,7 @@ export async function ensureEncryptedDataAccessForLogin({
 
   if (hasPasskeyWrappedMaterial) {
     try {
+      const passkeyUnwrapStartedAt = performance.now();
       const privateKeyJwkB64 = await decryptPrivateKeyWithPasskeyPrfOutput(
         passkeyWrappedPrivateKey as string,
         passkeyWrappedPrivateKeyIv as string,
@@ -108,6 +136,13 @@ export async function ensureEncryptedDataAccessForLogin({
       });
       await setActiveHpkePrivateKey(privateKeyJwkB64);
       await setActiveHpkePublicKey(hpkePublicKeyB64 as string);
+      logAuthTiming('ensure_encrypted_access', {
+        username,
+        path: 'passkey_unwrap',
+        bundle_lookup_ms: bundleLookupMs,
+        passkey_unwrap_ms: authTimingMs(passkeyUnwrapStartedAt),
+        total_ms: authTimingMs(totalStartedAt),
+      });
       return { hasAccess: true };
     } catch {
       console.warn(
@@ -125,6 +160,12 @@ export async function ensureEncryptedDataAccessForLogin({
   );
 
   if (!hasRecoveryMaterial) {
+    logAuthTiming('ensure_encrypted_access', {
+      username,
+      path: 'missing_recovery_material',
+      bundle_lookup_ms: bundleLookupMs,
+      total_ms: authTimingMs(totalStartedAt),
+    });
     return {
       hasAccess: false,
       message: `Login succeeded, but encrypted profile data is locked on this device. ${FIRST_LOGIN_RECOVERY_MESSAGE}`,
@@ -132,6 +173,12 @@ export async function ensureEncryptedDataAccessForLogin({
   }
 
   if (!recoveryPassphrase) {
+    logAuthTiming('ensure_encrypted_access', {
+      username,
+      path: 'missing_recovery_passphrase',
+      bundle_lookup_ms: bundleLookupMs,
+      total_ms: authTimingMs(totalStartedAt),
+    });
     return {
       hasAccess: false,
       message: FIRST_LOGIN_RECOVERY_MESSAGE,
@@ -139,23 +186,43 @@ export async function ensureEncryptedDataAccessForLogin({
   }
 
   try {
+    const recoveryUnlockStartedAt = performance.now();
     const recoveryKey = await deriveRecoveryKey(
       recoveryPassphrase,
       recoverySaltB64 as string
     );
+    const deriveRecoveryMs = authTimingMs(recoveryUnlockStartedAt);
+    const decryptStartedAt = performance.now();
     const privateKeyJwkB64 = await decryptPrivateKeyWithRecoveryKey(
       encryptedPrivateKey as string,
       encryptedPrivateKeyIv as string,
       recoveryKey
     );
+    const decryptRecoveryMs = authTimingMs(decryptStartedAt);
+    const activateStartedAt = performance.now();
     await saveUserHpkeBundle(username, {
       privateKeyJwkB64,
       publicKeyB64: hpkePublicKeyB64 as string,
     });
     await setActiveHpkePrivateKey(privateKeyJwkB64);
     await setActiveHpkePublicKey(hpkePublicKeyB64 as string);
+    logAuthTiming('ensure_encrypted_access', {
+      username,
+      path: 'recovery_unlock',
+      bundle_lookup_ms: bundleLookupMs,
+      derive_recovery_ms: deriveRecoveryMs,
+      decrypt_recovery_ms: decryptRecoveryMs,
+      activate_ms: authTimingMs(activateStartedAt),
+      total_ms: authTimingMs(totalStartedAt),
+    });
     return { hasAccess: true };
   } catch {
+    logAuthTiming('ensure_encrypted_access', {
+      username,
+      path: 'recovery_unlock_failed',
+      bundle_lookup_ms: bundleLookupMs,
+      total_ms: authTimingMs(totalStartedAt),
+    });
     return {
       hasAccess: false,
       message: `Login succeeded, but encrypted profile data could not be unlocked. ${FIRST_LOGIN_RECOVERY_MESSAGE}`,

@@ -3,6 +3,7 @@ import io
 import time
 import json
 import numpy as np
+from threading import Lock
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 
@@ -62,6 +63,24 @@ RETRIEVAL_IVF_NLIST = _get_env_int("MODEL_RETRIEVAL_IVF_NLIST", 8)
 RETRIEVAL_ANN_OVERFETCH_FACTOR = _get_env_int("MODEL_RETRIEVAL_ANN_OVERFETCH_FACTOR", 8)
 IDENTIFY_LABEL_TOP_M = _get_env_int("MODEL_IDENTIFY_LABEL_TOP_M", 3)
 VERIFY_TOP_M = _get_env_int("MODEL_VERIFY_TOP_M", 3)
+TIMING_LOGS_ENABLED = (
+    os.environ.get("MODEL_TIMING_LOGS", "true").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
+
+_RETRIEVAL_RUNTIME_CACHE = {}
+_RETRIEVAL_RUNTIME_CACHE_LOCK = Lock()
+
+
+def _timing_ms(start: float) -> float:
+    return round((time.perf_counter() - start) * 1000.0, 2)
+
+
+def _log_timing(event: str, **metrics) -> None:
+    if not TIMING_LOGS_ENABLED:
+        return
+    metrics_text = " ".join([f"{key}={value}" for key, value in metrics.items()])
+    print(f"[timing][{event}] {metrics_text}".strip())
 
 
 def _atomic_binary_replace(filepath: str, write_func) -> None:
@@ -675,6 +694,21 @@ def _retrieval_index_path(model_save_dir: str, model_name: str) -> str:
     return os.path.join(model_save_dir, f"{model_name}_flatip.faiss")
 
 
+def _retrieval_cache_key(model_save_dir: str, model_name: str) -> str:
+    return f"{os.path.abspath(model_save_dir)}::{model_name}"
+
+
+def _clear_retrieval_runtime_cache(model_save_dir: str | None = None, model_name: str | None = None) -> None:
+    with _RETRIEVAL_RUNTIME_CACHE_LOCK:
+        if model_save_dir is None or model_name is None:
+            _RETRIEVAL_RUNTIME_CACHE.clear()
+            return
+        _RETRIEVAL_RUNTIME_CACHE.pop(
+            _retrieval_cache_key(model_save_dir, model_name),
+            None,
+        )
+
+
 def _safe_inverse_label(label_encoder: LabelEncoder, label_index: int) -> str:
     try:
         return str(label_encoder.inverse_transform([int(label_index)])[0])
@@ -733,6 +767,7 @@ def train_retrieval_index(
 
     vectors = _l2_normalize_rows(vectors)
     os.makedirs(model_save_dir, exist_ok=True)
+    _clear_retrieval_runtime_cache(model_save_dir, model_name)
 
     templates_payload = {
         "vectors": vectors,
@@ -933,6 +968,18 @@ def _load_retrieval_runtime_artifacts(
     model_save_dir: str,
     model_name: str,
 ):
+    started_at = time.perf_counter()
+    cache_key = _retrieval_cache_key(model_save_dir, model_name)
+    with _RETRIEVAL_RUNTIME_CACHE_LOCK:
+        cached_runtime = _RETRIEVAL_RUNTIME_CACHE.get(cache_key)
+    if cached_runtime is not None:
+        _log_timing(
+            "retrieval_runtime_cache_hit",
+            model=model_name,
+            elapsed_ms=_timing_ms(started_at),
+        )
+        return cached_runtime
+
     encoder_filepath = os.path.join(model_save_dir, f"{model_name}_label_encoder.joblib")
     label_encoder = data_loader.load_label_encoder(encoder_filepath)
     if label_encoder is None:
@@ -955,7 +1002,7 @@ def _load_retrieval_runtime_artifacts(
     if faiss_index is not None and hasattr(faiss_index, "nprobe"):
         faiss_index.nprobe = max(1, int(RETRIEVAL_NPROBE))
 
-    return {
+    runtime = {
         "label_encoder": label_encoder,
         "template_vectors": template_vectors,
         "template_labels": template_labels,
@@ -965,6 +1012,15 @@ def _load_retrieval_runtime_artifacts(
         "rp_version": str(templates_payload.get("rp_version") or RP_VERSION),
         "space": str(templates_payload.get("space") or "rp"),
     }
+    with _RETRIEVAL_RUNTIME_CACHE_LOCK:
+        _RETRIEVAL_RUNTIME_CACHE[cache_key] = runtime
+    _log_timing(
+        "retrieval_runtime_cache_miss",
+        model=model_name,
+        templates=int(template_vectors.shape[0]),
+        elapsed_ms=_timing_ms(started_at),
+    )
+    return runtime
 
 
 def _search_top_k_candidates(
@@ -1006,7 +1062,10 @@ def identify_image(
     Retrieval-style identification in RP space: FlatIP retrieval then exact cosine rerank.
     """
     try:
+        total_started_at = time.perf_counter()
+        stage_started_at = time.perf_counter()
         runtime = _load_retrieval_runtime_artifacts(model_save_dir, model_name)
+        runtime_load_ms = _timing_ms(stage_started_at)
         label_encoder = runtime["label_encoder"]
         template_vectors = runtime["template_vectors"]
         template_labels = runtime["template_labels"]
@@ -1014,20 +1073,33 @@ def identify_image(
         centroid_vectors = runtime["centroid_vectors"]
         faiss_index = runtime["faiss_index"]
 
+        stage_started_at = time.perf_counter()
         expected_dim = int(template_vectors.shape[1])
         preprocessed_vector = preprocess_single_vector(vector_array, expected_dim)
         if preprocessed_vector is None:
             raise Exception("Vector preprocessing failed.")
         query_vector = preprocessed_vector.reshape(-1)
+        preprocess_ms = _timing_ms(stage_started_at)
 
+        stage_started_at = time.perf_counter()
         ann_indices, ann_scores = _search_top_k_candidates(
             query_vector_2d=preprocessed_vector,
             template_vectors=template_vectors,
             faiss_index=faiss_index,
             top_k=max(1, int(RETRIEVAL_TOP_K)),
         )
+        retrieval_ms = _timing_ms(stage_started_at)
 
         if ann_indices.size == 0:
+            _log_timing(
+                "identify_image",
+                decision="unknown_empty_candidates",
+                templates=int(template_vectors.shape[0]),
+                runtime_load_ms=runtime_load_ms,
+                preprocess_ms=preprocess_ms,
+                retrieval_ms=retrieval_ms,
+                total_ms=_timing_ms(total_started_at),
+            )
             return {
                 "predicted_label": "unknown",
                 "confidence": 0.0,
@@ -1043,13 +1115,16 @@ def identify_image(
                 "nprobe": int(RETRIEVAL_NPROBE),
             }
 
+        stage_started_at = time.perf_counter()
         candidate_vectors = template_vectors[ann_indices]
         rerank_scores = np.asarray(candidate_vectors @ query_vector, dtype=np.float32)
         rerank_order = np.argsort(-rerank_scores)
         ranked_indices = ann_indices[rerank_order]
         ranked_ann_scores = ann_scores[rerank_order]
         ranked_rerank_scores = rerank_scores[rerank_order]
+        rerank_ms = _timing_ms(stage_started_at)
 
+        stage_started_at = time.perf_counter()
         label_scores = {}
         label_ann_scores = {}
         label_best_template = {}
@@ -1081,6 +1156,7 @@ def identify_image(
             key=lambda item: item[1],
             reverse=True,
         )
+        aggregate_ms = _timing_ms(stage_started_at)
         template_label_scores = {int(label_idx): float(score) for label_idx, score in template_ranked_labels}
         centroid_label_scores = {}
         if centroid_vectors.size > 0 and centroid_labels.size > 0:
@@ -1105,6 +1181,18 @@ def identify_image(
         )
 
         if not ranked_labels:
+            _log_timing(
+                "identify_image",
+                decision="unknown_no_ranked_labels",
+                templates=int(template_vectors.shape[0]),
+                candidates=int(len(ann_indices)),
+                runtime_load_ms=runtime_load_ms,
+                preprocess_ms=preprocess_ms,
+                retrieval_ms=retrieval_ms,
+                rerank_ms=rerank_ms,
+                aggregate_ms=aggregate_ms,
+                total_ms=_timing_ms(total_started_at),
+            )
             return {
                 "predicted_label": "unknown",
                 "confidence": 0.0,
@@ -1167,6 +1255,18 @@ def identify_image(
             "retrieval_backend": "faiss-flatip" if faiss_index is not None else "numpy-flatip",
             "nprobe": int(RETRIEVAL_NPROBE),
         }
+        _log_timing(
+            "identify_image",
+            decision=output["decision"],
+            templates=int(template_vectors.shape[0]),
+            candidates=int(len(ann_indices)),
+            runtime_load_ms=runtime_load_ms,
+            preprocess_ms=preprocess_ms,
+            retrieval_ms=retrieval_ms,
+            rerank_ms=rerank_ms,
+            aggregate_ms=aggregate_ms,
+            total_ms=_timing_ms(total_started_at),
+        )
 
         if show_logs:
             print("\n--- Prediction Result (Retrieval + Rerank) ---")
@@ -1191,17 +1291,30 @@ def verify_claimed_identity(
     """
     1:1 verification in RP space using strict cosine threshold.
     """
+    total_started_at = time.perf_counter()
+    stage_started_at = time.perf_counter()
     resolved_db_path = db_path or os.environ.get("SQLITE_DB_PATH", DatabaseController.DEFAULT_DB_PATH)
     db = DatabaseController(resolved_db_path)
     raw_embeddings = db.get_embeddings_for_subject(str(claimed_user_id))
+    db_fetch_ms = _timing_ms(stage_started_at)
 
+    stage_started_at = time.perf_counter()
     claimed_vectors_list = []
     for raw_embedding in raw_embeddings:
         claimed_vectors_list.extend(
             _parse_embedding_payload(raw_embedding, subject_id=str(claimed_user_id))
         )
+    parse_embeddings_ms = _timing_ms(stage_started_at)
 
     if not claimed_vectors_list:
+        _log_timing(
+            "verify_claimed_identity",
+            user_id=str(claimed_user_id),
+            decision="unknown_claimed_user",
+            db_fetch_ms=db_fetch_ms,
+            parse_embeddings_ms=parse_embeddings_ms,
+            total_ms=_timing_ms(total_started_at),
+        )
         return {
             "verified": False,
             "confidence": 0.0,
@@ -1214,16 +1327,30 @@ def verify_claimed_identity(
             "space": "rp",
         }
 
+    stage_started_at = time.perf_counter()
     claimed_vectors = np.vstack(claimed_vectors_list).astype(np.float32)
     claimed_vectors = _l2_normalize_rows(claimed_vectors)
+    normalize_templates_ms = _timing_ms(stage_started_at)
 
+    stage_started_at = time.perf_counter()
     expected_dim = int(claimed_vectors.shape[1])
     preprocessed_vector = preprocess_single_vector(vector_array, expected_dim)
     if preprocessed_vector is None:
         raise Exception("Vector preprocessing failed.")
     query_vector = preprocessed_vector.reshape(-1)
+    preprocess_query_ms = _timing_ms(stage_started_at)
 
     if claimed_vectors.size == 0:
+        _log_timing(
+            "verify_claimed_identity",
+            user_id=str(claimed_user_id),
+            decision="no_claimed_templates",
+            db_fetch_ms=db_fetch_ms,
+            parse_embeddings_ms=parse_embeddings_ms,
+            normalize_templates_ms=normalize_templates_ms,
+            preprocess_query_ms=preprocess_query_ms,
+            total_ms=_timing_ms(total_started_at),
+        )
         return {
             "verified": False,
             "confidence": 0.0,
@@ -1236,6 +1363,7 @@ def verify_claimed_identity(
             "space": "rp",
         }
 
+    stage_started_at = time.perf_counter()
     cosine_scores = np.asarray(claimed_vectors @ query_vector, dtype=np.float32)
     sorted_scores = np.sort(cosine_scores)[::-1] if cosine_scores.size > 0 else np.asarray([], dtype=np.float32)
     best_score = float(sorted_scores[0]) if sorted_scores.size > 0 else 0.0
@@ -1248,11 +1376,13 @@ def verify_claimed_identity(
     if centroid_norm > 1e-12:
         centroid = centroid / centroid_norm
         centroid_score = float(np.dot(centroid, query_vector))
+    claimed_scoring_ms = _timing_ms(stage_started_at)
 
     # Favor centroid/cohort signals over single-template peaks to reduce noisy nearest-neighbor failures.
     fused_score = float(0.20 * best_score + 0.30 * top_m_mean + 0.50 * centroid_score)
 
     impostor_best = -1.0
+    stage_started_at = time.perf_counter()
     try:
         runtime = _load_retrieval_runtime_artifacts(model_save_dir, model_name)
         label_encoder = runtime["label_encoder"]
@@ -1285,7 +1415,9 @@ def verify_claimed_identity(
         # Verification should still work when retrieval artifacts are missing/outdated.
         impostor_best = -1.0
         impostor_best_centroid = -1.0
+    impostor_eval_ms = _timing_ms(stage_started_at)
 
+    stage_started_at = time.perf_counter()
     effective_impostor = impostor_best_centroid if impostor_best_centroid >= 0.0 else impostor_best
     margin_to_impostor = float(fused_score - effective_impostor) if effective_impostor >= 0.0 else 1.0
     template_margin_to_impostor = (
@@ -1332,6 +1464,23 @@ def verify_claimed_identity(
             decision = "rejected_impostor_centroid_too_close"
         else:
             decision = "rejected"
+    decision_ms = _timing_ms(stage_started_at)
+
+    _log_timing(
+        "verify_claimed_identity",
+        user_id=str(claimed_user_id),
+        template_count=int(claimed_vectors.shape[0]),
+        verified=bool(verified),
+        decision=decision,
+        db_fetch_ms=db_fetch_ms,
+        parse_embeddings_ms=parse_embeddings_ms,
+        normalize_templates_ms=normalize_templates_ms,
+        preprocess_query_ms=preprocess_query_ms,
+        claimed_scoring_ms=claimed_scoring_ms,
+        impostor_eval_ms=impostor_eval_ms,
+        decision_ms=decision_ms,
+        total_ms=_timing_ms(total_started_at),
+    )
 
     return {
         "verified": verified,

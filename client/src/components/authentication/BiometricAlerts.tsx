@@ -8,6 +8,7 @@ type BiometricAlertsProps = {
   // isModelTraining: boolean;
   // isModelStatusError: boolean;
   feedbackMessage: FeedbackMessage | null;
+  verificationInProgressMessage?: string | null;
 };
 
 export type { FeedbackMessage };
@@ -17,6 +18,7 @@ export default function BiometricAlerts({
   // isModelTraining,
   // isModelStatusError,
   feedbackMessage,
+  verificationInProgressMessage,
 }: BiometricAlertsProps) {
   return (
     <>
@@ -44,6 +46,12 @@ export default function BiometricAlerts({
           }`}
         >
           {feedbackMessage.text}
+        </div>
+      )}
+
+      {action === 'login' && verificationInProgressMessage && (
+        <div className="w-full rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
+          {verificationInProgressMessage}
         </div>
       )}
     </>

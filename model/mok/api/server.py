@@ -30,6 +30,8 @@ _retrain_dirty = False
 _retrain_worker_running = False
 _retrain_first_pending_at = 0.0
 _retrain_last_request_at = 0.0
+_retrain_pending_updates = 0
+_verify_last_request_at = 0.0
 _predict_total = 0
 _predict_unknown = 0
 _verify_total = 0
@@ -39,6 +41,12 @@ RETRAIN_DEBOUNCE_SECONDS = float(
 )
 RETRAIN_MAX_WAIT_SECONDS = float(
     os.environ.get("MODEL_RETRAIN_MAX_WAIT_SECONDS", "60")
+)
+RETRAIN_MIN_PENDING_UPDATES = int(
+    os.environ.get("MODEL_RETRAIN_MIN_PENDING_UPDATES", "5")
+)
+RETRAIN_QUIET_PERIOD_SECONDS = float(
+    os.environ.get("MODEL_RETRAIN_QUIET_PERIOD_SECONDS", "20")
 )
 PREDICT_RETRY_ATTEMPTS = int(
     os.environ.get("MODEL_PREDICT_RETRY_ATTEMPTS", "3")
@@ -78,6 +86,21 @@ PREDICT_ALLOW_SINGLE_GOOD_FRAME = (
     os.environ.get("MODEL_PREDICT_ALLOW_SINGLE_GOOD_FRAME", "true").strip().lower()
     in {"1", "true", "yes", "on"}
 )
+TIMING_LOGS_ENABLED = (
+    os.environ.get("MODEL_TIMING_LOGS", "true").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
+
+
+def _timing_ms(started_at: float) -> float:
+    return round((time.perf_counter() - started_at) * 1000.0, 2)
+
+
+def _log_timing(event: str, **metrics) -> None:
+    if not TIMING_LOGS_ENABLED:
+        return
+    metrics_text = " ".join([f"{key}={value}" for key, value in metrics.items()])
+    print(f"[timing][{event}] {metrics_text}".strip())
 
 
 def _decode_embedding_payload(embedding: Union[List[float], List[List[float]], str]):
@@ -117,10 +140,25 @@ def _verify_with_retry(
     delay_seconds = max(0.0, float(PREDICT_RETRY_DELAY_SECONDS))
     last_error = None
     for attempt in range(1, attempts + 1):
+        attempt_started_at = time.perf_counter()
         try:
-            return controller.verify_image(embedding, user_id)
+            result = controller.verify_image(embedding, user_id)
+            _log_timing(
+                "verify_frame_attempt",
+                attempt=attempt,
+                user_id=user_id,
+                elapsed_ms=_timing_ms(attempt_started_at),
+            )
+            return result
         except Exception as error:
             last_error = error
+            _log_timing(
+                "verify_frame_attempt_failed",
+                attempt=attempt,
+                user_id=user_id,
+                elapsed_ms=_timing_ms(attempt_started_at),
+                error_type=type(error).__name__,
+            )
             if attempt < attempts:
                 time.sleep(delay_seconds)
     if last_error is None:
@@ -157,6 +195,7 @@ def _record_verify_outcome(verified: bool) -> float:
 def _retrain_worker_loop(controller: MLController):
     global _retrain_dirty, _retrain_worker_running
     global _retrain_first_pending_at, _retrain_last_request_at
+    global _retrain_pending_updates, _verify_last_request_at
     while True:
         with _retrain_state_lock:
             # Nothing pending: stop worker. A future request will start a new one.
@@ -166,6 +205,8 @@ def _retrain_worker_loop(controller: MLController):
 
             first_pending_at = _retrain_first_pending_at
             last_request_at = _retrain_last_request_at
+            pending_updates = _retrain_pending_updates
+            last_verify_at = _verify_last_request_at
 
         # Batch short bursts, but enforce a hard upper bound on wait time.
         now = time.monotonic()
@@ -173,11 +214,30 @@ def _retrain_worker_loop(controller: MLController):
             0.0,
             RETRAIN_DEBOUNCE_SECONDS - (now - last_request_at),
         )
+        until_quiet_ready = max(
+            0.0,
+            RETRAIN_QUIET_PERIOD_SECONDS - (now - last_verify_at),
+        )
         until_max_wait = max(
             0.0,
             RETRAIN_MAX_WAIT_SECONDS - (now - first_pending_at),
         )
-        sleep_seconds = min(until_debounce_ready, until_max_wait)
+        has_enough_updates = pending_updates >= max(1, RETRAIN_MIN_PENDING_UPDATES)
+        max_wait_elapsed = until_max_wait <= 0.0
+
+        # Start retraining early only when we have enough batched updates and
+        # there has been a recent quiet window in verification traffic.
+        # Always force retrain once max wait is exceeded.
+        if not max_wait_elapsed and not has_enough_updates:
+            sleep_seconds = min(max(until_debounce_ready, 1.0), max(until_max_wait, 0.0))
+        elif not max_wait_elapsed:
+            sleep_seconds = min(
+                max(until_debounce_ready, until_quiet_ready, 0.0),
+                max(until_max_wait, 0.0),
+            )
+        else:
+            sleep_seconds = 0.0
+
         if sleep_seconds > 0.0:
             time.sleep(min(sleep_seconds, 1.0))
             continue
@@ -189,12 +249,14 @@ def _retrain_worker_loop(controller: MLController):
             _retrain_dirty = False
             _retrain_first_pending_at = 0.0
             _retrain_last_request_at = 0.0
+            _retrain_pending_updates = 0
         _run_single_retrain(controller)
 
 
-def request_retrain(controller: MLController):
+def request_retrain(controller: MLController, update_count: int = 1):
     global _retrain_dirty, _retrain_worker_running
     global _retrain_first_pending_at, _retrain_last_request_at
+    global _retrain_pending_updates
     now = time.monotonic()
     should_start_worker = False
     with _retrain_state_lock:
@@ -202,6 +264,7 @@ def request_retrain(controller: MLController):
             _retrain_first_pending_at = now
         _retrain_last_request_at = now
         _retrain_dirty = True
+        _retrain_pending_updates += max(1, int(update_count))
         if not _retrain_worker_running:
             _retrain_worker_running = True
             should_start_worker = True
@@ -430,12 +493,17 @@ async def verify_identity(request: EmbeddingRequest):
     Verify if embedding matches a specific user.
     Requires user_id in request.
     """
+    global _verify_last_request_at
+    total_started_at = time.perf_counter()
+    _verify_last_request_at = time.monotonic()
+
     if not request.user_id:
         raise HTTPException(status_code=400, detail="user_id is required for verification")
     
     import numpy as np
 
     controller = get_controller()
+    stage_started_at = time.perf_counter()
     raw_embedding = _decode_embedding_payload(request.embedding)
     if not raw_embedding:
         raise HTTPException(status_code=400, detail="Embedding is required for verification")
@@ -443,15 +511,19 @@ async def verify_identity(request: EmbeddingRequest):
         embedding_batch = raw_embedding
     else:
         embedding_batch = [raw_embedding]
+    decode_ms = _timing_ms(stage_started_at)
 
     frame_results = []
+    frame_durations_ms = []
     for embedding_item in embedding_batch:
+        frame_started_at = time.perf_counter()
         embedding = np.array(embedding_item, dtype=np.float32)
         verify_details = _verify_with_retry(
             controller,
             embedding,
             request.user_id,
         )
+        frame_durations_ms.append(_timing_ms(frame_started_at))
         confidence = float(verify_details.get("confidence", 0.0))
         threshold = float(verify_details.get("threshold", VERIFY_CONFIDENCE_THRESHOLD))
         margin_to_impostor = float(verify_details.get("margin_to_impostor", 0.0))
@@ -502,7 +574,25 @@ async def verify_identity(request: EmbeddingRequest):
     confidence = best_claimed_confidence
     predicted_user_id = request.user_id if verified else "unknown"
     predicted_user_confidence = confidence if verified else 0.0
+    stage_started_at = time.perf_counter()
     verify_accept_rate = _record_verify_outcome(verified)
+    metrics_ms = _timing_ms(stage_started_at)
+
+    frames_total_ms = round(sum(frame_durations_ms), 2)
+    frames_avg_ms = round(frames_total_ms / max(1, len(frame_durations_ms)), 2)
+    frames_max_ms = round(max(frame_durations_ms, default=0.0), 2)
+    _log_timing(
+        "verify_endpoint",
+        user_id=request.user_id,
+        frames=len(embedding_batch),
+        verified=bool(verified),
+        decode_ms=decode_ms,
+        frames_total_ms=frames_total_ms,
+        frame_avg_ms=frames_avg_ms,
+        frame_max_ms=frames_max_ms,
+        aggregate_ms=metrics_ms,
+        total_ms=_timing_ms(total_started_at),
+    )
 
     return {
         "verified": verified,
@@ -535,7 +625,7 @@ async def add_embedding(request: EmbeddingRequest):
     if request.embedding is None or len(request.embedding) == 0:
         raise HTTPException(status_code=400, detail="embedding is required for adding an embedding")
     controller.add_embedding(request.user_id, request.embedding)
-    request_retrain(controller)
+    request_retrain(controller, update_count=1)
     return {"message": "Embedding added; retraining scheduled"}
 
 
