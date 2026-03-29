@@ -1,4 +1,3 @@
-import { useUser } from '@/hooks/useUserContext';
 import { useState } from 'react';
 import ConfirmPassword from '../ConfirmPassword';
 import Modal from '../Modal';
@@ -14,7 +13,6 @@ export default function PasskeySetupModal({
 }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState({ message: '', type: '' });
-  const { user } = useUser();
   const [isConfirmed, setIsConfirmed] = useState(false);
   const trpc = useTRPC();
   const confirmPasswordMutation = useMutation(
@@ -67,9 +65,7 @@ export default function PasskeySetupModal({
       password: confirmPassword,
     });
     if (confirmed) {
-      const options = await getRegistrationOptionsMutation.mutateAsync({
-        userId: user!.userId,
-      });
+      const options = await getRegistrationOptionsMutation.mutateAsync();
       const attResp = await startRegistration({ optionsJSON: options });
       await verifyRegistrationMutation.mutateAsync(attResp);
     }

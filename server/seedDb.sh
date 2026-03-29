@@ -5,16 +5,35 @@ if [ -z "${SQLITE_DB_PATH:-}" ]; then
   SQLITE_DB_PATH="./data/users.db"
 fi
 
-MODE="${1:-"docker"}"
-if [ "$MODE" = "docker" ]; then
-  MODEL_BASE_URL="http://model:5000"
-elif [ "$MODE" = "localhost" ]; then
-  MODEL_BASE_URL="http://localhost:5000"
+is_docker_runtime() {
+  [ -f "/.dockerenv" ] || grep -qaE "(docker|containerd|kubepods)" /proc/1/cgroup 2>/dev/null
+}
+
+MODE="${1:-auto}"
+if [ "$MODE" = "auto" ]; then
+  if is_docker_runtime; then
+    MODE="docker"
+  else
+    MODE="local"
+  fi
+fi
+
+# Keep explicit env override highest priority.
+if [ -n "${MODEL_BASE_URL:-}" ]; then
+  RESOLVED_MODEL_BASE_URL="${MODEL_BASE_URL%/}"
+elif [ "$MODE" = "docker" ]; then
+  RESOLVED_MODEL_BASE_URL="http://model:5000"
+elif [ "$MODE" = "local" ] || [ "$MODE" = "localhost" ]; then
+  RESOLVED_MODEL_BASE_URL="http://localhost:5000"
 else
-  echo "Invalid MODE: $MODE"
+  echo "Invalid MODE: $MODE (use: auto|docker|local|localhost)"
   exit 1
 fi
+MODEL_BASE_URL="$RESOLVED_MODEL_BASE_URL"
 MODEL_INIT_TRAINING_URL="${MODEL_BASE_URL%/}/initial_training"
+
+echo "Seeding mode: $MODE"
+echo "Using MODEL_BASE_URL: $MODEL_BASE_URL"
 
 rm -f "$SQLITE_DB_PATH"
 

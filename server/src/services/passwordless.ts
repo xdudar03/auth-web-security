@@ -13,6 +13,7 @@ import { generateJwt } from "./user.ts";
 export type ChallengeSession = Session & {
   challenge?: string;
   userId?: string;
+  verifiedCredentialId?: string;
 };
 
 type PasskeyCredentialRecord = {
@@ -24,6 +25,37 @@ type PasskeyCredentialRecord = {
   wrappedPrivateKeyIv?: string;
   wrapSaltB64?: string;
 };
+
+function resolveExpectedOrigin(): string {
+  const raw = process.env.CLIENT_BASE_URL?.trim();
+  if (!raw) {
+    return "http://localhost:3000";
+  }
+
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return "http://localhost:3000";
+  }
+}
+
+function resolveRpId(): string {
+  const explicitRpId = process.env.WEBAUTHN_RP_ID?.trim();
+  if (explicitRpId) {
+    return explicitRpId;
+  }
+
+  const rawClientBaseUrl = process.env.CLIENT_BASE_URL?.trim();
+  if (rawClientBaseUrl) {
+    try {
+      return new URL(rawClientBaseUrl).hostname;
+    } catch {
+      return "localhost";
+    }
+  }
+
+  return "localhost";
+}
 
 function toBase64URL(bytes: Uint8Array): string {
   const b64 = Buffer.from(bytes).toString("base64");
@@ -75,7 +107,7 @@ export async function getRegistrationOptions(
   try {
     const options = await generateRegistrationOptions({
       rpName: "Example RP",
-      rpID: "localhost",
+      rpID: resolveRpId(),
       userName: user.username!,
       userID: isoUint8Array.fromUTF8String(user.userId as string),
       attestationType: "none",
@@ -91,6 +123,7 @@ export async function getRegistrationOptions(
 
     session.challenge = options.challenge;
     session.userId = user.userId as string;
+    delete session.verifiedCredentialId;
 
     return options;
   } catch (error) {
@@ -116,9 +149,9 @@ export async function verifyRegistration(
     const verification = await verifyRegistrationResponse({
       response: responseBody as any,
       expectedChallenge: `${expectedChallenge}`,
-      expectedOrigin: "http://localhost:3000",
-      expectedRPID: "localhost",
-      requireUserVerification: false,
+      expectedOrigin: resolveExpectedOrigin(),
+      expectedRPID: resolveRpId(),
+      requireUserVerification: true,
     });
 
     const { verified, registrationInfo } = verification as any;
@@ -147,6 +180,8 @@ export async function verifyRegistration(
       updateUser(userRecord.userId as string, {
         credentials: JSON.stringify(updated),
       });
+
+      clearPasswordlessSession(session);
     }
 
     return { verified };
@@ -175,7 +210,7 @@ export async function getAuthenticationOptions(
     const credentialsArray = parseCredentials(user.credentials ?? null);
 
     const options = await generateAuthenticationOptions({
-      rpID: "localhost",
+      rpID: resolveRpId(),
       allowCredentials: credentialsArray.map((cred) => ({
         id: cred.credentialID,
         transports: (cred.transports as any) || ["internal"],
@@ -186,6 +221,7 @@ export async function getAuthenticationOptions(
 
     session.challenge = options.challenge;
     session.userId = user.userId as string;
+    delete session.verifiedCredentialId;
 
     return options;
   } catch (error) {
@@ -199,8 +235,6 @@ export async function verifyAuthentication(
   session?: ChallengeSession,
 ) {
   assertSession(session);
-  console.log("responseBody", responseBody);
-  console.log("session", session);
   const expectedChallenge = session.challenge;
   const userId = session.userId;
 
@@ -228,8 +262,8 @@ export async function verifyAuthentication(
     const verification = await verifyAuthenticationResponse({
       response: responseBody,
       expectedChallenge: `${expectedChallenge}`,
-      expectedOrigin: "http://localhost:3000",
-      expectedRPID: "localhost",
+      expectedOrigin: resolveExpectedOrigin(),
+      expectedRPID: resolveRpId(),
       credential: {
         id: authenticator.credentialID,
         publicKey: fromBase64URL(authenticator.credentialPublicKey),
@@ -238,7 +272,7 @@ export async function verifyAuthentication(
       extensions: {
         prf: {},
       },
-      requireUserVerification: false,
+      requireUserVerification: true,
     } as any);
 
     const { verified, authenticationInfo } = verification as any;
@@ -256,6 +290,8 @@ export async function verifyAuthentication(
       updateUser(query.userId as string, {
         credentials: JSON.stringify(updatedCreds),
       });
+      session.verifiedCredentialId = authenticator.credentialID;
+      delete session.challenge;
     }
 
     return {
@@ -296,6 +332,20 @@ export async function saveCredentialKeyMaterial(
     );
   }
 
+  if (!session.verifiedCredentialId) {
+    throw new HttpError(
+      403,
+      "Passwordless verification required before saving credential material",
+    );
+  }
+
+  if (session.verifiedCredentialId !== input.credentialId) {
+    throw new HttpError(
+      403,
+      "Credential key material update is not allowed for this credential",
+    );
+  }
+
   const user = getUserById(session.userId);
   if (!user) {
     throw new HttpError(404, "User not found");
@@ -324,6 +374,8 @@ export async function saveCredentialKeyMaterial(
     credentials: JSON.stringify(updatedCredentials),
   });
 
+  delete session.verifiedCredentialId;
+
   return { saved: true };
 }
 
@@ -336,4 +388,5 @@ export function clearPasswordlessSession(session?: ChallengeSession) {
   if (!session) return;
   delete session.challenge;
   delete session.userId;
+  delete session.verifiedCredentialId;
 }

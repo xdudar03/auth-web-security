@@ -1009,9 +1009,7 @@ const getUserForAuthenticationQuery = db.prepare(
 );
 
 const getUserForAuthentication = (username: string) => {
-  console.log("getting user for authentication for username", username);
   const userData = getUserForAuthenticationQuery.get(username);
-  console.log("userData", userData);
   if (!userData) {
     return null;
   }

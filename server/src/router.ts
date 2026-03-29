@@ -171,23 +171,40 @@ export const appRouter = router({
       ),
   }),
   passwordless: router({
-    getRegistrationOptions: publicProcedure
-      .input(z.object({ userId: z.string() }))
-      .mutation(({ input, ctx }) =>
-        execute(() =>
-          getRegistrationOptions(
-            input.userId,
-            ctx.req.session as ChallengeSession,
-          ),
-        ),
-      ),
+    getRegistrationOptions: publicProcedure.mutation(({ ctx }) => {
+      const currentUserId = (ctx.user as User)?.userId;
+      if (!currentUserId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Not authenticated",
+        });
+      }
+
+      return execute(() =>
+        getRegistrationOptions(currentUserId, ctx.req.session as ChallengeSession),
+      );
+    }),
     verifyRegistration: publicProcedure
       .input(z.any())
-      .mutation(({ input, ctx }) =>
-        execute(() =>
-          verifyRegistration(input, ctx.req.session as ChallengeSession),
-        ),
-      ),
+      .mutation(({ input, ctx }) => {
+        const currentUserId = (ctx.user as User)?.userId;
+        if (!currentUserId) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Not authenticated",
+          });
+        }
+
+        const session = ctx.req.session as ChallengeSession;
+        if (session.userId && session.userId !== currentUserId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Passkey registration session does not match user",
+          });
+        }
+
+        return execute(() => verifyRegistration(input, session));
+      }),
     getAuthenticationOptions: publicProcedure
       .input(z.object({ username: z.string() }))
       .mutation(({ input, ctx }) =>

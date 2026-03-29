@@ -16,10 +16,76 @@ import type { Shop } from "../types/shop.ts";
 import type { PrivacySettings } from "../types/privacySetting.ts";
 
 function buildEncryptedOnlyBaseUser(user: User): User {
+  const redactCredentials = (raw: string | null | undefined): string | null => {
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) {
+        return null;
+      }
+
+      const redacted = parsed.map((value) => {
+        const credential = (value ?? {}) as Record<string, unknown>;
+        return {
+          credentialID:
+            typeof credential.credentialID === "string"
+              ? credential.credentialID
+              : null,
+          counter:
+            typeof credential.counter === "number" ? credential.counter : null,
+          transports: Array.isArray(credential.transports)
+            ? credential.transports.filter(
+                (transport): transport is string => typeof transport === "string",
+              )
+            : [],
+          credentialDeviceType:
+            typeof credential.credentialDeviceType === "string"
+              ? credential.credentialDeviceType
+              : null,
+          credentialBackedUp:
+            typeof credential.credentialBackedUp === "boolean"
+              ? credential.credentialBackedUp
+              : null,
+          hasWrappedPrivateKey: Boolean(credential.wrappedPrivateKey),
+        };
+      });
+
+      return JSON.stringify(redacted);
+    } catch {
+      return null;
+    }
+  };
+
   return {
-    ...user,
+    userId: user.userId,
+    hpkePublicKeyB64: user.hpkePublicKeyB64 ?? null,
+    recoverySaltB64: user.recoverySaltB64 ?? null,
+    encryptedPrivateKey: user.encryptedPrivateKey ?? null,
+    encryptedPrivateKeyIv: user.encryptedPrivateKeyIv ?? null,
+    emailHash: null,
     username: "",
+    password: "",
+    roleId: user.roleId ?? null,
+    credentials: redactCredentials(user.credentials),
+    firstName: user.firstName ?? null,
+    lastName: user.lastName ?? null,
+    isBiometric: user.isBiometric ?? false,
+    registered: user.registered,
+    phoneNumber: user.phoneNumber ?? null,
+    dateOfBirth: user.dateOfBirth ?? null,
+    gender: user.gender ?? null,
+    address: user.address ?? null,
+    city: user.city ?? null,
+    state: user.state ?? null,
+    zip: user.zip ?? null,
+    country: user.country ?? null,
+    spendings: user.spendings ?? null,
     shoppingHistory: null,
+    privacy: user.privacy,
+    privacyPreset: user.privacyPreset ?? null,
   };
 }
 
