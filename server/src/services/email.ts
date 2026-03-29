@@ -4,7 +4,7 @@ dotenv.config();
 import crypto from "crypto";
 import { addToken, deleteToken, getToken, updateUser } from "../database.ts";
 import { HttpError } from "../errors.ts";
-import { generateJwt } from "./biometric.ts";
+import { generateJwt } from "./user.ts";
 import bcrypt from "bcryptjs";
 
 export async function sendEmailWithToken(

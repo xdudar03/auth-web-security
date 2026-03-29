@@ -238,21 +238,6 @@ export const appRouter = router({
           ),
         ),
       ),
-    changePassword: publicProcedure
-      .input(
-        z.object({
-          oldPassword: z.string(),
-          newPassword: z.string(),
-        }),
-      )
-      .mutation(({ input, ctx }) =>
-        execute(() => changeUserPassword(input, ctx.user as User)),
-      ),
-    confirmPassword: publicProcedure
-      .input(z.object({ password: z.string() }))
-      .mutation(({ input, ctx }) =>
-        execute(() => confirmUserPassword(input, ctx.user as User)),
-      ),
   }),
   admin: router({
     listUsers: publicProcedure.query(() => execute(() => listUsers())),
@@ -276,6 +261,21 @@ export const appRouter = router({
       }),
   }),
   user: router({
+    changePassword: publicProcedure
+      .input(
+        z.object({
+          oldPassword: z.string(),
+          newPassword: z.string(),
+        }),
+      )
+      .mutation(({ input, ctx }) =>
+        execute(() => changeUserPassword(input, ctx.user as User)),
+      ),
+    confirmPassword: publicProcedure
+      .input(z.object({ password: z.string() }))
+      .mutation(({ input, ctx }) =>
+        execute(() => confirmUserPassword(input, ctx.user as User)),
+      ),
     register: publicProcedure
       .input(
         z.object({

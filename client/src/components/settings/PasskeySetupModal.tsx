@@ -18,7 +18,7 @@ export default function PasskeySetupModal({
   const [isConfirmed, setIsConfirmed] = useState(false);
   const trpc = useTRPC();
   const confirmPasswordMutation = useMutation(
-    trpc.biometric.confirmPassword.mutationOptions({
+    trpc.user.confirmPassword.mutationOptions({
       onSuccess: () => {
         setIsConfirmed(true);
       },

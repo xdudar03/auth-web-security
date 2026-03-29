@@ -19,7 +19,7 @@ export default function BiometricAuthModel({
   const { user } = useUser();
   const trpc = useTRPC();
   const confirmPasswordMutation = useMutation(
-    trpc.biometric.confirmPassword.mutationOptions({
+    trpc.user.confirmPassword.mutationOptions({
       onSuccess: (data) => {
         console.log('data', data);
         setIsConfirmed(true);

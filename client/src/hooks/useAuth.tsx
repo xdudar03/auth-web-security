@@ -245,14 +245,14 @@ export default function useAuth({
 }) {
   const trpc = useTRPC();
   const authenticateMutation = useMutation(
-    trpc.biometric.authenticate.mutationOptions({
+    trpc.user.authenticate.mutationOptions({
       onError: (error) => {
         console.error('error', error);
       },
     })
   );
   const registerMutation = useMutation(
-    trpc.biometric.register.mutationOptions({
+    trpc.user.register.mutationOptions({
       onSuccess: () => {
         setMessage({
           message: 'Please check your email for confirmation',

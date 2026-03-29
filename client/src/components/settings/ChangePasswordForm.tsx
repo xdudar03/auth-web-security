@@ -54,7 +54,7 @@ export default function ChangePasswordForm({
     })
   );
   const changePassword = useMutation(
-    trpc.biometric.changePassword.mutationOptions({
+    trpc.user.changePassword.mutationOptions({
       onSuccess: (data) => {
         console.log('data', data);
         setMessage({
