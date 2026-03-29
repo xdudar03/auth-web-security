@@ -1,16 +1,10 @@
 import {
   db,
-  getUserById,
   getUserPrivacyByUserId,
   getUserShops,
-  getUserPrivateDataByUserId,
   getUserWithRoleQuery,
-  updateUser,
-  addUserPrivateData as addUserPrivateDataDb,
-  updateUserPrivateData as updateUserPrivateDataDb,
 } from "../database.ts";
 import { HttpError } from "../errors.ts";
-import type { UserPrivateData } from "../types/user.ts";
 import { mapResponseQuery } from "../utils.ts";
 
 export function sanitizeUserSummary(row: any) {
@@ -79,61 +73,5 @@ export function getUserWithRoleById(id: string) {
   return {
     user: response.user,
     role: response.role,
-  };
-}
-
-type UpdateUserInput = {
-  username?: string | null;
-  email?: string | null;
-  password?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
-  phoneNumber?: string | null;
-  dateOfBirth?: string | null;
-  roleId?: number | string | null;
-};
-
-// TODO: everything below should be moved to user service
-
-export function addUserPrivateData(
-  userId: string,
-  privateData: UserPrivateData,
-) {
-  const existing = getUserById(userId);
-  if (!existing) {
-    throw new HttpError(404, "User not found");
-  }
-  const existingPrivateData = getUserPrivateDataByUserId(userId);
-  if (existingPrivateData) {
-    throw new HttpError(
-      409,
-      "User private data already exists. Use updateUserPrivateData.",
-    );
-  }
-  console.log("privateData: ", privateData);
-  addUserPrivateDataDb(userId, privateData);
-  return {
-    message: "User private data added successfully",
-  };
-}
-
-export function updateUserPrivateData(
-  userId: string,
-  privateData: UserPrivateData,
-) {
-  const existing = getUserById(userId);
-  if (!existing) {
-    throw new HttpError(404, "User not found");
-  }
-  const existingPrivateData = getUserPrivateDataByUserId(userId);
-  if (!existingPrivateData) {
-    throw new HttpError(
-      404,
-      "User private data not found. Use addUserPrivateData first.",
-    );
-  }
-  updateUserPrivateDataDb(userId, privateData);
-  return {
-    message: "User private data updated successfully",
   };
 }

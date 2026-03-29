@@ -192,4 +192,4 @@ The application will be accessible at `http://localhost:3000`.
 
 - The Next.js client proxies all requests from `/api/*` to the server (`SERVER_BASE_URL`).
 - The server accepts CORS origins set via `CORS_ORIGIN` (comma-separated list allowed).
-- Sometimes the db is not synced for viewing in the browser, you need to run `sqlite3 data/users.db "PRAGMA wal_checkpoint(FULL);"` to sync the db.
+- Sometimes the db is not synced for viewing in the browser, you need to run `sqlite3 data/users.db "PRAGMA wal_checkpoint(FULL);"` in the server terminal to sync the db.

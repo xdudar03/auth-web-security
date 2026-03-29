@@ -4,7 +4,7 @@ import {
   addUserPrivateData,
   addProvider,
 } from "../database.ts";
-import { buildEncryptedSeedUser } from "./encryption.ts";
+import { buildEncryptedSeedUser } from "../lib/encryption.ts";
 import { applyPrivacyPreset } from "../services/privacy.ts";
 
 type SeedUser = {

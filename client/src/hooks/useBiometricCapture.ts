@@ -134,15 +134,13 @@ export default function useBiometricCapture({
   const queryClient = useQueryClient();
   const trpc = useTRPC();
   const register = useMutation(
-    trpc.biometric.register.mutationOptions({
+    trpc.user.register.mutationOptions({
       onError: (error) => {
         console.error('error', error);
       },
     })
   );
-  const authenticate = useMutation(
-    trpc.biometric.authenticate.mutationOptions()
-  );
+  const authenticate = useMutation(trpc.user.authenticate.mutationOptions());
   const verify = useMutation(
     trpc.model.verify.mutationOptions({
       onError: (error) => {
@@ -325,12 +323,11 @@ export default function useBiometricCapture({
       setVerificationPhase('capturing');
       setIsCapturingStream(true);
       const frameCount =
-        action === 'login' ? LOGIN_STREAM_FRAME_COUNT : ENROLL_STREAM_FRAME_COUNT;
+        action === 'login'
+          ? LOGIN_STREAM_FRAME_COUNT
+          : ENROLL_STREAM_FRAME_COUNT;
       const streamStartedAt = performance.now();
-      const frames = await captureStream(
-        frameCount,
-        STREAM_INTERVAL_MS
-      );
+      const frames = await captureStream(frameCount, STREAM_INTERVAL_MS);
       const streamMs = timingMs(streamStartedAt);
       setIsCapturingStream(false);
       stopCamera();

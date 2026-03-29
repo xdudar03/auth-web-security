@@ -13,7 +13,7 @@ import {
 import {
   buildEncryptedSeedUser,
   encryptForProviderSeedShare,
-} from "./encryption.ts";
+} from "../lib/encryption.ts";
 import type { Visibility } from "../types/privacySetting.ts";
 
 const FIELDS = [

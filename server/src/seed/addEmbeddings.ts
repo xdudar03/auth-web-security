@@ -11,9 +11,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { dpSvdEmbeddingFromMatrix } from "../lib/dpSvd.ts";
 import sharp from "sharp";
-import { buildEncryptedSeedUser } from "./encryption.ts";
+import { buildEncryptedSeedUser } from "../lib/encryption.ts";
 import { applyPrivacyPreset } from "../services/privacy.ts";
-import { getProjectionMatrix, l2NormalizeVector } from "./randomProjection.ts";
+import {
+  getProjectionMatrix,
+  l2NormalizeVector,
+} from "../lib/randomProjection.ts";
 import { Matrix } from "ml-matrix";
 
 const RP_TARGET_DIMENSION = 1024;
@@ -239,7 +242,8 @@ const addEmbeddings = async () => {
           ),
         )
         .to1DArray();
-      const normalizedProjectedEmbedding = l2NormalizeVector(projectedEmbedding);
+      const normalizedProjectedEmbedding =
+        l2NormalizeVector(projectedEmbedding);
 
       if (USER_ID_SET.has(uId)) {
         const existing = embeddingsByUser.get(uId) ?? [];

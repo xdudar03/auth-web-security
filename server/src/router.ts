@@ -9,20 +9,17 @@ import {
   verifyRegistration,
   type ChallengeSession,
 } from "./services/passwordless.ts";
+import { changeBiometricEmbedding } from "./services/biometric.ts";
+import { getUserWithRoleById, listUsers } from "./services/admin.ts";
 import {
-  authenticateBiometricUser,
-  changeBiometricEmbedding,
-  changeBiometricPassword,
-  confirmBiometricPassword,
-  generateJwt,
-  registerBiometricUser,
-} from "./services/biometric.ts";
-import {
-  getUserWithRoleById,
-  listUsers,
   addUserPrivateData,
+  changeUserPassword,
+  confirmUserPassword,
   updateUserPrivateData,
-} from "./services/admin.ts";
+  registerUser,
+  authenticateUser,
+  generateJwt,
+} from "./services/user.ts";
 import { checkHealth, pingHealth } from "./services/health.ts";
 import {
   checkModelHealth,
@@ -31,7 +28,11 @@ import {
   verifyIdentity,
 } from "./services/model.ts";
 import { HttpError } from "./errors.ts";
-import { getAllShops, getAllUsersFromShop, getShopVisits } from "./services/shops.ts";
+import {
+  getAllShops,
+  getAllUsersFromShop,
+  getShopVisits,
+} from "./services/shops.ts";
 import {
   resetPassword,
   sendEmailWithToken,
@@ -223,40 +224,6 @@ export const appRouter = router({
       ),
   }),
   biometric: router({
-    register: publicProcedure
-      .input(
-        z.object({
-          userId: z.string(),
-          privateData: UserPrivateData.omit({ userId: true }).passthrough(),
-          username: z.string(),
-          emailHash: z.string().min(32),
-          password: z.string(),
-          roleId: z.union([z.string(), z.number()]),
-          shopIds: z.array(z.number()),
-          hpkePublicKeyB64: z.string(),
-          recoverySaltB64: z.string(),
-          encryptedPrivateKey: z.string(),
-          encryptedPrivateKeyIv: z.string(),
-        }),
-      )
-      .mutation(({ input }) =>
-        execute(() =>
-          registerBiometricUser({
-            ...input,
-            hpkePublicKeyB64: input.hpkePublicKeyB64,
-            privateData: { ...input.privateData, userId: input.userId },
-          }),
-        ),
-      ),
-    authenticate: publicProcedure
-      .input(
-        z.object({
-          username: z.string(),
-          password: z.string(),
-          hpkePublicKeyB64: z.string().optional(),
-        }),
-      )
-      .mutation(({ input }) => execute(() => authenticateBiometricUser(input))),
     changeEmbedding: publicProcedure // TODO: better naming
       .input(
         z.object({
@@ -279,12 +246,12 @@ export const appRouter = router({
         }),
       )
       .mutation(({ input, ctx }) =>
-        execute(() => changeBiometricPassword(input, ctx.user as User)),
+        execute(() => changeUserPassword(input, ctx.user as User)),
       ),
     confirmPassword: publicProcedure
       .input(z.object({ password: z.string() }))
       .mutation(({ input, ctx }) =>
-        execute(() => confirmBiometricPassword(input, ctx.user as User)),
+        execute(() => confirmUserPassword(input, ctx.user as User)),
       ),
   }),
   admin: router({
@@ -309,6 +276,40 @@ export const appRouter = router({
       }),
   }),
   user: router({
+    register: publicProcedure
+      .input(
+        z.object({
+          userId: z.string(),
+          privateData: UserPrivateData.omit({ userId: true }).passthrough(),
+          username: z.string(),
+          emailHash: z.string().min(32),
+          password: z.string(),
+          roleId: z.union([z.string(), z.number()]),
+          shopIds: z.array(z.number()),
+          hpkePublicKeyB64: z.string(),
+          recoverySaltB64: z.string(),
+          encryptedPrivateKey: z.string(),
+          encryptedPrivateKeyIv: z.string(),
+        }),
+      )
+      .mutation(({ input }) =>
+        execute(() =>
+          registerUser({
+            ...input,
+            hpkePublicKeyB64: input.hpkePublicKeyB64,
+            privateData: { ...input.privateData, userId: input.userId },
+          }),
+        ),
+      ),
+    authenticate: publicProcedure
+      .input(
+        z.object({
+          username: z.string(),
+          password: z.string(),
+          hpkePublicKeyB64: z.string().optional(),
+        }),
+      )
+      .mutation(({ input }) => execute(() => authenticateUser(input))),
     addUserPrivateData: publicProcedure
       .input(
         z.object({

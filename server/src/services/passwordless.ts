@@ -7,14 +7,8 @@ import {
 import { isoUint8Array } from "@simplewebauthn/server/helpers";
 import type { Session } from "express-session";
 import { HttpError } from "../errors.ts";
-import {
-  getAllUsers,
-  getUserById,
-  getUserByUsername,
-  updateUser,
-} from "../database.ts";
-import { generateJwt } from "./biometric.ts";
-import type { User } from "../types/user.ts";
+import { getUserById, getUserByUsername, updateUser } from "../database.ts";
+import { generateJwt } from "./user.ts";
 
 export type ChallengeSession = Session & {
   challenge?: string;
@@ -41,7 +35,9 @@ function fromBase64URL(str: string): Uint8Array {
   return new Uint8Array(Buffer.from(b64, "base64"));
 }
 
-function parseCredentials(raw: string | null | undefined): PasskeyCredentialRecord[] {
+function parseCredentials(
+  raw: string | null | undefined,
+): PasskeyCredentialRecord[] {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -306,7 +302,9 @@ export async function saveCredentialKeyMaterial(
   }
 
   const credentials = parseCredentials(user.credentials ?? null);
-  const matching = credentials.find((c) => c.credentialID === input.credentialId);
+  const matching = credentials.find(
+    (c) => c.credentialID === input.credentialId,
+  );
   if (!matching) {
     throw new HttpError(400, "Credential not found for current session user");
   }
