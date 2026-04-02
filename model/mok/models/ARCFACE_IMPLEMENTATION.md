@@ -1,238 +1,212 @@
-# ArcFace to ANN Migration Guide
+# ArcFace + ANN Implementation
 
 ## Purpose
 
-This document explains the migration from KNN-based prediction to ANN retrieval plus rerank, including:
+This document describes how this system performs face recognition using:
 
-- the theory behind the approach,
-- what changed in training and runtime,
-- why accuracy can regress after migration,
-- what was fixed in this codebase,
-- and how to tune/operate the system safely.
+- ArcFace-style metric learning to train discriminative embeddings
+- ANN (Approximate Nearest Neighbor) retrieval for fast candidate search
+- exact cosine reranking and label-level aggregation for final decisions
 
-## Executive Summary
+It explains how the pipeline works during:
 
-The model uses ArcFace-like training for discriminative embeddings, but runtime identity is now solved as nearest-neighbor retrieval in embedding space:
+1. training
+2. verification (1:1, claimed identity)
+3. prediction/identification (1:N, unknown user possible)
 
-1. Retrieve candidates quickly with ANN (FAISS IVF, inner product on normalized vectors).
-2. Rerank with exact cosine.
-3. Aggregate scores at label level (not single template only).
-4. Apply open-set acceptance policy (`unknown` rejection).
-5. For verification, combine claimed-user signals with impostor margin checks.
+## Architecture Overview
 
-This replaces the previous KNN classifier path.
+The pipeline is split into two layers:
 
-## Why Move from KNN to ANN + Rerank
+- **Embedding model (ArcFace-style):** maps face images to normalized vectors.
+- **Retrieval + decision layer (ANN + rerank):** compares vectors against enrolled templates.
 
-KNN classification can work on small datasets, but retrieval-style serving is more scalable and easier to reason about for biometric systems:
+At runtime, identity is not produced by a softmax classifier. Instead, identity is inferred by nearest-neighbor retrieval in embedding space.
 
-- **Scalability**: ANN supports larger template sets without O(N) full search latency.
-- **Separation of concerns**: retrieval stage for recall, rerank stage for precision.
-- **Open-set behavior**: thresholding on similarity/margins is explicit.
-- **Debuggability**: top-k candidates and scores are visible.
+## ArcFace Fundamentals
 
-## Core Theory
+ArcFace optimizes embeddings so that:
 
-### 1) Embedding Geometry
+- same identity vectors are close
+- different identity vectors are far apart
 
-All embeddings are L2-normalized. For normalized vectors:
+### Normalized embedding space
 
-- cosine similarity and inner product are equivalent,
-- higher score means closer identity,
-- score range is typically near `[-1, 1]` (but practical ranges are narrower).
+For each sample, the embedding `x` is L2-normalized (`||x||=1`).
+Classifier weights are also normalized. Similarity then becomes angular/cosine.
 
-### 2) ANN Retrieval + Exact Rerank
+### Additive angular margin
 
-ANN retrieves likely neighbors quickly but can miss exact top candidates. Rerank with exact dot-product/cosine on retrieved candidates restores precision.
+ArcFace modifies the target logit by adding an angular margin `m`:
 
-### 3) Open-Set Recognition
+- target class logit uses `cos(theta_y + m)`
+- non-target class logits use `cos(theta_j)`
 
-Identification is open-set: "none of the known users" must map to `unknown`.
-Typical policy:
+This creates stronger class separation and more stable verification margins than plain softmax embeddings.
 
-- accept only if best score passes absolute threshold,
-- and best-vs-second margin is high enough.
+### Why this matters for ANN
 
-### 4) Why Single-Template NN Can Fail
+Because embeddings are normalized:
 
-In biometric data, one user's templates may be noisy/outlier-heavy. A single nearest template can be misleading.
+- cosine similarity and inner product are equivalent
+- ANN index can use inner-product search for fast candidate retrieval
+- exact rerank can use cosine over the candidate set without changing ranking semantics
 
-Mitigation:
+## ANN Retrieval Fundamentals
 
-- aggregate multiple templates per label (`top-m mean`),
-- add per-label centroid similarity,
-- compare against impostor scores.
+The system stores enrolled face templates and searches them with ANN:
 
-This is now implemented.
+1. Retrieve top candidate templates quickly (approximate).
+2. Rerank candidates with exact cosine (precise).
+3. Aggregate template scores into label-level confidence.
+4. Apply open-set policy (`unknown`) or claimed-identity policy (verify).
 
-## Migration Changes in This Repository
+ANN is used for speed. Exact rerank and label aggregation are used for correctness.
 
-### A) Artifact Format and Runtime
+## Training Pipeline (Step-by-Step)
 
-Runtime now relies on:
+Training produces both model parameters and retrieval artifacts.
 
-- `{model_name}_rp_templates.joblib`
-- `{model_name}_flatip.faiss` (FAISS IVF index when available)
-- `{model_name}_label_encoder.joblib`
+### 1) Data preparation
 
-### B) Retrieval Index Build
+- detect and crop face
+- standardize size/alignment
+- apply preprocessing/augmentation
+- assign identity labels
 
-`train_retrieval_index()` now:
+### 2) ArcFace embedding training
 
-- saves normalized template vectors + labels,
-- builds FAISS IVF-Flat index when FAISS is present,
-- stores index with backup-safe writes.
+- forward pass through backbone to embedding vector
+- L2-normalize embedding
+- compute ArcFace margin logits
+- optimize with cross-entropy on identity labels
+- validate and checkpoint best model
 
-If FAISS is unavailable, runtime still works with exact NumPy search.
+### 3) Template extraction
 
-### C) Candidate Search Fixes
+After training, run enrollment images through the embedding model:
 
-Important correctness fixes:
+- generate one or more embeddings per identity
+- L2-normalize all embeddings
+- persist `templates` and aligned `labels`
 
-- ANN path now overfetches candidates before rerank (improves recall).
-- Non-FAISS fallback no longer truncates too early; exact mode can score all templates to avoid dropping true identities.
+### 4) Build retrieval artifacts
 
-### D) Label-Level Scoring for Identification
+- build FAISS IVF-Flat (or equivalent ANN index) over normalized templates
+- save index and metadata
+- save label encoder / id mapping
+- optionally compute per-label centroid embeddings
 
-`identify_image()` no longer trusts only a single nearest template.
-It builds label-level scores using:
+### 5) Runtime-ready outputs
 
-- best template score,
-- top-m mean template score per label,
-- centroid score per label,
-- weighted fusion for final ranking.
+Typical outputs are:
 
-### E) Verification Logic Improvements
+- trained embedding model weights
+- template matrix + labels
+- ANN index file
+- label encoder and optional centroids
 
-`verify_claimed_identity()` now computes:
+## Verification Flow (1:1, Claimed Identity)
 
-- best claimed template score,
-- claimed top-m mean,
-- claimed centroid score,
-- fused claimed confidence,
-- impostor best score (template and centroid views),
-- claimed-vs-impostor margin.
+Verification answers: "Does this probe face belong to claimed user X?"
 
-Decision now has explicit reasons:
+### Input
 
-- `accepted`
-- `accepted_high_confidence_bypass`
-- `rejected_below_threshold`
-- `rejected_low_margin`
+- probe face image (or video frame set)
+- claimed identity id/label
 
-### F) API Debug Signals
+### Steps
 
-`/verify` includes diagnostics to support fast root-cause analysis:
+1. **Preprocess probe:** detect/crop/align face.
+2. **Embed probe:** run ArcFace model and L2-normalize vector.
+3. **Retrieve candidates:** ANN search returns top-k nearest templates.
+4. **Exact rerank:** recompute cosine against candidate vectors.
+5. **Filter claimed identity:** keep scores belonging to claimed label.
+6. **Compute claimed confidence:** combine signals such as:
+   - best claimed template score
+   - claimed top-m mean score
+   - claimed centroid similarity (if enabled)
+7. **Compute impostor risk:** best non-claimed score / centroid score.
+8. **Margin test:** evaluate claimed score minus best impostor score.
+9. **Decision policy:**
+   - accept if claimed score >= threshold and margin >= margin threshold
+   - otherwise reject
+10. **Return diagnostics:** score, margin, reason code, and optional debug fields.
 
-- `verify_margin`
-- `verify_margin_threshold`
-- `verify_decision`
-- `verify_impostor_best_score`
-- `verify_impostor_best_centroid_score`
+### Output
 
-### G) Predict vs Verify Policy Split
+- `accepted` / `rejected`
+- confidence and margin metrics
+- optional decision reason (below threshold, low margin, etc.)
 
-Prediction and verification now use separate frame-consistency knobs.
-This prevents strict verification policy from over-penalizing 1:N identification.
+## Prediction / Identification Flow (1:N, Open Set)
 
-## Why Accuracy Dropped During Migration (Observed Failure Modes)
+Prediction answers: "Who is this person?" where unknown users must be rejected.
 
-The following issues were identified and fixed during migration hardening:
+### Input
 
-1. **ANN index not truly used** in some flows (templates saved, weak/no index path).
-2. **Small-dataset IVF misconfiguration** (`nlist` too large for template count).
-3. **Candidate truncation** in exact fallback path.
-4. **Single-template dominance** causing unstable class assignment.
-5. **Verification margin gate** rejecting cases where threshold passed but impostor score was higher.
-6. **Predict/verify threshold coupling** making prediction too strict.
+- probe face image (or frame sequence)
 
-## FAISS IVF Sizing Guidance
+### Steps
 
-If you see warnings like:
+1. **Preprocess probe** and generate normalized embedding.
+2. **ANN retrieval:** fetch top-k candidate templates.
+3. **Exact rerank:** cosine score each candidate exactly.
+4. **Label aggregation:** convert template-level scores to identity-level scores:
+   - best template score per label
+   - top-m mean per label
+   - centroid similarity per label (optional)
+   - weighted fusion into final label confidence
+5. **Rank labels** by fused confidence.
+6. **Open-set gate:** apply:
+   - absolute threshold (best score must be high enough)
+   - margin threshold (best minus second-best sufficiently large)
+7. **Return result:**
+   - top identity if accepted
+   - `unknown` if open-set gate fails
 
-`clustering X points to Y centroids: please provide at least ... training points`
+### Output
 
-it means `nlist` is too high for your dataset size.
+- predicted label or `unknown`
+- confidence, top candidates, and optional debug info
 
-Practical guidance for this project size:
+## Multi-Frame Handling (When Video Is Used)
 
-- with ~100-300 templates, start with `nlist=8` or `16`,
-- set `nprobe` to a meaningful fraction of `nlist` (e.g. 4 for 8, 8 for 16),
-- retrain index after changing these values.
+For both prediction and verification, frame-level decisions can be aggregated:
 
-## Environment Variables
+- run embedding + decision per frame
+- count accepted frames and confidence distribution
+- apply min-frames / min-ratio / strong-single-frame rules
+- produce one final response for the full capture window
 
-### Retrieval and Open-Set
+This reduces instability from blur, pose, and transient occlusions.
 
-- `MODEL_OPENSET_TAU_ABS` (default `0.58`)
-- `MODEL_OPENSET_TAU_MARGIN` (default `0.02`)
-- `MODEL_RETRIEVAL_TOP_K` (default `80`)
-- `MODEL_RETRIEVAL_NPROBE` (default `8`)
-- `MODEL_RETRIEVAL_IVF_NLIST` (default `64`, lower for small datasets)
-- `MODEL_RETRIEVAL_ANN_OVERFETCH_FACTOR` (default `8`)
-- `MODEL_IDENTIFY_LABEL_TOP_M` (default `3`)
+## Why ArcFace + ANN Works Well
 
-### Verification (model-level)
+- ArcFace provides highly separable identity embeddings.
+- ANN scales nearest-neighbor search to larger template sets.
+- Exact rerank recovers precision lost in approximate retrieval.
+- Label-level fusion is more robust than single-template winner-take-all.
+- Open-set and margin policies make acceptance behavior explicit and tunable.
 
-- `MODEL_VERIFY_COSINE_THRESHOLD` (default `0.52`)
-- `MODEL_VERIFY_COSINE_MARGIN` (default `0.015`)
-- `MODEL_VERIFY_MARGIN_BYPASS_DELTA` (default `0.03`)
-- `MODEL_VERIFY_TOP_M` (default `3`)
+## Practical Notes
 
-### API Frame Voting (predict path)
-
-- `MODEL_PREDICT_CONFIDENCE_THRESHOLD` (default `0.50`)
-- `MODEL_PREDICT_MIN_ACCEPTED_FRAMES` (default `1`)
-- `MODEL_PREDICT_MIN_ACCEPTED_RATIO` (default `0.34`)
-- `MODEL_PREDICT_STRONG_CONFIDENCE_THRESHOLD` (default `0.75`)
-- `MODEL_PREDICT_ALLOW_SINGLE_GOOD_FRAME` (default `true`)
-
-### API Frame Voting (verify path)
-
-- `MODEL_VERIFY_CONFIDENCE_THRESHOLD` (default `0.60`)
-- `MODEL_VERIFY_MIN_ACCEPTED_FRAMES` (default `2`)
-- `MODEL_VERIFY_MIN_ACCEPTED_RATIO` (default `0.5`)
-- `MODEL_VERIFY_STRONG_CONFIDENCE_THRESHOLD` (default `0.9`)
-- `MODEL_VERIFY_ALLOW_SINGLE_GOOD_FRAME` (default `true`)
-
-## Operational Runbook
-
-After changing retrieval or scoring code:
-
-1. Restart model API.
-2. Trigger retraining (`/initial_training`) to rebuild artifacts.
-3. Validate both `/predict` and `/verify`.
-4. Inspect debug fields for rejected verifications.
-5. Tune thresholds only after checking impostor-vs-claimed score distributions.
-
-## Troubleshooting Checklist
-
-If verification fails with high confidence:
-
-- Check `verify_decision`.
-- If `rejected_low_margin`, inspect impostor scores and centroid impostor score.
-- If impostor consistently wins, suspect data overlap/noise and re-enroll templates.
-- If IVF warning appears, reduce `MODEL_RETRIEVAL_IVF_NLIST`.
-
-If prediction returns too many `unknown`:
-
-- lower `MODEL_OPENSET_TAU_ABS` slightly,
-- reduce `MODEL_OPENSET_TAU_MARGIN`,
-- ensure ANN overfetch and rerank are active.
+- Keep embeddings normalized end-to-end.
+- Use ANN overfetch + exact rerank to avoid recall loss.
+- Size IVF parameters to dataset scale (small sets need small `nlist`).
+- Tune thresholds from real score distributions (genuine vs impostor), not guesses.
+- Rebuild index after enrollment changes or retrieval hyperparameter changes.
 
 ## File Map
 
 ```text
 model/mok/pipeline/ml_controller.py
-  - index training
-  - retrieval search + rerank
-  - label/centroid aggregation
-  - verification and margin policy
+  - embedding extraction
+  - retrieval index training
+  - ANN search + exact rerank
+  - identify/verify scoring logic
 
 model/mok/api/server.py
-  - /predict and /verify endpoints
-  - frame-level aggregation
-  - debug response fields
+  - /predict and /verify endpoint orchestration
+  - frame-level aggregation and response formatting
 ```
-
----

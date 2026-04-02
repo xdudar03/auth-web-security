@@ -323,6 +323,7 @@ export async function encryptWithHpkePublicKey(
   ivB64: string;
   encapPublicKeyB64: string;
 }> {
+  // import the recipient public key for ecdh
   const recipientPublicKey = await crypto.subtle.importKey(
     'spki',
     new Uint8Array(base64ToBytes(recipientPublicKeyB64)),
@@ -330,18 +331,23 @@ export async function encryptWithHpkePublicKey(
     false,
     []
   );
+  // generate a new ephemeral key pair for the sender
   const ephemeral = await generateHpkeKeyPair();
+  // generate a random iv for the aes-gcm encryption
   const iv = crypto.getRandomValues(new Uint8Array(12));
+  // derive the aes key from the ephemeral private key and the recipient public key
   const aesKey = await deriveContentKeyFromEcdh(
     ephemeral.privateKey,
     recipientPublicKey,
     iv
   );
+  // encrypt the plaintext with the aes key and the iv
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     aesKey,
     enc.encode(plaintext)
   );
+  // export the ephemeral public key as a base64 string
   const encapPublicKeyB64 = await exportHpkePublicKeyB64(ephemeral.publicKey);
 
   return {
