@@ -2,7 +2,13 @@ import { sendEmail } from "../tools/mailer.ts";
 import dotenv from "dotenv";
 dotenv.config();
 import crypto from "crypto";
-import { addToken, deleteToken, getToken, updateUser } from "../database.ts";
+import {
+  addToken,
+  addUserActivity,
+  deleteToken,
+  getToken,
+  updateUser,
+} from "../database.ts";
 import { HttpError } from "../errors.ts";
 import { generateJwt } from "./user.ts";
 import bcrypt from "bcryptjs";
@@ -41,8 +47,10 @@ export async function sendEmailWithToken(
     `Click here to ${subject.toLowerCase()}: <a href="${link}">${subject}</a>`,
   );
   if (!email) {
+    addUserActivity(userId, `Failed to send email for ${purpose}`);
     throw new Error(`Failed to send email for ${purpose}`);
   }
+  addUserActivity(userId, `Email sent for ${purpose}`);
   return { message: `Email sent for ${purpose}` };
 }
 
@@ -58,6 +66,7 @@ export async function verifyToken(token: string, purpose: string) {
   if (purpose === "confirmation") {
     const jwt = generateJwt(String(result.userId));
     deleteToken(token, purpose);
+    addUserActivity(result.userId, "Email verified");
     return { userId: result.userId, jwt: jwt };
   }
   return { userId: result.userId };
@@ -72,5 +81,6 @@ export async function resetPassword(
   const hashedPassword = await bcrypt.hash(newPassword, salt);
   updateUser(userId, { password: hashedPassword });
   deleteToken(token, "reset_password");
+  addUserActivity(userId, "Password reset");
   return { message: "Password reset successfully" };
 }

@@ -6,7 +6,7 @@ import {
   VerificationResponse,
   AddEmbeddingResponse,
 } from "../types/model.ts";
-import { getUserIdByUsername } from "../database.ts";
+import { addUserActivity, getUserIdByUsername } from "../database.ts";
 
 const DEFAULT_MODEL_BASE_URL = "http://localhost:5000";
 const MODEL_BASE_URL = process.env.MODEL_BASE_URL || DEFAULT_MODEL_BASE_URL;
@@ -29,7 +29,9 @@ function getModelBaseUrlCandidates(): string[] {
 
     if (parsed.hostname === "model") {
       fallbackUrls.push(
-        normalizeBaseUrl(`${parsed.protocol}//localhost:${parsed.port || "5000"}`),
+        normalizeBaseUrl(
+          `${parsed.protocol}//localhost:${parsed.port || "5000"}`,
+        ),
       );
     }
   } catch {
@@ -46,7 +48,9 @@ function isRecoverableNetworkError(error: unknown): boolean {
 
   const cause = (error as Error & { cause?: { code?: string } }).cause;
   const code = cause?.code;
-  return code === "EAI_AGAIN" || code === "ENOTFOUND" || code === "ECONNREFUSED";
+  return (
+    code === "EAI_AGAIN" || code === "ENOTFOUND" || code === "ECONNREFUSED"
+  );
 }
 
 async function fetchModel<T>(
@@ -105,7 +109,7 @@ async function fetchModel<T>(
         "elapsed_ms=",
         elapsedMs,
         "reason=",
-        isAbortError ? "timeout" : (error as Error)?.message ?? "unknown",
+        isAbortError ? "timeout" : ((error as Error)?.message ?? "unknown"),
       );
 
       // Retry only for network-level failures on fallback hosts.
@@ -184,10 +188,18 @@ export async function verifyIdentity(
     }),
   });
   console.log("response from verify: ", response);
+  if (response.verified) {
+    addUserActivity(userToVerify, "User authenticated (biometric login)");
+  } else {
+    addUserActivity(userToVerify, "Biometric login failed");
+  }
   if (response.verified && APPEND_EMBEDDING_AFTER_VERIFY) {
     // Do not block login on embedding refresh; schedule in background.
     void addNewEmbedding(userToVerify, embedding).catch((error) => {
-      console.error("Failed to append fresh embedding after verification", error);
+      console.error(
+        "Failed to append fresh embedding after verification",
+        error,
+      );
     });
   }
   return response;
@@ -203,6 +215,7 @@ export async function addNewEmbedding(
   userId: string,
   embedding: string,
 ): Promise<AddEmbeddingResponse> {
+  addUserActivity(userId, "New embedding added");
   return fetchModel<AddEmbeddingResponse>("/add_embedding", {
     method: "POST",
     body: JSON.stringify({

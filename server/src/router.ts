@@ -48,7 +48,13 @@ import {
   applyPrivacyPreset,
   getUserPrivacyPreset,
 } from "./services/privacy.ts";
-import { getUserById, updateUser } from "./database.ts";
+import {
+  getUserActivityByActivity,
+  getUserActivityByUserId,
+  getUserById,
+  updateUser,
+  getAllUserActivity,
+} from "./database.ts";
 import {
   getTransactionsById,
   getTransactionsByShopIdService,
@@ -181,7 +187,10 @@ export const appRouter = router({
       }
 
       return execute(() =>
-        getRegistrationOptions(currentUserId, ctx.req.session as ChallengeSession),
+        getRegistrationOptions(
+          currentUserId,
+          ctx.req.session as ChallengeSession,
+        ),
       );
     }),
     verifyRegistration: publicProcedure
@@ -276,6 +285,19 @@ export const appRouter = router({
           "Admins cannot edit user information. Use the reset password email feature instead.",
         );
       }),
+    getUserActivity: publicProcedure
+      .input(z.object({ userId: z.string() }))
+      .query(({ input }) =>
+        execute(() => getUserActivityByUserId(input.userId)),
+      ),
+    getUserActivityByActivity: publicProcedure
+      .input(z.object({ activity: z.string() }))
+      .query(({ input }) =>
+        execute(() => getUserActivityByActivity(input.activity)),
+      ),
+    getAllUserActivity: publicProcedure.query(() =>
+      execute(() => getAllUserActivity()),
+    ),
   }),
   user: router({
     changePassword: publicProcedure

@@ -133,6 +133,15 @@ const initTable = () => {
   )
     `);
   db.exec(`
+    CREATE TABLE IF NOT EXISTS user_activity (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId TEXT NOT NULL,
+      activity TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(userId)
+    )
+  `);
+  db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
       roleId INTEGER PRIMARY KEY AUTOINCREMENT,
       roleName TEXT NOT NULL,
@@ -1466,6 +1475,41 @@ const getLastInsertRowId = () => {
   return result ? (result.id as number) : null;
 };
 
+// User Activity queries
+const addUserActivityQuery = db.prepare(
+  `INSERT INTO user_activity (userId, activity) VALUES (?, ?)`,
+);
+
+const getUserActivityByUserIdQuery = db.prepare(
+  `SELECT * FROM user_activity WHERE userId = ?`,
+);
+
+const getUserActivityByActivityQuery = db.prepare(
+  `SELECT * FROM user_activity WHERE activity LIKE ? COLLATE NOCASE`,
+);
+
+const getAllUserActivityQuery = db.prepare(`SELECT * FROM user_activity`);
+
+const getAllUserActivity = () => {
+  const activityData = getAllUserActivityQuery.all();
+  return activityData;
+};
+
+const addUserActivity = (userId: string, activity: string) => {
+  addUserActivityQuery.run(userId, activity);
+};
+
+const getUserActivityByUserId = (userId: string) => {
+  const activityData = getUserActivityByUserIdQuery.all(userId);
+  return activityData;
+};
+
+const getUserActivityByActivity = (activity: string) => {
+  const activityPattern = `%${activity.trim()}%`;
+  const activityData = getUserActivityByActivityQuery.all(activityPattern);
+  return activityData;
+};
+
 export {
   db,
   addUser,
@@ -1537,4 +1581,8 @@ export {
   addProviderSharedData,
   updateProviderSharedData,
   deleteProviderSharedData,
+  addUserActivity,
+  getUserActivityByUserId,
+  getUserActivityByActivity,
+  getAllUserActivity,
 };

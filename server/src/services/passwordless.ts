@@ -7,7 +7,12 @@ import {
 import { isoUint8Array } from "@simplewebauthn/server/helpers";
 import type { Session } from "express-session";
 import { HttpError } from "../errors.ts";
-import { getUserById, getUserByUsername, updateUser } from "../database.ts";
+import {
+  addUserActivity,
+  getUserById,
+  getUserByUsername,
+  updateUser,
+} from "../database.ts";
 import { generateJwt } from "./user.ts";
 
 export type ChallengeSession = Session & {
@@ -181,6 +186,8 @@ export async function verifyRegistration(
         credentials: JSON.stringify(updated),
       });
 
+      addUserActivity(userRecord.userId as string, "Passkey registered");
+
       clearPasswordlessSession(session);
     }
 
@@ -290,6 +297,10 @@ export async function verifyAuthentication(
       updateUser(query.userId as string, {
         credentials: JSON.stringify(updatedCreds),
       });
+      addUserActivity(
+        query.userId as string,
+        "User authenticated (passwordless login)",
+      );
       session.verifiedCredentialId = authenticator.credentialID;
       delete session.challenge;
     }

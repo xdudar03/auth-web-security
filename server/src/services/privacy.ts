@@ -6,6 +6,7 @@ import {
   getUserIdByPseudoId,
   getUserPrivacyFieldByUserId,
   getUserPrivacyPresetById,
+  addUserActivity,
 } from "../database.ts";
 import type { Visibility } from "../types/privacySetting.ts";
 import { privacyLevelsPresets } from "../presetsPL.ts";
@@ -17,6 +18,7 @@ export function toggleUserPrivacyService(
   visibility: Visibility,
 ) {
   const result = getUserPrivacyByUserIdAndField(userId, field);
+  addUserActivity(userId, `Privacy toggled: ${field} to ${visibility}`);
   if (!result) {
     const statementChanges = insertUserPrivacy({ userId, field, visibility });
     if (statementChanges.changes === 0) {
@@ -79,6 +81,7 @@ export function applyPrivacyPreset(userId: string, preset: string) {
     result.push({ field: field, visibility: visibility });
   }
   updateUser(userId, { privacyPreset: preset });
+  addUserActivity(userId, `Privacy preset applied: ${preset}`);
   return result;
 }
 

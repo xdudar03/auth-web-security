@@ -10,6 +10,7 @@ import {
   addStatistic,
   getCustomerByCustomerId,
   getUserEmbeddingsByUserId,
+  addUserActivity,
 } from "../database.ts";
 import { HttpError } from "../errors.ts";
 import { predictFromEmbedding } from "./model.ts";
@@ -162,6 +163,11 @@ export function setProviderDataAccess(
   const oppositeVisibility =
     input.visibility === "visible" ? "anonymized" : "visible";
   deleteProviderSharedData(input.providerId, userId, oppositeVisibility);
+
+  addUserActivity(
+    userId,
+    `Provider data access set: ${input.providerId} to ${input.visibility}`,
+  );
 
   return {
     providerId: input.providerId,

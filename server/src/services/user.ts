@@ -9,6 +9,7 @@ import {
   addUser,
   addUserToShop,
   updateUser,
+  addUserActivity,
 } from "../database.ts";
 import { HttpError } from "../errors.ts";
 import type { User, UserPrivateData } from "../types/user.ts";
@@ -90,6 +91,7 @@ export async function registerUser(input: RegistrationInput) {
     roleId: typeof roleId === "string" ? Number(roleId) : roleId,
     isBiometric: false,
   });
+  addUserActivity(userId, "User registered, waiting for email confirmation");
 
   addUserPrivateData(userId, privateData);
 
@@ -103,6 +105,7 @@ export async function registerUser(input: RegistrationInput) {
   }
 
   applyPrivacyPreset(userId, "pl4");
+  addUserActivity(userId, "Privacy preset applied: pl4");
 
   return {
     message: "Registration successful",
@@ -131,7 +134,10 @@ export async function authenticateUser(input: AuthenticationInput) {
     updateUser(user.userId as string, { hpkePublicKeyB64 });
   }
 
+  addUserActivity(user.userId, "User authenticated (password-based login");
+
   const jwt = generateJwt(user.userId as string);
+
   return {
     jwt,
     hpkePublicKeyB64: user.hpkePublicKeyB64 ?? null,
@@ -212,7 +218,7 @@ export async function changeUserPassword(
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(newPassword, salt);
   updateUser(existingUser.userId, { password: hashedPassword });
-
+  addUserActivity(existingUser.userId, "Password changed");
   return { message: "Password changed successfully" };
 }
 

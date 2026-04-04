@@ -6,7 +6,7 @@ import {
   Settings,
   ShoppingCart,
   User,
-  Users,
+  HistoryIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -74,39 +74,33 @@ export default function SideBar() {
                 <LayoutDashboard className="w-6 h-6" />
               </Link>
             </Button>
-            {role?.canAccessAdminPanel ? (
-              <Button
-                asChild
-                variant="ghost"
-                size="icon"
-                className={`icon-btn-zoom ${
-                  isActive === 'users-table' ? 'active' : ''
-                }`}
-              >
-                <Link href="/users-table" aria-label="Users Table">
-                  <Users className="w-6 h-6" />
-                </Link>
-              </Button>
-            ) : null}
             <Button
               asChild
               variant="ghost"
               size="icon"
               className={`icon-btn-zoom ${
-                isActive === 'shopping-history' || isActive === 'shop-history'
+                isActive === 'users-activity' ||
+                isActive === 'shopping-history' ||
+                isActive === 'shop-history'
                   ? 'active'
                   : ''
               }`}
             >
               <Link
                 href={
-                  role?.canAccessProviderPanel
-                    ? '/shop-history'
-                    : '/shopping-history'
+                  role?.canAccessAdminPanel
+                    ? '/users-activity'
+                    : role?.canAccessProviderPanel
+                      ? '/shop-history'
+                      : '/shopping-history'
                 }
                 aria-label="Shopping History"
               >
-                <ShoppingCart className="w-6 h-6" />
+                {role?.canAccessAdminPanel ? (
+                  <HistoryIcon className="w-6 h-6" />
+                ) : (
+                  <ShoppingCart className="w-6 h-6" />
+                )}
               </Link>
             </Button>
             {role?.canAccessProviderPanel ? (
