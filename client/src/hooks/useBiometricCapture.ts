@@ -13,7 +13,7 @@ import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import useJwt from '@/hooks/useJwt';
 import { ensureEncryptedDataAccessForLogin } from '@/hooks/useAuth';
-import type { FeedbackMessage } from '../components/authentication/BiometricAlerts';
+import type { FeedbackMessage } from '../components/authentication/biometric/BiometricAlerts';
 import { getUserHpkeBundle } from '@/lib/encryption/encryption';
 import { Matrix } from 'ml-matrix';
 import {
@@ -57,6 +57,8 @@ const RP_TARGET_DIMENSION = 1024;
 const RP_VERSION = 'rp-v1';
 const BIOMETRIC_TIMING_LOGS_ENABLED =
   process.env.NEXT_PUBLIC_BIOMETRIC_TIMING_LOGS !== 'false';
+
+const COMPARISON_ENABLED = true;
 
 const timingMs = (startedAt: number) =>
   Math.round((performance.now() - startedAt) * 100) / 100;
@@ -105,6 +107,22 @@ const sleep = (ms: number) =>
   new Promise<void>((resolve) => {
     window.setTimeout(resolve, ms);
   });
+
+const selectComparisonFrames = (
+  projectedProjections: number[][],
+  maxFrames = 3
+) => {
+  if (projectedProjections.length <= maxFrames) {
+    return projectedProjections;
+  }
+  const picked: number[][] = [];
+  const lastIndex = projectedProjections.length - 1;
+  for (let i = 0; i < maxFrames; i += 1) {
+    const idx = Math.round((i * lastIndex) / (maxFrames - 1));
+    picked.push(projectedProjections[idx]);
+  }
+  return picked;
+};
 
 export default function useBiometricCapture({
   action,
@@ -155,7 +173,13 @@ export default function useBiometricCapture({
       },
     })
   );
-
+  const predictCompare = useMutation(
+    trpc.model.predictCompare.mutationOptions({
+      onError: (error) => {
+        console.error('error', error);
+      },
+    })
+  );
   const stopCamera = () => {
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
@@ -421,6 +445,17 @@ export default function useBiometricCapture({
         const actionStartedAt = performance.now();
         await runBiometricAction(userWithEmbedding);
         const actionMs = timingMs(actionStartedAt);
+        if (COMPARISON_ENABLED && action === 'change' && user?.isBiometric) {
+          const comparisonEmbedding = selectComparisonFrames(projectedProjections);
+          void predictCompare
+            .mutateAsync({
+              embedding: JSON.stringify(comparisonEmbedding),
+              userId: user?.userId,
+            })
+            .catch((error) => {
+              console.warn('Comparison request failed', error);
+            });
+        }
         setVerificationPhase('idle');
         if (action === 'login') {
           setFeedbackMessage(null);

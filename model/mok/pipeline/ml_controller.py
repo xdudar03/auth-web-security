@@ -3,6 +3,7 @@ import io
 import time
 import json
 import numpy as np
+from datetime import datetime, timezone
 from threading import Lock
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
@@ -63,15 +64,41 @@ RETRIEVAL_NPROBE = _get_env_int("MODEL_RETRIEVAL_NPROBE", 8)
 RETRIEVAL_IVF_NLIST = _get_env_int("MODEL_RETRIEVAL_IVF_NLIST", 8)
 RETRIEVAL_ANN_OVERFETCH_FACTOR = _get_env_int("MODEL_RETRIEVAL_ANN_OVERFETCH_FACTOR", 8)
 KNN_COMPARE_K = _get_env_int("MODEL_KNN_COMPARE_K", 5)
+KNN_COMPARE_TAU_ABS = _get_env_float("MODEL_KNN_COMPARE_TAU_ABS", 0.50)
+KNN_COMPARE_TAU_MARGIN = _get_env_float("MODEL_KNN_COMPARE_TAU_MARGIN", 0.01)
+KNN_COMPARE_TOP_M = _get_env_int("MODEL_KNN_COMPARE_TOP_M", 3)
 IDENTIFY_LABEL_TOP_M = _get_env_int("MODEL_IDENTIFY_LABEL_TOP_M", 3)
 VERIFY_TOP_M = _get_env_int("MODEL_VERIFY_TOP_M", 3)
 TIMING_LOGS_ENABLED = (
     os.environ.get("MODEL_TIMING_LOGS", "true").strip().lower()
     in {"1", "true", "yes", "on"}
 )
+COMPARISON_SAVE_ENABLED = (
+    os.environ.get("MODEL_COMPARE_SAVE_RESULTS", "true").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
+COMPARISON_OUTPUT_DIRNAME = os.environ.get(
+    "MODEL_COMPARE_OUTPUT_DIR",
+    "comparison_results",
+)
+COMPARISON_SUMMARY_PLOT = os.environ.get(
+    "MODEL_COMPARE_SUMMARY_PLOT",
+    "comparison_summary.png",
+)
 
 _RETRIEVAL_RUNTIME_CACHE = {}
 _RETRIEVAL_RUNTIME_CACHE_LOCK = Lock()
+_COMPARISON_STATS_LOCK = Lock()
+_COMPARISON_STATS = {
+    "total_comparisons": 0,
+    "comparisons_with_ground_truth": 0,
+    "ann_correct": 0,
+    "knn_correct": 0,
+    "both_correct": 0,
+    "both_wrong": 0,
+    "ann_only_correct": 0,
+    "knn_only_correct": 0,
+}
 
 
 def _timing_ms(start: float) -> float:
@@ -83,6 +110,134 @@ def _log_timing(event: str, **metrics) -> None:
         return
     metrics_text = " ".join([f"{key}={value}" for key, value in metrics.items()])
     print(f"[timing][{event}] {metrics_text}".strip())
+
+
+def _compute_binary_correctness(predicted_label: str, expected_user_id: str | None) -> bool | None:
+    if not expected_user_id:
+        return None
+    return str(predicted_label) == str(expected_user_id)
+
+
+def _update_comparison_summary_artifacts(
+    output_dir: str,
+    expected_user_id: str | None,
+    ann_correct: bool | None,
+    knn_correct: bool | None,
+) -> dict:
+    summary_plot_path = os.path.join(output_dir, COMPARISON_SUMMARY_PLOT)
+    with _COMPARISON_STATS_LOCK:
+        _COMPARISON_STATS["total_comparisons"] = int(_COMPARISON_STATS["total_comparisons"]) + 1
+        if expected_user_id:
+            _COMPARISON_STATS["comparisons_with_ground_truth"] = (
+                int(_COMPARISON_STATS["comparisons_with_ground_truth"]) + 1
+            )
+            if ann_correct is True:
+                _COMPARISON_STATS["ann_correct"] = int(_COMPARISON_STATS["ann_correct"]) + 1
+            if knn_correct is True:
+                _COMPARISON_STATS["knn_correct"] = int(_COMPARISON_STATS["knn_correct"]) + 1
+            if ann_correct is True and knn_correct is True:
+                _COMPARISON_STATS["both_correct"] = int(_COMPARISON_STATS["both_correct"]) + 1
+            elif ann_correct is False and knn_correct is False:
+                _COMPARISON_STATS["both_wrong"] = int(_COMPARISON_STATS["both_wrong"]) + 1
+            elif ann_correct is True and knn_correct is False:
+                _COMPARISON_STATS["ann_only_correct"] = int(_COMPARISON_STATS["ann_only_correct"]) + 1
+            elif ann_correct is False and knn_correct is True:
+                _COMPARISON_STATS["knn_only_correct"] = int(_COMPARISON_STATS["knn_only_correct"]) + 1
+        summary = dict(_COMPARISON_STATS)
+
+    gt_total = max(1, int(summary.get("comparisons_with_ground_truth", 0)))
+    ann_accuracy = float(summary["ann_correct"]) / gt_total
+    knn_accuracy = float(summary["knn_correct"]) / gt_total
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+    axes[0].bar(
+        ["ANN correct", "KNN correct", "Both wrong"],
+        [
+            int(summary["ann_correct"]),
+            int(summary["knn_correct"]),
+            int(summary["both_wrong"]),
+        ],
+        color=["#3b82f6", "#ef4444", "#6b7280"],
+    )
+    axes[0].set_title("Correct Predictions (with ground truth)")
+    axes[0].set_ylabel("Count")
+
+    axes[1].bar(
+        ["ANN accuracy", "KNN accuracy"],
+        [ann_accuracy, knn_accuracy],
+        color=["#2563eb", "#dc2626"],
+    )
+    axes[1].set_ylim(0.0, 1.0)
+    axes[1].set_title("Accuracy")
+    axes[1].set_ylabel("Rate")
+
+    fig.suptitle(
+        "ANN vs KNN Global Comparison Statistics\n"
+        f"comparisons={summary['total_comparisons']} "
+        f"with_ground_truth={summary['comparisons_with_ground_truth']}",
+        fontsize=10,
+    )
+    fig.tight_layout()
+    fig.savefig(summary_plot_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    return {
+        "summary_plot_path": summary_plot_path,
+        "summary": {
+            **summary,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "ann_accuracy": ann_accuracy,
+            "knn_accuracy": knn_accuracy,
+        },
+    }
+
+
+def _save_comparison_result_and_visualization(
+    comparison_output: dict,
+    model_save_dir: str,
+    model_name: str,
+    expected_user_id: str | None = None,
+) -> dict:
+    if not COMPARISON_SAVE_ENABLED:
+        return {}
+
+    ann_output = comparison_output.get("ann", {})
+    knn_output = comparison_output.get("knn", {})
+    ann_label = str(ann_output.get("predicted_label", "unknown"))
+    knn_label = str(knn_output.get("predicted_label", "unknown"))
+    ann_best_score = float(ann_output.get("best_score", 0.0))
+    knn_best_score = float(knn_output.get("best_score", 0.0))
+    ann_confidence = float(ann_output.get("confidence", 0.0))
+    knn_confidence = float(knn_output.get("confidence", 0.0))
+    ann_decision = str(ann_output.get("decision", "unknown"))
+    knn_decision = str(knn_output.get("decision", "unknown"))
+    predictions_agree = ann_label == knn_label
+    decisions_agree = ann_decision == knn_decision
+    output_dir = os.path.join(model_save_dir, COMPARISON_OUTPUT_DIRNAME)
+    os.makedirs(output_dir, exist_ok=True)
+
+    ann_is_correct = _compute_binary_correctness(ann_label, expected_user_id)
+    knn_is_correct = _compute_binary_correctness(knn_label, expected_user_id)
+
+    summary_artifacts = _update_comparison_summary_artifacts(
+        output_dir=output_dir,
+        expected_user_id=expected_user_id,
+        ann_correct=ann_is_correct,
+        knn_correct=knn_is_correct,
+    )
+
+    return {
+        "saved": True,
+        "mode": "summary_only",
+        "model_name": model_name,
+        "predictions_agree": bool(predictions_agree),
+        "decisions_agree": bool(decisions_agree),
+        "best_score_delta_ann_minus_knn": float(ann_best_score - knn_best_score),
+        "confidence_delta_ann_minus_knn": float(ann_confidence - knn_confidence),
+        "expected_user_id": str(expected_user_id) if expected_user_id else None,
+        "ann_is_correct": ann_is_correct,
+        "knn_is_correct": knn_is_correct,
+        **summary_artifacts,
+    }
 
 
 def _atomic_binary_replace(filepath: str, write_func) -> None:
@@ -373,9 +528,9 @@ class MLController:
             model_name=self.MODEL_NAME,
         )
 
-    def compare_image_details(self, vector: np.ndarray):
+    def compare_image_details(self, vector: np.ndarray, expected_user_id: str | None = None):
         # Comparison-only path; ANN production logic remains unchanged.
-        return {
+        comparison_output = {
             "ann": identify_image(
                 vector_array=vector,
                 model_save_dir=self._model_save_dir,
@@ -387,6 +542,15 @@ class MLController:
                 model_name=self.MODEL_NAME,
             ),
         }
+        comparison_artifacts = _save_comparison_result_and_visualization(
+            comparison_output=comparison_output,
+            model_save_dir=self._model_save_dir,
+            model_name=self.MODEL_NAME,
+            expected_user_id=expected_user_id,
+        )
+        if comparison_artifacts:
+            comparison_output["artifacts"] = comparison_artifacts
+        return comparison_output
 
     def verify_image(self, vector: np.ndarray, user_id: str):
         return verify_claimed_identity(
@@ -1344,7 +1508,18 @@ def identify_image_knn_comparison(
 
         ranked_labels = sorted(
             [
-                (int(label_idx), float(np.mean(scores)))
+                (
+                    int(label_idx),
+                    float(
+                        0.70 * sorted(scores, reverse=True)[0]
+                        + 0.30
+                        * np.mean(
+                            sorted(scores, reverse=True)[
+                                : max(1, min(int(KNN_COMPARE_TOP_M), len(scores)))
+                            ]
+                        )
+                    ),
+                )
                 for label_idx, scores in label_scores.items()
             ],
             key=lambda item: item[1],
@@ -1358,8 +1533,8 @@ def identify_image_knn_comparison(
                 "decision": "unknown",
                 "best_score": 0.0,
                 "second_score": 0.0,
-                "tau_abs": float(OPENSET_TAU_ABS),
-                "tau_margin": float(OPENSET_TAU_MARGIN),
+                "tau_abs": float(KNN_COMPARE_TAU_ABS),
+                "tau_margin": float(KNN_COMPARE_TAU_MARGIN),
                 "k": int(n_neighbors),
                 "algorithm": "knn_comparison_only",
                 "top_k": [],
@@ -1369,8 +1544,8 @@ def identify_image_knn_comparison(
         second_score = float(ranked_labels[1][1]) if len(ranked_labels) > 1 else -1.0
         margin = float(best_score - second_score)
         accepted = (
-            float(best_score) >= float(OPENSET_TAU_ABS)
-            and margin >= float(OPENSET_TAU_MARGIN)
+            float(best_score) >= float(KNN_COMPARE_TAU_ABS)
+            and margin >= float(KNN_COMPARE_TAU_MARGIN)
         )
 
         predicted_label = _safe_inverse_label(label_encoder, best_label_idx) if accepted else "unknown"
@@ -1394,8 +1569,8 @@ def identify_image_knn_comparison(
             "decision": decision,
             "best_score": float(best_score),
             "second_score": float(second_score),
-            "tau_abs": float(OPENSET_TAU_ABS),
-            "tau_margin": float(OPENSET_TAU_MARGIN),
+            "tau_abs": float(KNN_COMPARE_TAU_ABS),
+            "tau_margin": float(KNN_COMPARE_TAU_MARGIN),
             "k": int(n_neighbors),
             "algorithm": "knn_comparison_only",
             "top_k": neighbor_top_k,

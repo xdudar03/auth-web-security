@@ -509,7 +509,10 @@ async def predict_compare_embedding(request: EmbeddingRequest):
         frame_results = []
         for embedding_item in embedding_batch:
             embedding = np.array(embedding_item, dtype=np.float32)
-            comparison = controller.compare_image_details(embedding)
+            comparison = controller.compare_image_details(
+                embedding,
+                expected_user_id=request.user_id,
+            )
             frame_results.append(comparison)
 
         return {

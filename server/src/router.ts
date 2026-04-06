@@ -24,6 +24,7 @@ import { checkHealth, pingHealth } from "./services/health.ts";
 import {
   checkModelHealth,
   getModelStatus,
+  predictCompareFromEmbedding,
   predictFromEmbedding,
   verifyIdentity,
 } from "./services/model.ts";
@@ -174,6 +175,16 @@ export const appRouter = router({
             encryptedPrivateKeyIv: existingUser.encryptedPrivateKeyIv ?? null,
           };
         }),
+      ),
+    predictCompare: publicProcedure
+      .input(
+        z.object({
+          embedding: z.string(),
+          userId: z.string().optional(),
+        }),
+      )
+      .mutation(({ input }) =>
+        execute(() => predictCompareFromEmbedding(input.embedding, input.userId)),
       ),
   }),
   passwordless: router({

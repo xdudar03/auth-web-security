@@ -13,7 +13,10 @@ const MODEL_BASE_URL = process.env.MODEL_BASE_URL || DEFAULT_MODEL_BASE_URL;
 const APPEND_EMBEDDING_AFTER_VERIFY =
   process.env.APPEND_EMBEDDING_AFTER_VERIFY !== "false";
 const MODEL_REQUEST_TIMEOUT_MS = Number(
-  process.env.MODEL_REQUEST_TIMEOUT_MS ?? "1500",
+  process.env.MODEL_REQUEST_TIMEOUT_MS ?? "5000",
+);
+const MODEL_REQUEST_TIMEOUT_SLOW_MS = Number(
+  process.env.MODEL_REQUEST_TIMEOUT_SLOW_MS ?? "20000",
 );
 
 function normalizeBaseUrl(url: string): string {
@@ -22,20 +25,24 @@ function normalizeBaseUrl(url: string): string {
 
 function getModelBaseUrlCandidates(): string[] {
   const configuredBaseUrl = normalizeBaseUrl(MODEL_BASE_URL);
-  const fallbackUrls: string[] = [configuredBaseUrl];
+  const fallbackUrls: string[] = [];
 
   try {
     const parsed = new URL(configuredBaseUrl);
+    const localhostUrl = normalizeBaseUrl(
+      `${parsed.protocol}//localhost:${parsed.port || "5000"}`,
+    );
 
+    // In local dev, "model" hostname often resolves slowly (or not at all).
+    // Try localhost first to avoid a blocking DNS/connect delay on every call.
     if (parsed.hostname === "model") {
-      fallbackUrls.push(
-        normalizeBaseUrl(
-          `${parsed.protocol}//localhost:${parsed.port || "5000"}`,
-        ),
-      );
+      fallbackUrls.push(localhostUrl, configuredBaseUrl);
+    } else {
+      fallbackUrls.push(configuredBaseUrl);
     }
   } catch {
     // If MODEL_BASE_URL is invalid, fetch will surface the real error.
+    fallbackUrls.push(configuredBaseUrl);
   }
 
   return Array.from(new Set(fallbackUrls));
@@ -56,6 +63,7 @@ function isRecoverableNetworkError(error: unknown): boolean {
 async function fetchModel<T>(
   endpoint: string,
   options?: RequestInit,
+  timeoutMs: number = MODEL_REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   const candidateUrls = getModelBaseUrlCandidates();
   let lastError: unknown;
@@ -65,7 +73,7 @@ async function fetchModel<T>(
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => {
       controller.abort();
-    }, MODEL_REQUEST_TIMEOUT_MS);
+    }, timeoutMs);
     try {
       console.log("Fetching model from: ", `${baseUrl}${endpoint}`);
       const response = await fetch(`${baseUrl}${endpoint}`, {
@@ -205,6 +213,19 @@ export async function verifyIdentity(
   return response;
 }
 
+export async function predictCompareFromEmbedding(
+  embedding: string,
+  userId?: string,
+) {
+  return fetchModel("/predict_compare", {
+    method: "POST",
+    body: JSON.stringify({
+      embedding: JSON.parse(embedding),
+      ...(userId ? { user_id: userId } : {}),
+    }),
+  }, MODEL_REQUEST_TIMEOUT_SLOW_MS);
+}
+
 /**
  * Add a new embedding to the database and re-train the model.
  *
@@ -222,7 +243,7 @@ export async function addNewEmbedding(
       user_id: userId,
       embedding: JSON.parse(embedding),
     }),
-  });
+  }, MODEL_REQUEST_TIMEOUT_SLOW_MS);
 }
 
 export async function initialModelTraining() {
