@@ -17,7 +17,7 @@ import { useTRPC } from '@/hooks/TrpcContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import useAuth from '@/hooks/useAuth';
 import useJwt from '@/hooks/useJwt';
-import type { FormValues } from './types';
+import type { FormValues } from '@/types/authentication';
 import UsernameField from './UsernameField';
 import PasswordField from './PasswordField';
 import RegistrationFields from './RegistrationFields';

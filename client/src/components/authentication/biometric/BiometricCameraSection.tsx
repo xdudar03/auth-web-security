@@ -41,7 +41,9 @@ export default function BiometricCameraSection({
             />
           )}
         </div>
-        <span className="helper-text">Position your face within the frame.</span>
+        <span className="helper-text">
+          Position your face within the frame.
+        </span>
       </div>
       <div className="flex items-center gap-2 self-center">
         <Button onClick={onButtonClick} disabled={isButtonDisabled}>

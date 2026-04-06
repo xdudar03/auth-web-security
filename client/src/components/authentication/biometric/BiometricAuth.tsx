@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useId, useState } from 'react';
 import { useUser } from '@/hooks/useUserContext';
-import { Input } from '../ui/input';
+import { Input } from '@/components/ui/input';
 import { useRouter } from 'next/navigation';
 import BiometricAlerts from './BiometricAlerts';
 import BiometricCameraSection from './BiometricCameraSection';

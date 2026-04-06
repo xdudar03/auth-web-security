@@ -8,7 +8,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import type { UseFormReturn } from 'react-hook-form';
-import type { FormValues } from './types';
+import type { FormValues } from '@/types/authentication';
 
 export default function UsernameField({
   form,

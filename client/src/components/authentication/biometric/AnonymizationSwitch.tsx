@@ -1,6 +1,6 @@
 import { CircleQuestionMark } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
-import { Switch } from '../ui/switch';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
+import { Switch } from '../../ui/switch';
 
 export default function AnonymizationSwitch({
   anonymizeImage,

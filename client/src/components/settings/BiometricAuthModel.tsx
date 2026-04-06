@@ -1,5 +1,5 @@
 'use client';
-import BiometricAuth from '../authentication/BiometricAuth';
+import BiometricAuth from '../authentication/biometric/BiometricAuth';
 import Modal from '../Modal';
 import { useState } from 'react';
 import { useUser } from '@/hooks/useUserContext';

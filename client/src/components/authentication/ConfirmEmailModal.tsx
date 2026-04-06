@@ -1,11 +1,11 @@
 'use client';
 
-import Modal from '../Modal';
+import Modal from '@/components/Modal';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Button } from '../ui/button';
+import { Button } from '@/components/ui/button';
 import useJwt from '@/hooks/useJwt';
 
 export default function ConfirmEmailModal() {

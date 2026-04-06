@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/form';
 import { MultiSelect } from '@/components/ui/multi-select';
 import type { UseFormReturn } from 'react-hook-form';
-import type { FormValues } from './types';
+import type { FormValues } from '@/types/authentication';
 import type { Shop } from '@/hooks/useUserContext';
 import { useMemo } from 'react';
 

@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useTRPC } from './TrpcContext';
 import { Shop, type User } from './useUserContext';
 import { useCallback } from 'react';
-import { FormValues } from '@/components/authentication/types';
+import { FormValues } from '@/types/authentication';
 import { startAuthentication } from '@simplewebauthn/browser';
 import {
   decryptPrivateKeyWithPasskeyPrfOutput,

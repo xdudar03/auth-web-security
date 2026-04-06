@@ -845,6 +845,9 @@ const getUserById = (userId: string | null) => {
     return null;
   }
   const userData = getUserByIdQuery.get(userId);
+  if (!userData) {
+    return null;
+  }
   const result = User.safeParse(userData);
   if (!result.success) {
     console.error("Parse error in getUserById:", result.error);
