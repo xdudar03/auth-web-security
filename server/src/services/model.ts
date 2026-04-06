@@ -12,6 +12,11 @@ const DEFAULT_MODEL_BASE_URL = "http://localhost:5000";
 const MODEL_BASE_URL = process.env.MODEL_BASE_URL || DEFAULT_MODEL_BASE_URL;
 const APPEND_EMBEDDING_AFTER_VERIFY =
   process.env.APPEND_EMBEDDING_AFTER_VERIFY !== "false";
+const APPEND_MIN_VERIFY_MARGIN = Number(
+  process.env.APPEND_MIN_VERIFY_MARGIN ?? "0.02",
+);
+const APPEND_REQUIRE_ACCEPTED_DECISION =
+  process.env.APPEND_REQUIRE_ACCEPTED_DECISION !== "false";
 const MODEL_REQUEST_TIMEOUT_MS = Number(
   process.env.MODEL_REQUEST_TIMEOUT_MS ?? "5000",
 );
@@ -201,7 +206,20 @@ export async function verifyIdentity(
   } else {
     addUserActivity(userToVerify, "Biometric login failed");
   }
-  if (response.verified && APPEND_EMBEDDING_AFTER_VERIFY) {
+
+  const verifyDecision = response.verify_decision ?? "";
+  const verifyMargin = Number(response.verify_margin ?? Number.NaN);
+  const decisionPass =
+    !APPEND_REQUIRE_ACCEPTED_DECISION || verifyDecision === "accepted";
+  const marginPass =
+    Number.isFinite(verifyMargin) && verifyMargin >= APPEND_MIN_VERIFY_MARGIN;
+  const shouldAppendEmbedding =
+    response.verified &&
+    APPEND_EMBEDDING_AFTER_VERIFY &&
+    decisionPass &&
+    marginPass;
+
+  if (shouldAppendEmbedding) {
     // Do not block login on embedding refresh; schedule in background.
     void addNewEmbedding(userToVerify, embedding).catch((error) => {
       console.error(
@@ -209,6 +227,18 @@ export async function verifyIdentity(
         error,
       );
     });
+  } else if (response.verified && APPEND_EMBEDDING_AFTER_VERIFY) {
+    console.log(
+      "Skipped embedding append after verification",
+      JSON.stringify({
+        userId: userToVerify,
+        verifyDecision,
+        verifyMargin,
+        minMargin: APPEND_MIN_VERIFY_MARGIN,
+        decisionPass,
+        marginPass,
+      }),
+    );
   }
   return response;
 }
@@ -217,13 +247,17 @@ export async function predictCompareFromEmbedding(
   embedding: string,
   userId?: string,
 ) {
-  return fetchModel("/predict_compare", {
-    method: "POST",
-    body: JSON.stringify({
-      embedding: JSON.parse(embedding),
-      ...(userId ? { user_id: userId } : {}),
-    }),
-  }, MODEL_REQUEST_TIMEOUT_SLOW_MS);
+  return fetchModel(
+    "/predict_compare",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        embedding: JSON.parse(embedding),
+        ...(userId ? { user_id: userId } : {}),
+      }),
+    },
+    MODEL_REQUEST_TIMEOUT_SLOW_MS,
+  );
 }
 
 /**
@@ -237,13 +271,17 @@ export async function addNewEmbedding(
   embedding: string,
 ): Promise<AddEmbeddingResponse> {
   addUserActivity(userId, "New embedding added");
-  return fetchModel<AddEmbeddingResponse>("/add_embedding", {
-    method: "POST",
-    body: JSON.stringify({
-      user_id: userId,
-      embedding: JSON.parse(embedding),
-    }),
-  }, MODEL_REQUEST_TIMEOUT_SLOW_MS);
+  return fetchModel<AddEmbeddingResponse>(
+    "/add_embedding",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: userId,
+        embedding: JSON.parse(embedding),
+      }),
+    },
+    MODEL_REQUEST_TIMEOUT_SLOW_MS,
+  );
 }
 
 export async function initialModelTraining() {

@@ -49,6 +49,11 @@ export const VerificationResponse = z.object({
   predicted_user_id: z.string().optional(),
   predicted_user_confidence: z.number().optional(),
   verify_threshold: z.number().optional(),
+  verify_margin: z.number().optional(),
+  verify_margin_threshold: z.number().optional(),
+  verify_decision: z.string().optional(),
+  verify_impostor_best_score: z.number().optional(),
+  verify_impostor_best_centroid_score: z.number().optional(),
   verify_accept_rate: z.number().optional(),
 });
 export type VerificationResponse = z.infer<typeof VerificationResponse>;

@@ -598,7 +598,7 @@ async def verify_identity(request: EmbeddingRequest):
     required_votes = max(min_required, ratio_required)
     best_claimed_confidence = max((frame["confidence"] for frame in frame_results), default=0.0)
     best_threshold = min((frame["threshold"] for frame in frame_results), default=VERIFY_CONFIDENCE_THRESHOLD)
-    representative_frame = max(frame_results, key=lambda frame: frame["confidence"], default=None)
+
     single_good_frame_verified = (
         VERIFY_ALLOW_SINGLE_GOOD_FRAME
         and accepted_frames >= 1
@@ -609,6 +609,19 @@ async def verify_identity(request: EmbeddingRequest):
         or (strong_matches >= 1)
         or single_good_frame_verified
     )
+    if verified:
+        accepted_candidates = [frame for frame in frame_results if frame["is_match"]]
+        representative_frame = max(
+            accepted_candidates,
+            key=lambda frame: frame["confidence"],
+            default=None,
+        )
+    else:
+        representative_frame = max(
+            frame_results,
+            key=lambda frame: frame["confidence"],
+            default=None,
+        )
 
     confidence = best_claimed_confidence
     predicted_user_id = request.user_id if verified else "unknown"

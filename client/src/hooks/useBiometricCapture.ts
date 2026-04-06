@@ -44,9 +44,9 @@ type VerificationPhase =
   | 'unlocking';
 
 const TARGET_SIZE = 100;
-const LOGIN_STREAM_FRAME_COUNT = 3;
+const LOGIN_STREAM_FRAME_COUNT = 11;
 const ENROLL_STREAM_FRAME_COUNT = 11;
-const STREAM_INTERVAL_MS = 50;
+const STREAM_INTERVAL_MS = 80;
 const DP_SVD_OPTIONS: DpSvdOptions = {
   epsilon: 0.4,
   nSingularValues: 15,
@@ -446,7 +446,8 @@ export default function useBiometricCapture({
         await runBiometricAction(userWithEmbedding);
         const actionMs = timingMs(actionStartedAt);
         if (COMPARISON_ENABLED && action === 'change' && user?.isBiometric) {
-          const comparisonEmbedding = selectComparisonFrames(projectedProjections);
+          const comparisonEmbedding =
+            selectComparisonFrames(projectedProjections);
           void predictCompare
             .mutateAsync({
               embedding: JSON.stringify(comparisonEmbedding),

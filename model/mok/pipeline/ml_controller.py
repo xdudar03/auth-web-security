@@ -49,16 +49,27 @@ def _get_env_int(name: str, default: int) -> int:
         return default
 
 
+def _get_env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 RP_VERSION = os.environ.get("MODEL_RP_VERSION", "rp-v1")
 OPENSET_TAU_ABS = _get_env_float("MODEL_OPENSET_TAU_ABS", 0.58)
 OPENSET_TAU_MARGIN = _get_env_float("MODEL_OPENSET_TAU_MARGIN", 0.02)
 VERIFY_COSINE_THRESHOLD = _get_env_float("MODEL_VERIFY_COSINE_THRESHOLD", 0.52)
-VERIFY_COSINE_MARGIN = _get_env_float("MODEL_VERIFY_COSINE_MARGIN", 0.015)
+VERIFY_COSINE_MARGIN = _get_env_float("MODEL_VERIFY_COSINE_MARGIN", 0.008)
 VERIFY_MARGIN_BYPASS_DELTA = _get_env_float("MODEL_VERIFY_MARGIN_BYPASS_DELTA", 0.03)
 VERIFY_TOP_M_MIN_SCORE = _get_env_float("MODEL_VERIFY_TOP_M_MIN_SCORE", 0.50)
 VERIFY_CENTROID_MIN_SCORE = _get_env_float("MODEL_VERIFY_CENTROID_MIN_SCORE", 0.50)
 VERIFY_TEMPLATE_DOMINANCE_MARGIN = _get_env_float("MODEL_VERIFY_TEMPLATE_DOMINANCE_MARGIN", 0.005)
 VERIFY_CENTROID_DOMINANCE_MARGIN = _get_env_float("MODEL_VERIFY_CENTROID_DOMINANCE_MARGIN", 0.01)
+VERIFY_ENABLE_HIGH_CONFIDENCE_BYPASS = _get_env_bool(
+    "MODEL_VERIFY_ENABLE_HIGH_CONFIDENCE_BYPASS",
+    False,
+)
 RETRIEVAL_TOP_K = _get_env_int("MODEL_RETRIEVAL_TOP_K", 80)
 RETRIEVAL_NPROBE = _get_env_int("MODEL_RETRIEVAL_NPROBE", 8)
 RETRIEVAL_IVF_NLIST = _get_env_int("MODEL_RETRIEVAL_IVF_NLIST", 8)
@@ -1737,7 +1748,7 @@ def verify_claimed_identity(
     high_confidence_bypass_candidate = bool(
         fused_score >= float(VERIFY_COSINE_THRESHOLD + VERIFY_MARGIN_BYPASS_DELTA)
     )
-    verified = bool(
+    base_verified = bool(
         threshold_pass
         and margin_pass
         and top_m_floor_pass
@@ -1745,8 +1756,21 @@ def verify_claimed_identity(
         and template_dominance_pass
         and centroid_dominance_pass
     )
+    high_confidence_bypass = bool(
+        VERIFY_ENABLE_HIGH_CONFIDENCE_BYPASS
+        and high_confidence_bypass_candidate
+        and margin_to_impostor >= 0.0
+        and template_dominance_pass
+        and centroid_dominance_pass
+        and top_m_floor_pass
+        and centroid_floor_pass
+    )
+    verified = bool(base_verified or high_confidence_bypass)
     if verified:
-        decision = "accepted"
+        if base_verified:
+            decision = "accepted"
+        else:
+            decision = "accepted_high_confidence_bypass"
     else:
         if not threshold_pass:
             decision = "rejected_below_threshold"
@@ -1806,6 +1830,7 @@ def verify_claimed_identity(
         "passes_centroid_dominance": bool(centroid_dominance_pass),
         "margin_bypass_delta": float(VERIFY_MARGIN_BYPASS_DELTA),
         "high_confidence_bypass_candidate": bool(high_confidence_bypass_candidate),
+        "high_confidence_bypass_applied": bool(high_confidence_bypass and not base_verified),
         "template_count": int(claimed_vectors.shape[0]),
         "decision": decision,
         "rp_version": RP_VERSION,
