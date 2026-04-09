@@ -1,15 +1,20 @@
 import { useUser } from '@/hooks/useUserContext';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ChangePasswordForm from './ChangePasswordForm';
 import BiometricAuthModel from './BiometricAuthModel';
 import PasskeySetupModal from './PasskeySetupModal';
 import { Lock, KeyRound, ScanFace } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { useTRPC } from '@/hooks/TrpcContext';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function SecuritySettings() {
   const { user } = useUser();
-  console.log('user: ', user);
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const isBiometric = user?.isBiometric;
+  const isMfaEnabled = user?.MFAEnabled ?? false;
   const parsedCredentials = user?.credentials
     ? JSON.parse(user?.credentials)
     : [];
@@ -22,6 +27,30 @@ export default function SecuritySettings() {
   const [showChangeBiometricModal, setShowChangeBiometricModal] =
     useState(false);
   const [showPasskeySetupModal, setShowPasskeySetupModal] = useState(false);
+  const [mfaEnabled, setMfaEnabled] = useState(isMfaEnabled);
+
+  useEffect(() => {
+    setMfaEnabled(isMfaEnabled);
+  }, [isMfaEnabled]);
+
+  const updateMfaPreferenceMutation = useMutation(
+    trpc.user.updateMfaPreference.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({
+          queryKey: trpc.info.getUserInfo.queryOptions().queryKey,
+        });
+      },
+      onError: (_error, variables) => {
+        setMfaEnabled(!variables.enabled);
+      },
+    })
+  );
+
+  const handleMfaToggle = (checked: boolean) => {
+    setMfaEnabled(checked);
+    updateMfaPreferenceMutation.mutate({ enabled: checked });
+  };
+
   return (
     <div className="w-full mx-auto space-y-6 border-t border-border pt-4 ">
       <div className="flex flex-col gap-2 ">
@@ -29,6 +58,23 @@ export default function SecuritySettings() {
         <p className="text-sm text-muted">
           Manage how you sign in and protect your account.
         </p>
+      </div>
+
+      <div className="w-full rounded-lg border border-border/70 bg-background/60 px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Enable MFA</p>
+            <p className="text-xs text-muted">
+              Save your multi-factor authentication preference for this account.
+            </p>
+          </div>
+          <Switch
+            checked={mfaEnabled}
+            disabled={updateMfaPreferenceMutation.isPending}
+            onCheckedChange={handleMfaToggle}
+            aria-label="Enable MFA"
+          />
+        </div>
       </div>
 
       {/* Password */}

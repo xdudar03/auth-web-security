@@ -16,6 +16,8 @@ import type { User, UserPrivateData } from "../types/user.ts";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { jwtSecret } from "../tools/trpc.ts";
+import type { ChallengeSession } from "./passwordless.ts";
+import { completePrimaryAuthentication } from "./mfa.ts";
 import { applyPrivacyPreset } from "./privacy.ts";
 
 type RegistrationInput = {
@@ -45,6 +47,10 @@ type ChangePasswordInput = {
 
 type ConfirmPasswordInput = {
   password: string;
+};
+
+type UpdateMfaPreferenceInput = {
+  enabled: boolean;
 };
 
 export function generateJwt(userId: string) {
@@ -90,6 +96,7 @@ export async function registerUser(input: RegistrationInput) {
     password: hashedPassword,
     roleId: typeof roleId === "string" ? Number(roleId) : roleId,
     isBiometric: false,
+    MFAEnabled: false,
   });
   addUserActivity(userId, "User registered, waiting for email confirmation");
 
@@ -113,7 +120,10 @@ export async function registerUser(input: RegistrationInput) {
   };
 }
 
-export async function authenticateUser(input: AuthenticationInput) {
+export async function authenticateUser(
+  input: AuthenticationInput,
+  session?: ChallengeSession,
+) {
   const { username, password, hpkePublicKeyB64 } = input;
 
   const user = getUserForAuthentication(username);
@@ -134,17 +144,14 @@ export async function authenticateUser(input: AuthenticationInput) {
     updateUser(user.userId as string, { hpkePublicKeyB64 });
   }
 
+  const resolvedUser =
+    !user.hpkePublicKeyB64 && hpkePublicKeyB64
+      ? { ...user, hpkePublicKeyB64 }
+      : user;
+
   addUserActivity(user.userId, "User authenticated (password-based login");
 
-  const jwt = generateJwt(user.userId as string);
-
-  return {
-    jwt,
-    hpkePublicKeyB64: user.hpkePublicKeyB64 ?? null,
-    recoverySaltB64: user.recoverySaltB64 ?? null,
-    encryptedPrivateKey: user.encryptedPrivateKey ?? null,
-    encryptedPrivateKeyIv: user.encryptedPrivateKeyIv ?? null,
-  };
+  return completePrimaryAuthentication(resolvedUser, "password", session);
 }
 
 export function addUserPrivateData(
@@ -244,4 +251,30 @@ export async function confirmUserPassword(
   }
 
   return { message: "Password confirmed successfully" };
+}
+
+export function updateMfaPreference(
+  input: UpdateMfaPreferenceInput,
+  user: User,
+) {
+  if (!user.userId) {
+    throw new HttpError(401, "Unauthorized");
+  }
+
+  const existingUser = getUserById(user.userId);
+
+  if (!existingUser) {
+    throw new HttpError(400, "User not found");
+  }
+
+  updateUser(existingUser.userId, { MFAEnabled: input.enabled });
+  addUserActivity(
+    existingUser.userId,
+    `MFA ${input.enabled ? "enabled" : "disabled"}`,
+  );
+
+  return {
+    MFAEnabled: input.enabled,
+    message: `MFA ${input.enabled ? "enabled" : "disabled"} successfully`,
+  };
 }

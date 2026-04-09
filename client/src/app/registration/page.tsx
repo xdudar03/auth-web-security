@@ -11,7 +11,7 @@ export default function RegistrationPage() {
   const router = useRouter();
 
   const handleBack = () => {
-    if (tab === 'multi-factor') {
+    if (tab === 'biometric') {
       setTab('registration');
     } else {
       router.push('/');

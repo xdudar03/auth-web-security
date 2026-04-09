@@ -22,6 +22,14 @@ export const User = z.object({
     }, z.boolean().nullable())
     .optional()
     .default(false),
+  MFAEnabled: z
+    .preprocess((value) => {
+      if (value === 0) return false;
+      if (value === 1) return true;
+      return value;
+    }, z.boolean().nullable())
+    .optional()
+    .default(false),
   registered: z
     .preprocess((value) => {
       if (value === 0) return false;

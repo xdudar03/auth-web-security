@@ -43,6 +43,19 @@ type VerificationPhase =
   | 'verifying'
   | 'unlocking';
 
+type PendingBiometricMfaState = {
+  username: string;
+  recoveryPassphrase?: string;
+};
+
+type BiometricAuthResult = {
+  jwt?: string;
+  hpkePublicKeyB64?: string | null;
+  recoverySaltB64?: string | null;
+  encryptedPrivateKey?: string | null;
+  encryptedPrivateKeyIv?: string | null;
+};
+
 const TARGET_SIZE = 100;
 const LOGIN_STREAM_FRAME_COUNT = 11;
 const ENROLL_STREAM_FRAME_COUNT = 11;
@@ -58,7 +71,7 @@ const RP_VERSION = 'rp-v1';
 const BIOMETRIC_TIMING_LOGS_ENABLED =
   process.env.NEXT_PUBLIC_BIOMETRIC_TIMING_LOGS !== 'false';
 
-const COMPARISON_ENABLED = true;
+const COMPARISON_ENABLED = false;
 
 const timingMs = (startedAt: number) =>
   Math.round((performance.now() - startedAt) * 100) / 100;
@@ -145,6 +158,10 @@ export default function useBiometricCapture({
     useState<FeedbackMessage | null>(null);
   const [verificationPhase, setVerificationPhase] =
     useState<VerificationPhase>('idle');
+  const [pendingMfa, setPendingMfa] = useState<PendingBiometricMfaState | null>(
+    null
+  );
+  const [isMfaCodeSent, setIsMfaCodeSent] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const ovalRef = useRef<SVGEllipseElement | null>(null);
   const { user } = useUser();
@@ -180,6 +197,22 @@ export default function useBiometricCapture({
       },
     })
   );
+  const sendMfaCodeMutation = useMutation(
+    trpc.user.sendMfaCode.mutationOptions({
+      onError: (error) => {
+        console.error('Failed to send MFA code', error);
+        setFeedbackMessage({ type: 'error', text: error.message });
+      },
+    })
+  );
+  const verifyMfaCodeMutation = useMutation(
+    trpc.user.verifyMfaCode.mutationOptions({
+      onError: (error) => {
+        console.error('Failed to verify MFA code', error);
+        setFeedbackMessage({ type: 'error', text: error.message });
+      },
+    })
+  );
   const stopCamera = () => {
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
@@ -200,6 +233,43 @@ export default function useBiometricCapture({
       console.error('Error accessing camera:', error);
     }
   }
+
+  const resetMfaState = () => {
+    setPendingMfa(null);
+    setIsMfaCodeSent(false);
+    setVerificationPhase('idle');
+  };
+
+  const finalizeBiometricLogin = async (
+    result: BiometricAuthResult,
+    context: PendingBiometricMfaState
+  ) => {
+    if (!result.jwt) {
+      throw new Error('Biometric verification failed');
+    }
+
+    setVerificationPhase('unlocking');
+    const encryptedAccess = await ensureEncryptedDataAccessForLogin({
+      username: context.username,
+      recoveryPassphrase: context.recoveryPassphrase,
+      hpkePublicKeyB64: result.hpkePublicKeyB64 ?? null,
+      recoverySaltB64: result.recoverySaltB64 ?? null,
+      encryptedPrivateKey: result.encryptedPrivateKey ?? null,
+      encryptedPrivateKeyIv: result.encryptedPrivateKeyIv ?? null,
+    });
+
+    if (!encryptedAccess.hasAccess) {
+      setFeedbackMessage({
+        type: 'error',
+        text:
+          encryptedAccess.message ??
+          'Encrypted profile data is locked on this device. Enter your recovery passphrase once and retry biometric login.',
+      });
+    }
+
+    queryClient.clear();
+    setJwt(result.jwt);
+  };
 
   const runBiometricAction = async (payload: User & { embedding: string }) => {
     if (action === 'login') {
@@ -226,31 +296,26 @@ export default function useBiometricCapture({
         hpkePublicKeyB64: hpkeBundle?.publicKeyB64,
       });
       const verifyMs = timingMs(verifyStartedAt);
+      if (response.requiresMfa) {
+        setPendingMfa({ username, recoveryPassphrase });
+        setIsMfaCodeSent(false);
+        setVerificationPhase('idle');
+        setFeedbackMessage({
+          type: 'success',
+          text:
+            response.message ??
+            'Additional verification is required to finish signing in.',
+        });
+        return;
+      }
+
       if (!response.verified || !response.jwt) {
         throw new Error('Biometric verification failed');
       }
 
-      setVerificationPhase('unlocking');
       const unlockStartedAt = performance.now();
-      const encryptedAccess = await ensureEncryptedDataAccessForLogin({
-        username,
-        recoveryPassphrase,
-        hpkePublicKeyB64: response.hpkePublicKeyB64 ?? null,
-        recoverySaltB64: response.recoverySaltB64 ?? null,
-        encryptedPrivateKey: response.encryptedPrivateKey ?? null,
-        encryptedPrivateKeyIv: response.encryptedPrivateKeyIv ?? null,
-      });
+      await finalizeBiometricLogin(response, { username, recoveryPassphrase });
       const unlockMs = timingMs(unlockStartedAt);
-
-      if (!encryptedAccess.hasAccess) {
-        throw new Error(
-          encryptedAccess.message ??
-            'Encrypted profile data is locked on this device. Enter your recovery passphrase once and retry biometric login.'
-        );
-      }
-
-      queryClient.clear();
-      setJwt(response.jwt);
       logTiming('biometric_login_action', {
         frames: embeddingBatch.length,
         hpke_bundle_ms: hpkeBundleMs,
@@ -267,6 +332,50 @@ export default function useBiometricCapture({
         text: 'Biometric registered. Model training has started; biometric login will be available once training finishes.',
       });
     }
+  };
+
+  const handleSendMfaCode = async (email: string) => {
+    if (!pendingMfa) {
+      setFeedbackMessage({
+        type: 'error',
+        text: 'Restart biometric sign-in to request a verification code.',
+      });
+      return;
+    }
+
+    if (!email) {
+      setFeedbackMessage({
+        type: 'error',
+        text: 'Enter your account email first.',
+      });
+      return;
+    }
+
+    const result = await sendMfaCodeMutation.mutateAsync({ email });
+    setIsMfaCodeSent(true);
+    setFeedbackMessage({ type: 'success', text: result.message });
+  };
+
+  const handleVerifyMfaCode = async (code: string) => {
+    if (!pendingMfa) {
+      setFeedbackMessage({
+        type: 'error',
+        text: 'Restart biometric sign-in to verify MFA.',
+      });
+      return;
+    }
+
+    if (code.trim().length !== 6) {
+      setFeedbackMessage({
+        type: 'error',
+        text: 'Enter the 6-digit verification code.',
+      });
+      return;
+    }
+
+    const result = await verifyMfaCodeMutation.mutateAsync({ code: code.trim() });
+    await finalizeBiometricLogin(result, pendingMfa);
+    resetMfaState();
   };
 
   const captureFrame = async (): Promise<CapturedFrame | null> => {
@@ -375,6 +484,9 @@ export default function useBiometricCapture({
       });
       const flattenMs = timingMs(flattenStartedAt);
 
+      console.log('Original biometric frames', flattenedFrames);
+
+      // DP-SVD anonymization
       const anonymizeStartedAt = performance.now();
       const projections = anonymizeImage
         ? anonymizeFrames(flattenedFrames)
@@ -386,6 +498,7 @@ export default function useBiometricCapture({
         setVerificationPhase('idle');
         return;
       }
+      // End DP-SVD anonymization
 
       const sourceDimension = projections[0].length;
       const hasInconsistentDimensions = projections.some(
@@ -399,6 +512,7 @@ export default function useBiometricCapture({
         return;
       }
 
+      // Random Projection
       const projectionMatrix = getProjectionMatrix(
         sourceDimension,
         RP_TARGET_DIMENSION,
@@ -413,6 +527,9 @@ export default function useBiometricCapture({
         return l2NormalizeVector(projected);
       });
       const projectMs = timingMs(projectStartedAt);
+      // End Random Projection
+      console.log('Random projected biometric frames', projectedProjections);
+
       // Skip reconstruction in login flow to avoid extra client-side latency.
       if (action !== 'login') {
         try {
@@ -521,7 +638,8 @@ export default function useBiometricCapture({
     authenticate.isPending ||
     changeEmbedding.isPending ||
     isCapturingStream ||
-    verificationPhase !== 'idle';
+    verificationPhase !== 'idle' ||
+    Boolean(pendingMfa);
   // isModelTraining ||
   // isModelStatusLoading ||
   // isModelStatusError;
@@ -534,9 +652,15 @@ export default function useBiometricCapture({
     capturedImageUrl,
     reconstructedImageUrl,
     feedbackMessage,
+    pendingMfa,
+    isMfaCodeSent,
+    isMfaBusy: sendMfaCodeMutation.isPending || verifyMfaCodeMutation.isPending,
     buttonLabel,
     isButtonDisabled,
     handleCaptureClick,
+    handleSendMfaCode,
+    handleVerifyMfaCode,
+    resetMfaState,
     verificationInProgressMessage:
       verificationPhase === 'capturing'
         ? 'Verification in progress: capturing biometric frames...'

@@ -8,6 +8,7 @@ import BiometricCameraSection from './BiometricCameraSection';
 import BiometricImagePreviews from './BiometricImagePreviews';
 import useBiometricCapture from '@/hooks/useBiometricCapture';
 import AnonymizationSwitch from './AnonymizationSwitch';
+import EmailMfaStep from '../EmailMfaStep';
 
 export default function BiometricAuth({
   title,
@@ -21,6 +22,8 @@ export default function BiometricAuth({
   const [showRecoveryPassphraseInput, setShowRecoveryPassphraseInput] =
     useState(false);
   const [anonymizeImage, setAnonymizeImage] = useState(true);
+  const [mfaEmail, setMfaEmail] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
   const { role, isAuthenticated } = useUser();
 
   const router = useRouter();
@@ -32,10 +35,15 @@ export default function BiometricAuth({
     capturedImageUrl,
     reconstructedImageUrl,
     feedbackMessage,
+    pendingMfa,
+    isMfaCodeSent,
+    isMfaBusy,
     verificationInProgressMessage,
     buttonLabel,
     isButtonDisabled,
     handleCaptureClick,
+    handleSendMfaCode,
+    handleVerifyMfaCode,
   } = useBiometricCapture({
     action,
     username,
@@ -73,6 +81,12 @@ export default function BiometricAuth({
     }
   }, [action, feedbackMessage]);
 
+  useEffect(() => {
+    if (!pendingMfa) return;
+    setMfaEmail('');
+    setMfaCode('');
+  }, [pendingMfa]);
+
   return (
     <div className="flex flex-col items-center justify-center p-6 bg-surface rounded gap-2">
       {title !== '' && (
@@ -80,7 +94,7 @@ export default function BiometricAuth({
           Biometric {title.toLowerCase()}
         </h2>
       )}
-      {action === 'login' && (
+      {action === 'login' && !pendingMfa && (
         <>
           <Input
             type="text"
@@ -120,25 +134,42 @@ export default function BiometricAuth({
         feedbackMessage={feedbackMessage}
         verificationInProgressMessage={verificationInProgressMessage}
       />
-      <AnonymizationSwitch
-        anonymizeImage={anonymizeImage}
-        setAnonymizeImage={setAnonymizeImage}
-      />
-      <BiometricCameraSection
-        videoRef={videoRef}
-        ovalRef={ovalRef}
-        isOvalVisible={isOvalVisible}
-        overlayMaskId={overlayMaskId}
-        onButtonClick={handleCaptureClick}
-        isButtonDisabled={isButtonDisabled}
-        buttonLabel={buttonLabel}
-      />
-      <BiometricImagePreviews
-        hasCapturedImage={hasCapturedImage}
-        capturedImageUrl={capturedImageUrl}
-        reconstructedImageUrl={reconstructedImageUrl}
-        targetSize={TARGET_SIZE}
-      />
+      {action === 'login' && pendingMfa ? (
+        <EmailMfaStep
+          factorLabel="Biometric sign-in"
+          email={mfaEmail}
+          code={mfaCode}
+          isCodeSent={isMfaCodeSent}
+          isSending={isMfaBusy}
+          isVerifying={isMfaBusy}
+          onEmailChange={setMfaEmail}
+          onCodeChange={setMfaCode}
+          onSendCode={() => void handleSendMfaCode(mfaEmail)}
+          onVerifyCode={() => void handleVerifyMfaCode(mfaCode)}
+        />
+      ) : (
+        <>
+          <AnonymizationSwitch
+            anonymizeImage={anonymizeImage}
+            setAnonymizeImage={setAnonymizeImage}
+          />
+          <BiometricCameraSection
+            videoRef={videoRef}
+            ovalRef={ovalRef}
+            isOvalVisible={isOvalVisible}
+            overlayMaskId={overlayMaskId}
+            onButtonClick={handleCaptureClick}
+            isButtonDisabled={isButtonDisabled}
+            buttonLabel={buttonLabel}
+          />
+          <BiometricImagePreviews
+            hasCapturedImage={hasCapturedImage}
+            capturedImageUrl={capturedImageUrl}
+            reconstructedImageUrl={reconstructedImageUrl}
+            targetSize={TARGET_SIZE}
+          />
+        </>
+      )}
     </div>
   );
 }

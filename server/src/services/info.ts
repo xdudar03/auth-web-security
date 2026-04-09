@@ -73,6 +73,7 @@ function buildEncryptedOnlyBaseUser(user: User): User {
     firstName: user.firstName ?? null,
     lastName: user.lastName ?? null,
     isBiometric: user.isBiometric ?? false,
+    MFAEnabled: user.MFAEnabled ?? false,
     registered: user.registered,
     phoneNumber: user.phoneNumber ?? null,
     dateOfBirth: user.dateOfBirth ?? null,

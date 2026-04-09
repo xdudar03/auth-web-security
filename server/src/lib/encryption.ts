@@ -247,6 +247,7 @@ export async function buildEncryptedSeedUser(
       password: hashedPassword,
       roleId,
       isBiometric,
+      MFAEnabled: false,
       privacyPreset: privacyPreset ?? null,
       emailHash: hashEmailForSeed(email),
       hpkePublicKeyB64,

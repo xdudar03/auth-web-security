@@ -18,8 +18,13 @@ import {
   updateUserPrivateData,
   registerUser,
   authenticateUser,
-  generateJwt,
+  updateMfaPreference,
 } from "./services/user.ts";
+import {
+  completePrimaryAuthentication,
+  sendMfaCode,
+  verifyMfaCode,
+} from "./services/mfa.ts";
 import { checkHealth, pingHealth } from "./services/health.ts";
 import {
   checkModelHealth,
@@ -140,7 +145,7 @@ export const appRouter = router({
           hpkePublicKeyB64: z.string().optional(),
         }),
       )
-      .mutation(async ({ input }) =>
+      .mutation(async ({ input, ctx }) =>
         execute(async () => {
           const result = await verifyIdentity(
             input.embedding,
@@ -165,14 +170,18 @@ export const appRouter = router({
             });
           }
 
+          const resolvedUser =
+            !existingUser.hpkePublicKeyB64 && input.hpkePublicKeyB64
+              ? { ...existingUser, hpkePublicKeyB64: input.hpkePublicKeyB64 }
+              : existingUser;
+
           return {
             ...result,
-            jwt: generateJwt(result.user_id),
-            hpkePublicKeyB64:
-              existingUser.hpkePublicKeyB64 ?? input.hpkePublicKeyB64 ?? null,
-            recoverySaltB64: existingUser.recoverySaltB64 ?? null,
-            encryptedPrivateKey: existingUser.encryptedPrivateKey ?? null,
-            encryptedPrivateKeyIv: existingUser.encryptedPrivateKeyIv ?? null,
+            ...completePrimaryAuthentication(
+              resolvedUser,
+              "biometric",
+              ctx.req.session as ChallengeSession,
+            ),
           };
         }),
       ),
@@ -326,6 +335,33 @@ export const appRouter = router({
       .mutation(({ input, ctx }) =>
         execute(() => confirmUserPassword(input, ctx.user as User)),
       ),
+    updateMfaPreference: publicProcedure
+      .input(
+        z.object({
+          enabled: z.boolean(),
+        }),
+      )
+      .mutation(({ input, ctx }) =>
+        execute(() => updateMfaPreference(input, ctx.user as User)),
+      ),
+    sendMfaCode: publicProcedure
+      .input(
+        z.object({
+          email: z.string().email(),
+        }),
+      )
+      .mutation(({ input, ctx }) =>
+        execute(() => sendMfaCode(input.email, ctx.req.session as ChallengeSession)),
+      ),
+    verifyMfaCode: publicProcedure
+      .input(
+        z.object({
+          code: z.string().min(6).max(6),
+        }),
+      )
+      .mutation(({ input, ctx }) =>
+        execute(() => verifyMfaCode(input.code, ctx.req.session as ChallengeSession)),
+      ),
     register: publicProcedure
       .input(
         z.object({
@@ -359,7 +395,9 @@ export const appRouter = router({
           hpkePublicKeyB64: z.string().optional(),
         }),
       )
-      .mutation(({ input }) => execute(() => authenticateUser(input))),
+      .mutation(({ input, ctx }) =>
+        execute(() => authenticateUser(input, ctx.req.session as ChallengeSession)),
+      ),
     addUserPrivateData: publicProcedure
       .input(
         z.object({

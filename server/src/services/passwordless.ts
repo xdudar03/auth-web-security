@@ -13,12 +13,20 @@ import {
   getUserByUsername,
   updateUser,
 } from "../database.ts";
-import { generateJwt } from "./user.ts";
+import { clearMfaSession, completePrimaryAuthentication } from "./mfa.ts";
 
 export type ChallengeSession = Session & {
   challenge?: string;
   userId?: string;
   verifiedCredentialId?: string;
+  mfa?: {
+    userId: string;
+    firstFactor: "password" | "passwordless" | "biometric";
+    attempts: number;
+    code?: string;
+    expiresAt?: string;
+    lastSentAt?: string;
+  };
 };
 
 type PasskeyCredentialRecord = {
@@ -307,15 +315,7 @@ export async function verifyAuthentication(
 
     return {
       verified,
-      jwt: generateJwt(query.userId as string),
-      credentialId: authenticator.credentialID,
-      passkeyWrappedPrivateKey: authenticator.wrappedPrivateKey ?? null,
-      passkeyWrappedPrivateKeyIv: authenticator.wrappedPrivateKeyIv ?? null,
-      passkeyWrapSaltB64: authenticator.wrapSaltB64 ?? null,
-      hpkePublicKeyB64: query.hpkePublicKeyB64 ?? null,
-      recoverySaltB64: query.recoverySaltB64 ?? null,
-      encryptedPrivateKey: query.encryptedPrivateKey ?? null,
-      encryptedPrivateKeyIv: query.encryptedPrivateKeyIv ?? null,
+      ...completePrimaryAuthentication(query, "passwordless", session),
     };
   } catch (error) {
     console.error("Error verifying authentication", error);
@@ -400,4 +400,5 @@ export function clearPasswordlessSession(session?: ChallengeSession) {
   delete session.challenge;
   delete session.userId;
   delete session.verifiedCredentialId;
+  clearMfaSession(session);
 }

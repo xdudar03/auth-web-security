@@ -42,6 +42,7 @@ const initTable = () => {
       password TEXT NOT NULL,
       roleId INTEGER NOT NULL,
       isBiometric BOOLEAN NOT NULL DEFAULT FALSE,
+      MFAEnabled BOOLEAN NOT NULL DEFAULT FALSE,
       credentials TEXT,
       privacyPreset TEXT,
       FOREIGN KEY (roleId) REFERENCES roles(roleId)
@@ -293,12 +294,13 @@ function mapUndefinedToNull<T extends Record<string, any>>(
 }
 
 const addUserQuery = db.prepare(
-  `INSERT INTO users (userId, hpkePublicKeyB64, recoverySaltB64, encryptedPrivateKey, encryptedPrivateKeyIv, emailHash, username, password, roleId, isBiometric, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  `INSERT INTO users (userId, hpkePublicKeyB64, recoverySaltB64, encryptedPrivateKey, encryptedPrivateKeyIv, emailHash, username, password, roleId, isBiometric, MFAEnabled, credentials, privacyPreset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 );
 
 const addUser = (user: User) => {
   const userWithoutUndefined = mapUndefinedToNull(user);
   const biometricFlag = userWithoutUndefined.isBiometric ? 1 : 0;
+  const mfaFlag = userWithoutUndefined.MFAEnabled ? 1 : 0;
   addUserQuery.run(
     userWithoutUndefined.userId,
     userWithoutUndefined.hpkePublicKeyB64,
@@ -310,6 +312,7 @@ const addUser = (user: User) => {
     userWithoutUndefined.password,
     userWithoutUndefined.roleId,
     biometricFlag,
+    mfaFlag,
     userWithoutUndefined.credentials,
     userWithoutUndefined.privacyPreset,
   );
@@ -495,6 +498,7 @@ function updateUserQuery(userId: string, updates: Record<string, any>) {
     "firstName",
     "lastName",
     "isBiometric",
+    "MFAEnabled",
     "phoneNumber",
     "dateOfBirth",
     "credentials",

@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useTRPC } from './TrpcContext';
 import { Shop, type User } from './useUserContext';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { FormValues } from '@/types/authentication';
 import { startAuthentication } from '@simplewebauthn/browser';
 import {
@@ -28,6 +28,25 @@ import { hashString } from '@/lib/encryption/hash';
 
 export type SuccessData = {
   jwt: string;
+};
+
+type PendingMfaState = {
+  method: 'password' | 'passwordless';
+  username: string;
+  recoveryPassphrase?: string;
+  passkeyPrfOutputB64?: string;
+};
+
+type AuthenticatedLoginResult = {
+  jwt: string;
+  credentialId?: string | null;
+  passkeyWrappedPrivateKey?: string | null;
+  passkeyWrappedPrivateKeyIv?: string | null;
+  passkeyWrapSaltB64?: string | null;
+  hpkePublicKeyB64?: string | null;
+  recoverySaltB64?: string | null;
+  encryptedPrivateKey?: string | null;
+  encryptedPrivateKeyIv?: string | null;
 };
 
 const PASSKEY_PRF_EVAL_LABEL = 'auth-web-security:hpke-unlock-v1';
@@ -244,6 +263,8 @@ export default function useAuth({
   setMessage: (message: { message: string; type: 'success' | 'error' }) => void;
 }) {
   const trpc = useTRPC();
+  const [pendingMfa, setPendingMfa] = useState<PendingMfaState | null>(null);
+  const [isMfaCodeSent, setIsMfaCodeSent] = useState(false);
   const authenticateMutation = useMutation(
     trpc.user.authenticate.mutationOptions({
       onError: (error) => {
@@ -293,6 +314,28 @@ export default function useAuth({
     trpc.passwordless.saveCredentialKeyMaterial.mutationOptions({
       onError: (error) => {
         console.error('Failed to save passkey key material', error);
+      },
+    })
+  );
+  const sendMfaCodeMutation = useMutation(
+    trpc.user.sendMfaCode.mutationOptions({
+      onError: (error) => {
+        console.error('Failed to send MFA code', error);
+        setMessage({
+          message: error.message,
+          type: 'error',
+        });
+      },
+    })
+  );
+  const verifyMfaCodeMutation = useMutation(
+    trpc.user.verifyMfaCode.mutationOptions({
+      onError: (error) => {
+        console.error('Failed to verify MFA code', error);
+        setMessage({
+          message: error.message,
+          type: 'error',
+        });
       },
     })
   );
@@ -350,6 +393,75 @@ export default function useAuth({
     async (input: EncryptedAccessInput): Promise<EncryptedAccessResult> =>
       ensureEncryptedDataAccessForLogin(input),
     []
+  );
+
+  const resetMfaState = useCallback(() => {
+    setPendingMfa(null);
+    setIsMfaCodeSent(false);
+  }, []);
+
+  const finalizeAuthenticatedLogin = useCallback(
+    async (result: AuthenticatedLoginResult, context: PendingMfaState) => {
+      const encryptedAccess = await ensureEncryptedDataAccess({
+        username: context.username,
+        recoveryPassphrase: context.recoveryPassphrase,
+        passkeyPrfOutputB64:
+          context.method === 'passwordless'
+            ? context.passkeyPrfOutputB64
+            : undefined,
+        passkeyCredentialId:
+          context.method === 'passwordless' ? result.credentialId ?? null : null,
+        passkeyWrappedPrivateKey:
+          context.method === 'passwordless'
+            ? result.passkeyWrappedPrivateKey ?? null
+            : null,
+        passkeyWrappedPrivateKeyIv:
+          context.method === 'passwordless'
+            ? result.passkeyWrappedPrivateKeyIv ?? null
+            : null,
+        passkeyWrapSaltB64:
+          context.method === 'passwordless'
+            ? result.passkeyWrapSaltB64 ?? null
+            : null,
+        hpkePublicKeyB64: result.hpkePublicKeyB64 ?? null,
+        recoverySaltB64: result.recoverySaltB64 ?? null,
+        encryptedPrivateKey: result.encryptedPrivateKey ?? null,
+        encryptedPrivateKeyIv: result.encryptedPrivateKeyIv ?? null,
+      });
+
+      if (
+        context.method === 'passwordless' &&
+        encryptedAccess.hasAccess &&
+        context.passkeyPrfOutputB64 &&
+        result.credentialId
+      ) {
+        const activePrivateKeyJwkB64 = await getActiveHpkePrivateKeyJwkB64();
+        if (activePrivateKeyJwkB64) {
+          const wrappedPrivateKey = await encryptPrivateKeyWithPasskeyPrfOutput(
+            activePrivateKeyJwkB64,
+            context.passkeyPrfOutputB64
+          );
+          await saveCredentialKeyMaterialMutation.mutateAsync({
+            credentialId: result.credentialId,
+            wrappedPrivateKey: wrappedPrivateKey.ciphertextB64,
+            wrappedPrivateKeyIv: wrappedPrivateKey.ivB64,
+            wrapSaltB64: wrappedPrivateKey.saltB64,
+          });
+        }
+      }
+
+      if (!encryptedAccess.hasAccess) {
+        setMessage({
+          message:
+            encryptedAccess.message ??
+            'Encrypted profile data is locked on this device.',
+          type: 'error',
+        });
+      }
+
+      handleSuccess({ jwt: result.jwt });
+    },
+    [ensureEncryptedDataAccess, handleSuccess, saveCredentialKeyMaterialMutation, setMessage]
   );
 
   const loadShops = useCallback(
@@ -465,9 +577,16 @@ export default function useAuth({
         return;
       }
       try {
+        resetMfaState();
         const { bundle: hpkeBundle } = await ensureActiveHpkeBundle(
           values.username
         );
+
+        const authContext: PendingMfaState = {
+          method: 'password',
+          username: values.username,
+          recoveryPassphrase: values.recoveryPassphrase || values.password,
+        };
 
         const result = await authenticateMutation.mutateAsync({
           username: values.username,
@@ -475,25 +594,23 @@ export default function useAuth({
           hpkePublicKeyB64: hpkeBundle.publicKeyB64,
         });
 
-        const encryptedAccess = await ensureEncryptedDataAccess({
-          username: values.username,
-          recoveryPassphrase: values.recoveryPassphrase || values.password,
-          hpkePublicKeyB64: result.hpkePublicKeyB64 ?? null,
-          recoverySaltB64: result.recoverySaltB64 ?? null,
-          encryptedPrivateKey: result.encryptedPrivateKey ?? null,
-          encryptedPrivateKeyIv: result.encryptedPrivateKeyIv ?? null,
-        });
-
-        if (!encryptedAccess.hasAccess) {
+        if (result.requiresMfa) {
+          setPendingMfa(authContext);
+          setIsMfaCodeSent(false);
           setMessage({
             message:
-              encryptedAccess.message ??
-              'Encrypted profile data is locked on this device.',
-            type: 'error',
+              result.message ??
+              'Additional verification is required to finish signing in.',
+            type: 'success',
           });
+          return;
         }
 
-        handleSuccess({ jwt: result.jwt });
+        if (!result.jwt) {
+          throw new Error('Login failed');
+        }
+
+        await finalizeAuthenticatedLogin(result, authContext);
       } catch {
         setMessage({
           message: 'Login failed',
@@ -517,6 +634,7 @@ export default function useAuth({
         });
         return;
       }
+      resetMfaState();
       const options = await getAuthenticationOptionsMutation.mutateAsync({
         username,
       });
@@ -557,54 +675,34 @@ export default function useAuth({
 
       const result = await verifyAuthenticationMutation.mutateAsync(attResp);
 
-      if (!result?.verified || !result?.jwt) {
-        throw new Error('Passwordless verification failed');
-      }
-
-      const encryptedAccess = await ensureEncryptedDataAccess({
+      const authContext: PendingMfaState = {
+        method: 'passwordless',
         username,
         recoveryPassphrase,
         passkeyPrfOutputB64: passkeyPrfOutputB64 ?? undefined,
-        passkeyCredentialId: result.credentialId ?? attResp.id ?? null,
-        passkeyWrappedPrivateKey: result.passkeyWrappedPrivateKey ?? null,
-        passkeyWrappedPrivateKeyIv: result.passkeyWrappedPrivateKeyIv ?? null,
-        passkeyWrapSaltB64: result.passkeyWrapSaltB64 ?? null,
-        hpkePublicKeyB64: result.hpkePublicKeyB64 ?? null,
-        recoverySaltB64: result.recoverySaltB64 ?? null,
-        encryptedPrivateKey: result.encryptedPrivateKey ?? null,
-        encryptedPrivateKeyIv: result.encryptedPrivateKeyIv ?? null,
-      });
+      };
 
-      if (
-        encryptedAccess.hasAccess &&
-        passkeyPrfOutputB64 &&
-        result.credentialId
-      ) {
-        const activePrivateKeyJwkB64 = await getActiveHpkePrivateKeyJwkB64();
-        if (activePrivateKeyJwkB64) {
-          const wrappedPrivateKey = await encryptPrivateKeyWithPasskeyPrfOutput(
-            activePrivateKeyJwkB64,
-            passkeyPrfOutputB64
-          );
-          await saveCredentialKeyMaterialMutation.mutateAsync({
-            credentialId: result.credentialId,
-            wrappedPrivateKey: wrappedPrivateKey.ciphertextB64,
-            wrappedPrivateKeyIv: wrappedPrivateKey.ivB64,
-            wrapSaltB64: wrappedPrivateKey.saltB64,
-          });
-        }
+      if (!result?.verified) {
+        throw new Error('Passwordless verification failed');
       }
 
-      if (!encryptedAccess.hasAccess) {
+      if (result.requiresMfa) {
+        setPendingMfa(authContext);
+        setIsMfaCodeSent(false);
         setMessage({
           message:
-            encryptedAccess.message ??
-            'Encrypted profile data is locked on this device.',
-          type: 'error',
+            result.message ??
+            'Additional verification is required to finish signing in.',
+          type: 'success',
         });
+        return;
       }
 
-      handleSuccess({ jwt: result.jwt });
+      if (!result.jwt) {
+        throw new Error('Passwordless verification failed');
+      }
+
+      await finalizeAuthenticatedLogin(result, authContext);
     } catch (error) {
       console.error('Passwordless authentication failed', error);
       setMessage({
@@ -614,9 +712,62 @@ export default function useAuth({
     }
   };
 
+  const handleSendMfaCode = async (email: string) => {
+    if (!pendingMfa) {
+      setMessage({
+        message: 'Restart sign-in to request a new verification code',
+        type: 'error',
+      });
+      return;
+    }
+
+    if (!email) {
+      setMessage({
+        message: 'Enter your account email first',
+        type: 'error',
+      });
+      return;
+    }
+
+    const result = await sendMfaCodeMutation.mutateAsync({ email });
+    setIsMfaCodeSent(true);
+    setMessage({ message: result.message, type: 'success' });
+  };
+
+  const handleVerifyMfaCode = async (code: string) => {
+    if (!pendingMfa) {
+      setMessage({
+        message: 'Restart sign-in to verify MFA',
+        type: 'error',
+      });
+      return;
+    }
+
+    if (code.trim().length !== 6) {
+      setMessage({
+        message: 'Enter the 6-digit verification code',
+        type: 'error',
+      });
+      return;
+    }
+
+    try {
+      const result = await verifyMfaCodeMutation.mutateAsync({ code: code.trim() });
+      await finalizeAuthenticatedLogin(result, pendingMfa);
+      resetMfaState();
+    } catch (error) {
+      console.error('MFA verification failed', error);
+    }
+  };
+
   return {
     handleAuthenticate,
     handlePasswordless,
+    handleSendMfaCode,
+    handleVerifyMfaCode,
+    pendingMfa,
+    isMfaCodeSent,
+    resetMfaState,
     ensureEncryptedDataAccess,
     loadShops,
     isRegistering: registerMutation.isPending,
@@ -624,6 +775,8 @@ export default function useAuth({
       authenticateMutation.isPending ||
       getAuthenticationOptionsMutation.isPending ||
       verifyAuthenticationMutation.isPending ||
-      saveCredentialKeyMaterialMutation.isPending,
+      saveCredentialKeyMaterialMutation.isPending ||
+      sendMfaCodeMutation.isPending ||
+      verifyMfaCodeMutation.isPending,
   };
 }

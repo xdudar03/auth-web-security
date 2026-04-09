@@ -11,7 +11,7 @@ export default function LoginPage() {
   const router = useRouter();
 
   const handleBack = () => {
-    if (tab === 'multi-factor') {
+    if (tab === 'biometric' || tab === 'send-code') {
       setTab('login');
     } else {
       router.push('/');
@@ -29,10 +29,10 @@ export default function LoginPage() {
           >
             <ArrowLeft />
           </Button>
-          {tab === 'login' ? (
-            <FormAuth title="Login" setTab={setTab} />
-          ) : (
+          {tab === 'biometric' ? (
             <BiometricAuth title="Login" action="login" />
+          ) : (
+            <FormAuth title="Login" setTab={setTab} tab={tab} />
           )}
         </div>
       </div>

@@ -11,6 +11,7 @@ export function mapResponseQuery(query: any) {
       firstName: query.firstName,
       lastName: query.lastName,
       isBiometric: query.isBiometric,
+      MFAEnabled: query.MFAEnabled,
       phoneNumber: query.phoneNumber,
       dateOfBirth: query.dateOfBirth,
     },

@@ -50,23 +50,30 @@ export const getProjectionMatrix = (
   if (sourceDimension <= 0 || targetDimension <= 0) {
     throw new Error('Projection dimensions must be positive');
   }
-
+  // creating a cache key for the matrix
   const cacheKey = `${version}:${sourceDimension}:${targetDimension}`;
+  // checking if the matrix is already cached
   const cachedMatrix = matrixCache.get(cacheKey);
+  // if the matrix is already cached, return it
   if (cachedMatrix) {
     return cachedMatrix;
   }
-
+  // seeding the random number generator
   const seed = fnv1a32(cacheKey);
+  // creating a random number generator
   const random = mulberry32(seed);
+  // scaling the values to the target dimension
   const scale = 1 / Math.sqrt(targetDimension);
   const values = new Array<number>(targetDimension * sourceDimension);
 
+  // generating the values for the matrix
   for (let index = 0; index < values.length; index += 1) {
     values[index] = random() < 0.5 ? -scale : scale;
   }
 
+  // creating the matrix
   const matrix = Matrix.from1DArray(targetDimension, sourceDimension, values);
+  // caching the matrix
   matrixCache.set(cacheKey, matrix);
   return matrix;
 };

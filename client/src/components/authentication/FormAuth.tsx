@@ -23,13 +23,16 @@ import PasswordField from './PasswordField';
 import RegistrationFields from './RegistrationFields';
 import TestAccountsDialog from './TestAccountsDialog';
 import { Input } from '@/components/ui/input';
+import EmailMfaStep from './EmailMfaStep';
 
 export default function FormAuth({
   setTab,
   title,
+  tab,
 }: {
   setTab: (tab: string) => void;
   title: string;
+  tab?: string;
 }) {
   const { user, role, isAuthenticated } = useUser();
   const { setJwt } = useJwt();
@@ -39,6 +42,9 @@ export default function FormAuth({
   const [message, setMessage] = useState({ message: '', type: '' });
   const [showRecoveryPassphraseField, setShowRecoveryPassphraseField] =
     useState(false);
+  const [mfaEmail, setMfaEmail] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const previousTabRef = useRef(tab);
   const listShopsQuery = useQuery(trpc.shops.getAllShops.queryOptions());
   const allShops = useMemo(
     () => listShopsQuery.data?.shops ?? [],
@@ -61,7 +67,12 @@ export default function FormAuth({
   const {
     handleAuthenticate,
     handlePasswordless,
+    handleSendMfaCode,
+    handleVerifyMfaCode,
     loadShops,
+    pendingMfa,
+    isMfaCodeSent,
+    resetMfaState,
     isRegistering,
     isAuthenticating,
   } = useAuth({
@@ -81,6 +92,28 @@ export default function FormAuth({
     queryClient.clear();
     setJwt(jwt);
   }
+
+  useEffect(() => {
+    if (!pendingMfa) return;
+    setMfaEmail('');
+    setMfaCode('');
+    setMessage({ message: '', type: '' });
+    setTab('send-code');
+  }, [pendingMfa, setTab]);
+
+  useEffect(() => {
+    const previousTab = previousTabRef.current;
+    previousTabRef.current = tab;
+
+    if (title !== 'Login') return;
+    if (!pendingMfa) return;
+    if (previousTab !== 'send-code' || tab === 'send-code') return;
+
+    resetMfaState();
+    setMfaEmail('');
+    setMfaCode('');
+    setMessage({ message: '', type: '' });
+  }, [tab, title, pendingMfa, resetMfaState]);
 
   const redirectToDashboard = useCallback(() => {
     console.log('redirecting to dashboard', role);
@@ -184,7 +217,7 @@ export default function FormAuth({
     //   setMessage({ message: 'Username is required', type: 'error' });
     //   return;
     // }
-    setTab('multi-factor');
+    setTab('biometric');
   };
   const loginAs = useCallback(
     (username: string, password: string) => {
@@ -213,60 +246,89 @@ export default function FormAuth({
     <div className="flex flex-col items-center justify-center p-6 bg-surface rounded gap-6">
       <h2 className="text-xl font-semibold">{title}</h2>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="form">
-          <UsernameField form={form} />
-
-          {title === 'Registration' && (
-            <RegistrationFields
-              form={form}
-              allShops={allShops}
-              loadShops={loadShops}
-              isLoadingShops={listShopsQuery.isLoading}
+        <form
+          onSubmit={
+            pendingMfa
+              ? (event) => event.preventDefault()
+              : form.handleSubmit(onSubmit)
+          }
+          className="form"
+        >
+          
+          {pendingMfa ? (
+            <EmailMfaStep
+              factorLabel={
+                pendingMfa.method === 'password'
+                  ? 'Password sign-in'
+                  : 'Passwordless sign-in'
+              }
+              email={mfaEmail}
+              code={mfaCode}
+              isCodeSent={isMfaCodeSent}
+              isSending={isAuthenticating}
+              isVerifying={isAuthenticating}
+              onEmailChange={setMfaEmail}
+              onCodeChange={setMfaCode}
+              onSendCode={() => void handleSendMfaCode(mfaEmail)}
+              onVerifyCode={() => void handleVerifyMfaCode(mfaCode)}
             />
-          )}
-
-          <PasswordField form={form} title={title} />
-
-          {title === 'Login' && (
+          ) : (
             <>
-              {!showRecoveryPassphraseField ? (
-                <div className="w-full">
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="p-0 h-auto self-start"
-                    onClick={() => setShowRecoveryPassphraseField(true)}
-                  >
-                    Use recovery passphrase for this device
-                  </Button>
-                  <p className="text-xs text-muted mt-1">
-                    If this is a new device, enter your recovery passphrase once
-                    to unlock encrypted profile data.
-                  </p>
-                </div>
-              ) : (
-                <FormField
-                  control={form.control}
-                  name="recoveryPassphrase"
-                  render={({ field }) => (
-                    <FormItem className="form-field">
-                      <FormLabel>Recovery Passphrase</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="password"
-                          placeholder="Optional: unlock encrypted profile on this device"
-                          autoComplete="current-password"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Needed only when this browser does not have your private
-                        key yet.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+              <UsernameField form={form} />
+
+              {title === 'Registration' && (
+                <RegistrationFields
+                  form={form}
+                  allShops={allShops}
+                  loadShops={loadShops}
+                  isLoadingShops={listShopsQuery.isLoading}
                 />
+              )}
+
+              <PasswordField form={form} title={title} />
+
+              {title === 'Login' && (
+                <>
+                  {!showRecoveryPassphraseField ? (
+                    <div className="w-full">
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="p-0 h-auto self-start"
+                        onClick={() => setShowRecoveryPassphraseField(true)}
+                      >
+                        Use recovery passphrase for this device
+                      </Button>
+                      <p className="text-xs text-muted mt-1">
+                        If this is a new device, enter your recovery passphrase
+                        once to unlock encrypted profile data.
+                      </p>
+                    </div>
+                  ) : (
+                    <FormField
+                      control={form.control}
+                      name="recoveryPassphrase"
+                      render={({ field }) => (
+                        <FormItem className="form-field">
+                          <FormLabel>Recovery Passphrase</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="password"
+                              placeholder="Optional: unlock encrypted profile on this device"
+                              autoComplete="current-password"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Needed only when this browser does not have your
+                            private key yet.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </>
               )}
             </>
           )}
@@ -281,45 +343,49 @@ export default function FormAuth({
             </div>
           )}
 
-          <div className="flex items-center justify-between flex-col">
-            {title === 'Login' && (
-              <div className="w-full">
+          {!pendingMfa && (
+            <div className="flex items-center justify-between flex-col">
+              {title === 'Login' && (
+                <div className="w-full">
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="shadow-none self-center w-full p-0"
+                    onClick={onPasswordless}
+                  >
+                    Use passwordless {title.toLowerCase()}
+                  </Button>
+                  <p className="text-xs text-muted text-center mt-1">
+                    New device? You may need your recovery passphrase once.
+                  </p>
+                </div>
+              )}
+              {title === 'Login' && (
                 <Button
                   type="button"
                   variant="link"
                   className="shadow-none self-center w-full p-0"
-                  onClick={onPasswordless}
+                  onClick={handleBiometric}
                 >
-                  Use passwordless {title.toLowerCase()}
+                  Use biometric login
                 </Button>
-                <p className="text-xs text-muted text-center mt-1">
-                  New device? You may need your recovery passphrase once.
-                </p>
-              </div>
-            )}
-            <Button
-              type="button"
-              variant="link"
-              className="shadow-none self-center w-full p-0"
-              onClick={handleBiometric}
-            >
-              Use biometric {title.toLowerCase()}
-            </Button>
-            {title === 'Login' && (
-              <TestAccountsDialog
-                disabled={isAuthenticating}
-                onSelect={loginAs}
-              />
-            )}
+              )}
+              {title === 'Login' && (
+                <TestAccountsDialog
+                  disabled={isAuthenticating}
+                  onSelect={loginAs}
+                />
+              )}
 
-            <Button
-              type="submit"
-              className="w-full p-0"
-              disabled={isRegistering || isAuthenticating}
-            >
-              {title}
-            </Button>
-          </div>
+              <Button
+                type="submit"
+                className="w-full p-0"
+                disabled={isRegistering || isAuthenticating}
+              >
+                {title}
+              </Button>
+            </div>
+          )}
         </form>
       </Form>
     </div>
