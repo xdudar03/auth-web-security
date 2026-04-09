@@ -33,28 +33,6 @@ function parseCredentials(
   }
 }
 
-function maskEmail(email: string): string {
-  const [localPart, domain] = email.trim().split("@");
-  if (!localPart || !domain) {
-    return email;
-  }
-
-  const maskedLocal =
-    localPart.length <= 2
-      ? `${localPart[0] ?? ""}*`
-      : `${localPart.slice(0, 2)}${"*".repeat(Math.max(1, localPart.length - 2))}`;
-
-  const domainParts = domain.split(".");
-  const domainName = domainParts[0] ?? "";
-  const suffix = domainParts.slice(1).join(".");
-  const maskedDomain =
-    domainName.length <= 1
-      ? `${domainName}*`
-      : `${domainName[0]}${"*".repeat(Math.max(1, domainName.length - 1))}`;
-
-  return `${maskedLocal}@${maskedDomain}${suffix ? `.${suffix}` : ""}`;
-}
-
 function buildSuccessResponse(
   user: User,
   firstFactor: AuthFactorMethod,
@@ -62,11 +40,11 @@ function buildSuccessResponse(
 ) {
   const matchingCredential =
     firstFactor === "passwordless" && session?.verifiedCredentialId
-    ? parseCredentials(user.credentials ?? null).find(
-        (credential) =>
-          credential.credentialID === session.verifiedCredentialId,
-      )
-    : null;
+      ? parseCredentials(user.credentials ?? null).find(
+          (credential) =>
+            credential.credentialID === session.verifiedCredentialId,
+        )
+      : null;
 
   return {
     requiresMfa: false as const,
@@ -150,7 +128,6 @@ export async function sendMfaCode(email: string, session?: ChallengeSession) {
 
   const code = crypto.randomInt(100000, 1000000).toString(); // 6 digit code
   const expiresAt = new Date(Date.now() + MFA_CODE_TTL_MS).toISOString();
-  const maskedEmail = maskEmail(email);
 
   const delivery = await sendEmail(
     email,
@@ -177,8 +154,7 @@ export async function sendMfaCode(email: string, session?: ChallengeSession) {
   );
 
   return {
-    message: `Verification code sent to ${maskedEmail}`,
-    maskedEmail,
+    message: `Verification code sent to ${email}`,
   };
 }
 
