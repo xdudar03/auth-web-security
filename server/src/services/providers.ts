@@ -26,6 +26,7 @@ type SetProviderAccessInput = {
   userIv?: string | null;
   userEncapPubKey?: string | null;
   userVersion?: number;
+  sharingAllowed?: boolean;
 };
 
 function ensureUserCanManageProvider(userId: string, providerId: string) {
@@ -72,6 +73,9 @@ export function listProvidersForUser(userId: string) {
         (row) =>
           row.providerId === providerId && row.visibility === "anonymized",
       );
+      const providerSharedData = sharedData.find(
+        (row) => row.providerId === providerId,
+      );
 
       const currentVisibility: ProviderAccessVisibility = hasVisibleAccess
         ? "visible"
@@ -92,6 +96,7 @@ export function listProvidersForUser(userId: string) {
         hpkePublicKeyB64: providerUser.hpkePublicKeyB64 ?? null,
         currentVisibility,
         shops,
+        sharingAllowed: providerSharedData?.sharingAllowed ?? true,
       };
     })
     .filter((provider) => provider !== null);
@@ -146,6 +151,7 @@ export function setProviderDataAccess(
     userIv: input.userIv,
     userEncapPubKey: input.userEncapPubKey,
     userVersion: input.userVersion ?? 1,
+    sharingAllowed: input.sharingAllowed ?? true,
   };
 
   const existing = getProviderSharedDataByUserId(
@@ -196,7 +202,7 @@ export function getSharedUserDataForProvider(
     userId,
     "visible",
   );
-  if (visibleData) {
+  if (visibleData && visibleData.sharingAllowed !== false) {
     return visibleData;
   }
 
@@ -205,7 +211,7 @@ export function getSharedUserDataForProvider(
     userId,
     "anonymized",
   );
-  if (anonymizedData) {
+  if (anonymizedData && anonymizedData.sharingAllowed !== false) {
     return anonymizedData;
   }
 

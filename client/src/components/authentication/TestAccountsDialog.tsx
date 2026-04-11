@@ -1,7 +1,9 @@
 import { Button } from '@/components/ui/button';
+import type { ButtonProps } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -11,9 +13,15 @@ import {
 export default function TestAccountsDialog({
   disabled,
   onSelect,
+  triggerClassName,
+  triggerVariant = 'link',
+  triggerLabel = 'Use test account',
 }: {
   disabled: boolean;
   onSelect: (username: string, password: string) => void;
+  triggerClassName?: string;
+  triggerVariant?: ButtonProps['variant'];
+  triggerLabel?: string;
 }) {
   const testAccounts = [
     { label: 'Admin', username: 'admin', password: 'admin' },
@@ -32,15 +40,19 @@ export default function TestAccountsDialog({
       <DialogTrigger asChild>
         <Button
           type="button"
-          variant="link"
-          className="shadow-none self-center w-full p-0"
+          variant={triggerVariant}
+          className={triggerClassName}
+          disabled={disabled}
         >
-          Use test account
+          {triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Select a test account</DialogTitle>
+          <DialogDescription>
+            Use a seeded account to jump into a specific role or privacy setup.
+          </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2">
           {testAccounts.map((acc) => (

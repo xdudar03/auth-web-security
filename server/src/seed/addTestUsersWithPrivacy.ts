@@ -387,6 +387,7 @@ async function seedProviderSharedDataForUser(userRecord: UserRecord) {
       userIv: encryptedShare.userIv,
       userEncapPubKey: encryptedShare.userEncapPubKey,
       userVersion: 1,
+      sharingAllowed: true,
     });
   }
 }

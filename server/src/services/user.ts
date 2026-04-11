@@ -149,7 +149,7 @@ export async function authenticateUser(
       ? { ...user, hpkePublicKeyB64 }
       : user;
 
-  addUserActivity(user.userId, "User authenticated (password-based login");
+  addUserActivity(user.userId, "User authenticated (password-based login)");
 
   return completePrimaryAuthentication(resolvedUser, "password", session);
 }

@@ -15,11 +15,14 @@ import {
 import type { FormValues } from '@/lib/anonymization/anonymizationHandlers';
 import type { Visibility } from '../../../server/src/types/privacySetting';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 type ProviderForSharing = {
   providerId: string;
+  name: string;
   hpkePublicKeyB64: string | null;
+  currentVisibility: 'hidden' | 'anonymized' | 'visible';
+  sharingAllowed: boolean;
 };
 
 type UseProviderDataAccessSyncParams = {
@@ -46,9 +49,15 @@ export const useProviderDataAccessSync = ({
       enabled: Boolean(userId),
     });
 
-  const providersForSharing =
-    (providersForSharingData?.providers as ProviderForSharing[] | undefined) ??
-    [];
+  const providersForSharing = useMemo(() => {
+    return (
+      (providersForSharingData?.providers as
+        | ProviderForSharing[]
+        | undefined) ?? []
+    );
+  }, [providersForSharingData]);
+
+  console.log('providersForSharing', providersForSharing);
 
   const setProviderDataAccessMutation = useMutation(
     trpc.user.setProviderDataAccess.mutationOptions({
@@ -73,6 +82,7 @@ export const useProviderDataAccessSync = ({
       options?: {
         privacyOverride?: { field: string; visibility: Visibility };
         anonymizedSnapshot?: AnonymizedSnapshot;
+        sharingOverride?: Record<string, boolean>;
       }
     ) => {
       if (!userId) {
@@ -104,10 +114,15 @@ export const useProviderDataAccessSync = ({
 
       await Promise.all(
         providers.map(async (provider) => {
+          const sharingAllowed =
+            options?.sharingOverride?.[provider.providerId] ??
+            provider.sharingAllowed;
+
           if (mode === 'hidden' || !provider.hpkePublicKeyB64) {
             await setProviderDataAccessMutation.mutateAsync({
               providerId: provider.providerId,
               visibility: 'hidden',
+              sharingAllowed,
             });
             return;
           }
@@ -128,6 +143,7 @@ export const useProviderDataAccessSync = ({
             userIv: encryptedPayload.ivB64,
             userEncapPubKey: encryptedPayload.encapPublicKeyB64,
             userVersion: 1,
+            sharingAllowed,
           });
         })
       );
@@ -171,6 +187,21 @@ export const useProviderDataAccessSync = ({
   ]);
 
   return {
+    providersForSharing,
+    updateProviderSharingPreferences: async (blockedProviderIds: string[]) => {
+      const sharingOverride = Object.fromEntries(
+        providersForSharing.map((provider) => [
+          provider.providerId,
+          !blockedProviderIds.includes(provider.providerId),
+        ])
+      );
+
+      await syncProviderAccessFromForm(getCurrentFormValues(), {
+        sharingOverride,
+      });
+      await refetchProvidersForSharing();
+    },
+    isUpdatingProviderSharing: setProviderDataAccessMutation.isPending,
     syncProviderAccessFromForm,
   };
 };

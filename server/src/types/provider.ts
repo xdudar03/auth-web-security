@@ -17,6 +17,7 @@ export const ProviderSharedData = z.object({
   userIv: z.string().nullable(),
   userEncapPubKey: z.string().nullable(),
   userVersion: z.optional(z.number()),
+  sharingAllowed: z.optional(z.boolean()),
 });
 
 export type ProviderSharedData = z.infer<typeof ProviderSharedData>;

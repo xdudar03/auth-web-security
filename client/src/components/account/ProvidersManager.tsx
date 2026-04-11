@@ -1,28 +1,54 @@
 import { MultiSelect } from '@/components/ui/multi-select';
-import { useMemo, useState } from 'react';
-import { Shop, useUser } from '@/hooks/useUserContext';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../ui/button';
 
-export default function AccountProvidersManager() {
+type ProviderOption = {
+  providerId: string;
+  name: string;
+  sharingAllowed: boolean;
+};
+
+type AccountProvidersManagerProps = {
+  providers: ProviderOption[];
+  onUpdateProviderSharing: (blockedProviderIds: string[]) => Promise<void>;
+  isUpdating: boolean;
+};
+
+export default function AccountProvidersManager({
+  providers,
+  onUpdateProviderSharing,
+  isUpdating,
+}: AccountProvidersManagerProps) {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
-  const [sharePL, setSharePL] = useState<'yes' | 'no' | 'custom'>('yes');
+  const [sharePL, setSharePL] = useState<'yes' | 'custom'>('yes');
   const [shareDataExternal, setShareDataExternal] = useState<
     'yes' | 'no' | 'custom'
   >('no');
   const [customExternalProviders, setCustomExternalProviders] = useState<
     string[]
   >([]);
-  const { shops } = useUser();
+
+  useEffect(() => {
+    const blockedProviderIds = providers
+      .filter((provider) => !provider.sharingAllowed)
+      .map((provider) => provider.providerId);
+
+    setSelectedOptions(blockedProviderIds);
+    setSharePL(blockedProviderIds.length > 0 ? 'custom' : 'yes');
+  }, [providers]);
+
   const providerOptions = useMemo(
     () =>
-      shops?.map((shop: Shop) => ({
-        value: shop.shopId.toString(),
-        label: shop.shopName,
-      })) ?? [],
-    [shops]
+      providers.map((provider) => ({
+        value: provider.providerId,
+        label: provider.name,
+      })),
+    [providers]
   );
-  const handleSelectedOptionsChange = (options: string[]) => {
+
+  const handleSelectedOptionsChange = async (options: string[]) => {
     setSelectedOptions(options);
+    await onUpdateProviderSharing(options);
   };
 
   return (
@@ -43,13 +69,19 @@ export default function AccountProvidersManager() {
                   <Button
                     variant={sharePL === 'yes' ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => setSharePL('yes')}
+                    disabled={isUpdating}
+                    onClick={() => {
+                      setSharePL('yes');
+                      setSelectedOptions([]);
+                      void onUpdateProviderSharing([]);
+                    }}
                   >
                     Yes
                   </Button>
                   <Button
                     variant={sharePL === 'custom' ? 'default' : 'outline'}
                     size="sm"
+                    disabled={isUpdating}
                     onClick={() => setSharePL('custom')}
                   >
                     Customize...
@@ -61,13 +93,15 @@ export default function AccountProvidersManager() {
               {sharePL === 'custom' && (
                 <div className="border-t border-border/50 pt-4">
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-2">
-                    Select Providers
+                    Do Not Share With These Providers
                   </label>
                   <MultiSelect
                     options={providerOptions}
-                    onValueChange={handleSelectedOptionsChange}
+                    onValueChange={(options) => {
+                      void handleSelectedOptionsChange(options);
+                    }}
                     value={selectedOptions}
-                    placeholder="Choose providers to customize..."
+                    placeholder="Choose providers to block..."
                     searchable={true}
                     autoSize={true}
                     singleLine={true}
@@ -85,6 +119,12 @@ export default function AccountProvidersManager() {
                 {sharePL === 'yes' && (
                   <p className="text-xs text-muted-foreground mt-2">
                     ✓ Selected
+                  </p>
+                )}
+                {sharePL === 'custom' && selectedOptions.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Blocking {selectedOptions.length} provider
+                    {selectedOptions.length === 1 ? '' : 's'}
                   </p>
                 )}
               </div>

@@ -193,7 +193,9 @@ export const appRouter = router({
         }),
       )
       .mutation(({ input }) =>
-        execute(() => predictCompareFromEmbedding(input.embedding, input.userId)),
+        execute(() =>
+          predictCompareFromEmbedding(input.embedding, input.userId),
+        ),
       ),
   }),
   passwordless: router({
@@ -351,7 +353,9 @@ export const appRouter = router({
         }),
       )
       .mutation(({ input, ctx }) =>
-        execute(() => sendMfaCode(input.email, ctx.req.session as ChallengeSession)),
+        execute(() =>
+          sendMfaCode(input.email, ctx.req.session as ChallengeSession),
+        ),
       ),
     verifyMfaCode: publicProcedure
       .input(
@@ -360,7 +364,9 @@ export const appRouter = router({
         }),
       )
       .mutation(({ input, ctx }) =>
-        execute(() => verifyMfaCode(input.code, ctx.req.session as ChallengeSession)),
+        execute(() =>
+          verifyMfaCode(input.code, ctx.req.session as ChallengeSession),
+        ),
       ),
     register: publicProcedure
       .input(
@@ -396,7 +402,9 @@ export const appRouter = router({
         }),
       )
       .mutation(({ input, ctx }) =>
-        execute(() => authenticateUser(input, ctx.req.session as ChallengeSession)),
+        execute(() =>
+          authenticateUser(input, ctx.req.session as ChallengeSession),
+        ),
       ),
     addUserPrivateData: publicProcedure
       .input(
@@ -475,6 +483,7 @@ export const appRouter = router({
           userIv: z.string().nullable().optional(),
           userEncapPubKey: z.string().nullable().optional(),
           userVersion: z.number().optional(),
+          sharingAllowed: z.boolean().optional(),
         }),
       )
       .mutation(({ input, ctx }) => {
@@ -494,6 +503,7 @@ export const appRouter = router({
           userIv?: string | null;
           userEncapPubKey?: string | null;
           userVersion?: number;
+          sharingAllowed?: boolean;
         } = {
           providerId: input.providerId,
           visibility: input.visibility,
@@ -513,6 +523,9 @@ export const appRouter = router({
         }
         if (input.userVersion !== undefined) {
           payload.userVersion = input.userVersion;
+        }
+        if (input.sharingAllowed !== undefined) {
+          payload.sharingAllowed = input.sharingAllowed;
         }
 
         return execute(() => setProviderDataAccess(currentUserId, payload));

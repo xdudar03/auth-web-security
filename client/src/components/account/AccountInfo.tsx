@@ -102,7 +102,12 @@ export default function AccountInfo() {
     updatePrivateData: updateUserPrivateDataMutation.mutateAsync,
   });
 
-  const { syncProviderAccessFromForm } = useProviderDataAccessSync({
+  const {
+    syncProviderAccessFromForm,
+    providersForSharing,
+    updateProviderSharingPreferences,
+    isUpdatingProviderSharing,
+  } = useProviderDataAccessSync({
     userId: user?.userId,
     privacy,
     providerVisibleValues,
@@ -351,7 +356,11 @@ export default function AccountInfo() {
             messages={messages}
             onToggleVisibility={handleToggleVisibility}
           />
-          <ProvidersManager />
+          <ProvidersManager
+            providers={providersForSharing}
+            onUpdateProviderSharing={updateProviderSharingPreferences}
+            isUpdating={isUpdatingProviderSharing}
+          />
         </form>
       </Form>
     </div>

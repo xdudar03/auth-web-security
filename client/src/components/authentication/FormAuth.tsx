@@ -24,6 +24,7 @@ import RegistrationFields from './RegistrationFields';
 import TestAccountsDialog from './TestAccountsDialog';
 import { Input } from '@/components/ui/input';
 import EmailMfaStep from './EmailMfaStep';
+import { FlaskConical, KeyRound, ScanFace } from 'lucide-react';
 
 export default function FormAuth({
   setTab,
@@ -242,6 +243,26 @@ export default function FormAuth({
     },
     [form, handleAuthenticate]
   );
+
+  const loginMethodRows = [
+    {
+      id: 'passwordless',
+      title: 'Passwordless login',
+      description: 'Sign in with your saved passkey after entering your username.',
+      icon: KeyRound,
+      actionLabel: 'Continue',
+      onClick: onPasswordless,
+    },
+    {
+      id: 'biometric',
+      title: 'Biometric login',
+      description: 'Switch to face or fingerprint authentication for this account.',
+      icon: ScanFace,
+      actionLabel: 'Use biometric',
+      onClick: handleBiometric,
+    },
+  ] as const;
+
   return (
     <div className="flex flex-col items-center justify-center p-6 bg-surface rounded gap-6">
       <h2 className="text-xl font-semibold">{title}</h2>
@@ -254,7 +275,6 @@ export default function FormAuth({
           }
           className="form"
         >
-          
           {pendingMfa ? (
             <EmailMfaStep
               factorLabel={
@@ -344,39 +364,7 @@ export default function FormAuth({
           )}
 
           {!pendingMfa && (
-            <div className="flex items-center justify-between flex-col">
-              {title === 'Login' && (
-                <div className="w-full">
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="shadow-none self-center w-full p-0"
-                    onClick={onPasswordless}
-                  >
-                    Use passwordless {title.toLowerCase()}
-                  </Button>
-                  <p className="text-xs text-muted text-center mt-1">
-                    New device? You may need your recovery passphrase once.
-                  </p>
-                </div>
-              )}
-              {title === 'Login' && (
-                <Button
-                  type="button"
-                  variant="link"
-                  className="shadow-none self-center w-full p-0"
-                  onClick={handleBiometric}
-                >
-                  Use biometric login
-                </Button>
-              )}
-              {title === 'Login' && (
-                <TestAccountsDialog
-                  disabled={isAuthenticating}
-                  onSelect={loginAs}
-                />
-              )}
-
+            <div className="flex flex-col gap-4">
               <Button
                 type="submit"
                 className="w-full p-0"
@@ -384,6 +372,71 @@ export default function FormAuth({
               >
                 {title}
               </Button>
+
+              {title === 'Login' && (
+                <div className="w-full border-t border-border/60 pt-3">
+                  <div className="mb-2 space-y-0.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                      Other sign-in methods
+                    </p>
+                    <p className="text-xs text-muted">
+                      Alternative ways to sign in.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    {loginMethodRows.map((method) => {
+                      const Icon = method.icon;
+
+                      return (
+                        <div
+                          key={method.id}
+                          className="flex flex-col gap-2 rounded-md border border-border/60 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="flex items-start gap-3">
+                            <Icon className="mt-0.5 h-4 w-4 text-muted" />
+                            <div>
+                              <p className="text-sm font-medium">{method.title}</p>
+                              <p className="text-xs text-muted">
+                                {method.description}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            disabled={isAuthenticating}
+                            onClick={method.onClick}
+                          >
+                            {method.actionLabel}
+                          </Button>
+                        </div>
+                      );
+                    })}
+
+                    <div className="flex flex-col gap-2 rounded-md border border-border/60 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-3">
+                        <FlaskConical className="mt-0.5 h-4 w-4 text-muted" />
+                        <div>
+                          <p className="text-sm font-medium">Use test account</p>
+                          <p className="text-xs text-muted">
+                            Try a seeded role or privacy setup.
+                          </p>
+                        </div>
+                      </div>
+                      <TestAccountsDialog
+                        disabled={isAuthenticating}
+                        onSelect={loginAs}
+                        triggerVariant="outline"
+                        triggerClassName="w-full sm:w-auto"
+                        triggerLabel="Choose account"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </form>

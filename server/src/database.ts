@@ -80,6 +80,7 @@ const initTable = () => {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     providerId TEXT NOT NULL,
     userId TEXT NOT NULL,
+    sharingAllowed BOOLEAN NOT NULL DEFAULT TRUE,
     visibility TEXT NOT NULL, -- 'anonymized' | 'visible'
     providerPublicKeyHash TEXT NOT NULL, -- hash of the provider's public key
     
@@ -702,11 +703,17 @@ const normalizeProviderSharedDataBlob = (value: unknown): unknown => {
 const normalizeProviderSharedDataRow = (
   row: Record<string, unknown>,
 ): Record<string, unknown> => {
+  const sharingAllowed =
+    typeof row.sharingAllowed === "number"
+      ? row.sharingAllowed !== 0
+      : row.sharingAllowed;
+
   return {
     ...row,
     userCipher: normalizeProviderSharedDataBlob(row.userCipher),
     userIv: normalizeProviderSharedDataBlob(row.userIv),
     userEncapPubKey: normalizeProviderSharedDataBlob(row.userEncapPubKey),
+    sharingAllowed,
   };
 };
 
@@ -766,7 +773,7 @@ const addProvider = (providerId: string, name?: string | null) => {
 };
 
 const addProviderSharedDataQuery = db.prepare(
-  `INSERT INTO providers_shared_data (providerId, userId, visibility, providerPublicKeyHash, userCipher, userIv, userEncapPubKey, userVersion) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  `INSERT INTO providers_shared_data (providerId, userId, visibility, providerPublicKeyHash, userCipher, userIv, userEncapPubKey, userVersion, sharingAllowed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 );
 
 const addProviderSharedData = (providerSharedData: ProviderSharedData) => {
@@ -779,11 +786,12 @@ const addProviderSharedData = (providerSharedData: ProviderSharedData) => {
     providerSharedData.userIv,
     providerSharedData.userEncapPubKey,
     providerSharedData.userVersion ?? 1,
+    providerSharedData.sharingAllowed ? 1 : 0,
   );
 };
 
 const updateProviderSharedDataQuery = db.prepare(
-  `UPDATE providers_shared_data SET providerPublicKeyHash = ?, userCipher = ?, userIv = ?, userEncapPubKey = ?, userVersion = ?, updatedAt = CURRENT_TIMESTAMP WHERE providerId = ? AND userId = ? AND visibility = ?`,
+  `UPDATE providers_shared_data SET providerPublicKeyHash = ?, userCipher = ?, userIv = ?, userEncapPubKey = ?, userVersion = ?, sharingAllowed = ?, updatedAt = CURRENT_TIMESTAMP WHERE providerId = ? AND userId = ? AND visibility = ?`,
 );
 
 const updateProviderSharedData = (providerSharedData: ProviderSharedData) => {
@@ -793,6 +801,7 @@ const updateProviderSharedData = (providerSharedData: ProviderSharedData) => {
     providerSharedData.userIv,
     providerSharedData.userEncapPubKey,
     providerSharedData.userVersion ?? 1,
+    providerSharedData.sharingAllowed ? 1 : 0,
     providerSharedData.providerId,
     providerSharedData.userId,
     providerSharedData.visibility,
