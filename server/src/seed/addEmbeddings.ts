@@ -19,6 +19,12 @@ import {
 } from "../lib/randomProjection.ts";
 import { Matrix } from "ml-matrix";
 
+const SAMPLE_EMBEDDINGS_FILE = path.resolve(
+  process.cwd(),
+  "data",
+  "sampleEmbeddings.json",
+);
+
 const RP_TARGET_DIMENSION = 1024;
 const RP_VERSION = "rp-v1";
 
@@ -263,11 +269,14 @@ const addEmbeddings = async () => {
     }
   }
 
+  const sampleEmbeddings = [];
+
   for (const [userId, embeddings] of embeddingsByUser.entries()) {
     if (!embeddings.length) {
       continue;
     }
-
+    // write embeddings to file [{ userId, embeddings: [embedding1, embedding2, ...] }]
+    sampleEmbeddings.push({ userId, embeddings });
     addUserEmbedding(userId, JSON.stringify(embeddings));
   }
 
@@ -275,9 +284,11 @@ const addEmbeddings = async () => {
     if (!embeddings.length) {
       continue;
     }
-
+    // write embeddings to file [{ customerId, embeddings: [embedding1, embedding2, ...] }]
+    sampleEmbeddings.push({ customerId, embeddings });
     addCustomerEmbedding(customerId, JSON.stringify(embeddings));
   }
+  fs.writeFileSync(SAMPLE_EMBEDDINGS_FILE, JSON.stringify(sampleEmbeddings));
   addCustomerToShop("c109", 1);
   addCustomerToShop("c110", 2);
   addCustomerToShop("c111", 3);
