@@ -1,7 +1,8 @@
 {
   "scripts": {
     "dev": "npx tsx src/server.ts",
-    "start": "node --import tsx src/server.ts"
+    "start": "node --import tsx src/server.ts",
+    "perf:sweep": "tsx ./src/runPerformanceSweep.ts"
   },
   "type": "module",
   "devDependencies": {
@@ -10,7 +11,7 @@
     "@types/express-session": "^1.18.2",
     "@types/form-data": "^2.5.0",
     "@types/k6": "^1.7.0",
-    "@types/node": "^24.5.1",
+    "@types/node": "^24.12.2",
     "@types/nodemailer": "^7.0.3",
     "@types/sharp": "^0.31.1",
     "eslint": "^9.35.0",

@@ -98,3 +98,5 @@ build/
 /server/src/users.json
 /server/data/*
 !/server/yalefaces/**
+
+/server/perf-results/*

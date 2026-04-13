@@ -2,6 +2,7 @@ import http from "k6/http";
 import { check } from "k6";
 import { SharedArray } from "k6/data";
 import exec from "k6/execution";
+import { Counter, Rate, Trend } from "k6/metrics";
 
 type SampleEmbedding = {
   userId?: string;
@@ -9,8 +10,40 @@ type SampleEmbedding = {
   embeddings: unknown;
 };
 
-const sampleEmbeddingsPath = "./data/sampleEmbeddings.json";
-const maxVus = Number(__ENV.MAX_VUS) || 50;
+type PerfMode = "verify" | "predict" | "both";
+
+function envInt(name: string, fallback: number): number {
+  const rawValue = __ENV[name];
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`Invalid ${name}: ${rawValue}`);
+  }
+
+  return Math.floor(parsed);
+}
+
+function parseMode(rawMode: string | undefined): PerfMode {
+  switch ((rawMode || "both").trim().toLowerCase()) {
+    case "verify":
+      return "verify";
+    case "predict":
+      return "predict";
+    case "both":
+      return "both";
+    default:
+      throw new Error(`Invalid MODEL_PERF_MODE: ${rawMode}`);
+  }
+}
+
+const sampleEmbeddingsPath =
+  __ENV.SAMPLE_EMBEDDINGS_PATH || "./data/sampleEmbeddings.json";
+const maxVus = Math.max(1, envInt("MAX_VUS", 50));
+const latencyThresholdMs = envInt("LATENCY_THRESHOLD_MS", 0);
+const mode = parseMode(__ENV.MODEL_PERF_MODE);
 
 const sampleEmbeddings = new SharedArray("sample embeddings", () => {
   return JSON.parse(open(sampleEmbeddingsPath)) as SampleEmbedding[];
@@ -37,6 +70,13 @@ const jsonHeaders = {
   "Content-Type": "application/json",
 };
 
+const verifyDuration = new Trend("verify_duration", true);
+const predictDuration = new Trend("predict_duration", true);
+const verifyFailRate = new Rate("verify_fail_rate");
+const predictFailRate = new Rate("predict_fail_rate");
+const verifyRequests = new Counter("verify_requests");
+const predictRequests = new Counter("predict_requests");
+
 function buildScenario(scenarioName: string) {
   const warmupVus = Math.min(2, maxVus);
 
@@ -54,16 +94,49 @@ function buildScenario(scenarioName: string) {
   };
 }
 
-export const options = {
-  scenarios: {
+function buildScenarios() {
+  if (mode === "verify") {
+    return {
+      verify: buildScenario("verifyUsers"),
+    };
+  }
+
+  if (mode === "predict") {
+    return {
+      predict: buildScenario("predictCustomers"),
+    };
+  }
+
+  return {
     verify: buildScenario("verifyUsers"),
     predict: buildScenario("predictCustomers"),
-  },
-  thresholds: {
+  };
+}
+
+function buildThresholds(): Record<string, string[]> {
+  const thresholds: Record<string, string[]> = {
     http_req_failed: ["rate<0.01"],
-    "http_req_duration{endpoint:verify}": ["p(95)<2000"],
-    "http_req_duration{endpoint:predict}": ["p(95)<2000"],
-  },
+  };
+
+  if (latencyThresholdMs <= 0) {
+    return thresholds;
+  }
+
+  if (mode !== "predict") {
+    thresholds.verify_duration = [`p(95)<${latencyThresholdMs}`];
+  }
+
+  if (mode !== "verify") {
+    thresholds.predict_duration = [`p(95)<${latencyThresholdMs}`];
+  }
+
+  return thresholds;
+}
+
+export const options = {
+  scenarios: buildScenarios(),
+  thresholds: buildThresholds(),
+  summaryTrendStats: ["avg", "min", "med", "max", "p(90)", "p(95)", "p(99)"],
 };
 
 function sampleAtIndex<T>(items: T[]): T {
@@ -87,6 +160,10 @@ export function verifyUsers() {
     },
   );
 
+  verifyRequests.add(1);
+  verifyDuration.add(response.timings.duration);
+  verifyFailRate.add(response.status !== 200);
+
   check(response, {
     "verify status is 200": (r) => r.status === 200,
     "verify body is present": (r) =>
@@ -108,6 +185,10 @@ export function predictCustomers() {
       },
     },
   );
+
+  predictRequests.add(1);
+  predictDuration.add(response.timings.duration);
+  predictFailRate.add(response.status !== 200);
 
   check(response, {
     "predict status is 200": (r) => r.status === 200,
