@@ -104,7 +104,7 @@ test.describe('Authentication - Login', () => {
     await page.goto('/login');
 
     // Click on test accounts button
-    await page.getByRole('button', { name: /use test account/i }).click();
+    await page.getByRole('button', { name: /choose account/i }).click();
 
     // Check dialog is visible
     await expect(page.getByRole('dialog')).toBeVisible();
@@ -122,7 +122,7 @@ test.describe('Authentication - Login', () => {
     await page.goto('/login');
 
     // Open test accounts dialog
-    await page.getByRole('button', { name: /use test account/i }).click();
+    await page.getByRole('button', { name: /choose account/i }).click();
 
     // Click on User account
     await page.getByRole('button', { name: /^user$/i }).click();
