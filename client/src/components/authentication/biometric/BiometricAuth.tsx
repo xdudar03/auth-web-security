@@ -162,12 +162,12 @@ export default function BiometricAuth({
             isButtonDisabled={isButtonDisabled}
             buttonLabel={buttonLabel}
           />
-          <BiometricImagePreviews
+          {/* <BiometricImagePreviews
             hasCapturedImage={hasCapturedImage}
             capturedImageUrl={capturedImageUrl}
             reconstructedImageUrl={reconstructedImageUrl}
             targetSize={TARGET_SIZE}
-          />
+          /> */}
         </>
       )}
     </div>

@@ -90,8 +90,7 @@ build/
 
 /model/analysis/visualizations_subject_1_pipeline
 
-/model/data/gui_database.db
-/model/data/ml_models/
+/model/data/*
 /model/data/dataset-lfw_reconstructed/
 /model/data/dataset-yalefaces/
 

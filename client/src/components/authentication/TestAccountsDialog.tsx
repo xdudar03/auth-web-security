@@ -48,9 +48,9 @@ export default function TestAccountsDialog({
         </Button>
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader>
+        <DialogHeader className="flex flex-col gap-2 items-center">
           <DialogTitle>Select a test account</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-center">
             Use a seeded account to jump into a specific role or privacy setup.
           </DialogDescription>
         </DialogHeader>
