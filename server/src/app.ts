@@ -5,6 +5,7 @@ import { CORS_ORIGINS, SESSION_SECRET } from "./config.ts";
 import { createContext } from "./tools/trpc.ts";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import { appRouter } from "./router.ts";
+import { createSessionStore } from "./sessionStore.ts";
 
 export type { AppRouter } from "./router.ts";
 
@@ -24,9 +25,14 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(
   session({
+    store: createSessionStore(),
     secret: SESSION_SECRET,
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
+    cookie: {
+      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: "lax",
+    },
   }),
 );
 

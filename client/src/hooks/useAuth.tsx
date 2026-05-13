@@ -540,7 +540,6 @@ export default function useAuth({
         encryptedPrivateKeyIv: encryptedPrivateKey.ivB64,
         password: values.password,
         userId: id,
-        roleId: 2,
         shopIds: values.shopIds,
         privateData: {
           original_cipher: encryptedData.ciphertextB64,

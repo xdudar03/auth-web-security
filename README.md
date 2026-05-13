@@ -91,6 +91,7 @@ Docker startup reads:
 Required server envs:
 
 - `SESSION_SECRET`
+- `JWT_SECRET`
 - `CORS_ORIGIN`
 - `MODEL_BASE_URL`
 - `EMAIL_USER`

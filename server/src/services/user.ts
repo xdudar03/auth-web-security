@@ -30,7 +30,6 @@ type RegistrationInput = {
   username: string;
   emailHash: string;
   password: string;
-  roleId: number | string;
   shopIds: number[];
 };
 
@@ -68,7 +67,6 @@ export async function registerUser(input: RegistrationInput) {
     username,
     emailHash,
     password,
-    roleId,
     shopIds,
   } = input;
   const existingUserByUsername = getUserByUsername(username);
@@ -94,7 +92,7 @@ export async function registerUser(input: RegistrationInput) {
     emailHash,
     username,
     password: hashedPassword,
-    roleId: typeof roleId === "string" ? Number(roleId) : roleId,
+    roleId: 2,
     isBiometric: false,
     MFAEnabled: false,
   });

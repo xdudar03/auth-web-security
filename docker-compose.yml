@@ -104,8 +104,6 @@ services:
     environment:
       - EXPRESS_BASE_URL=http://server:4000
       - SQLITE_DB_PATH=/app/shared-db/users.db
-    ports:
-      - "5000:5000"
     volumes:
       - model_data:/app/data
       - sqlite_db:/app/shared-db

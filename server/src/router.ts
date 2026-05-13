@@ -1,6 +1,13 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { publicProcedure, router } from "./tools/trpc.ts";
+import {
+  adminProcedure,
+  protectedProcedure,
+  providerProcedure,
+  publicProcedure,
+  router,
+  type Context,
+} from "./tools/trpc.ts";
 import {
   getAuthenticationOptions,
   getRegistrationOptions,
@@ -58,6 +65,10 @@ import {
   getUserActivityByActivity,
   getUserActivityByUserId,
   getUserById,
+  getUserIdByPseudoId,
+  getUserShops,
+  getShopById,
+  getShopUsers as getDbShopUsers,
   updateUser,
   getAllUserActivity,
 } from "./database.ts";
@@ -119,6 +130,107 @@ async function execute<T>(fn: () => Promise<T> | T): Promise<T> {
   }
 }
 
+type AuthContext = Pick<Context, "user" | "role">;
+
+function isAdminContext(ctx: AuthContext) {
+  return Boolean(
+    ctx.role?.canAccessAdminPanel || ctx.role?.roleName === "admin",
+  );
+}
+
+function requireCurrentUserId(ctx: AuthContext) {
+  const userId = (ctx.user as User | null)?.userId;
+  if (!userId) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Not authenticated",
+    });
+  }
+  return userId;
+}
+
+function assertCanAccessShop(ctx: AuthContext, shopId: number) {
+  if (isAdminContext(ctx)) return;
+
+  const providerId = requireCurrentUserId(ctx);
+  const shop = getShopById(shopId);
+  if (!shop) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Shop not found",
+    });
+  }
+  if (shop.shopOwnerId !== providerId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Provider can only access their own shop",
+    });
+  }
+}
+
+function providerOwnedShopIds(ctx: AuthContext) {
+  const providerId = requireCurrentUserId(ctx);
+  return getUserShops(providerId)
+    .filter((shop) => shop.shopOwnerId === providerId)
+    .map((shop) => shop.shopId);
+}
+
+function assertCanAccessSubject(ctx: AuthContext, subjectId: string) {
+  if (isAdminContext(ctx)) return;
+
+  const canAccess = providerOwnedShopIds(ctx).some((shopId) =>
+    getDbShopUsers(shopId).some(
+      (row: { userId?: unknown }) => row.userId === subjectId,
+    ),
+  );
+
+  if (!canAccess) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Provider can only access users in their own shop",
+    });
+  }
+}
+
+function assertCanAccessSubjectInShop(
+  ctx: AuthContext,
+  subjectId: string,
+  shopId: number,
+) {
+  assertCanAccessShop(ctx, shopId);
+  if (isAdminContext(ctx)) return;
+
+  const subjectInShop = getDbShopUsers(shopId).some(
+    (row: { userId?: unknown }) => row.userId === subjectId,
+  );
+
+  if (!subjectInShop) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Provider can only record visits for users in their own shop",
+    });
+  }
+}
+
+function assertCanAccessPrivacySubjects(
+  ctx: AuthContext,
+  userFields: { pseudoId: string; field: string }[],
+) {
+  if (isAdminContext(ctx)) return;
+
+  const pseudoIds = new Set(userFields.map(({ pseudoId }) => pseudoId));
+  for (const pseudoId of pseudoIds) {
+    const userId = getUserIdByPseudoId(pseudoId);
+    if (!userId) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "User not found for pseudoId",
+      });
+    }
+    assertCanAccessSubject(ctx, userId);
+  }
+}
+
 export const appRouter = router({
   health: router({
     root: publicProcedure.query(() => pingHealth()),
@@ -127,15 +239,16 @@ export const appRouter = router({
   model: router({
     health: publicProcedure.query(() => execute(() => checkModelHealth())),
     status: publicProcedure.query(() => execute(() => getModelStatus())),
-    predict: publicProcedure
+    predict: providerProcedure
       .input(
         z.object({
           id: z.string(),
         }),
       )
-      .mutation(({ input }) =>
-        execute(() => predictFromEmbeddingService(input.id)),
-      ),
+      .mutation(({ input, ctx }) => {
+        assertCanAccessSubject(ctx, input.id);
+        return execute(() => predictFromEmbeddingService(input.id));
+      }),
     verify: publicProcedure
       .input(
         z.object({
@@ -185,21 +298,33 @@ export const appRouter = router({
           };
         }),
       ),
-    predictCompare: publicProcedure
+    predictCompare: protectedProcedure
       .input(
         z.object({
           embedding: z.string(),
           userId: z.string().optional(),
         }),
       )
-      .mutation(({ input }) =>
-        execute(() =>
+      .mutation(({ input, ctx }) => {
+        const currentUserId = requireCurrentUserId(ctx);
+        if (
+          input.userId &&
+          input.userId !== currentUserId &&
+          !isAdminContext(ctx)
+        ) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Users can only compare their own biometric embedding",
+          });
+        }
+
+        return execute(() =>
           predictCompareFromEmbedding(input.embedding, input.userId),
-        ),
-      ),
+        );
+      }),
   }),
   passwordless: router({
-    getRegistrationOptions: publicProcedure.mutation(({ ctx }) => {
+    getRegistrationOptions: protectedProcedure.mutation(({ ctx }) => {
       const currentUserId = (ctx.user as User)?.userId;
       if (!currentUserId) {
         throw new TRPCError({
@@ -215,7 +340,7 @@ export const appRouter = router({
         ),
       );
     }),
-    verifyRegistration: publicProcedure
+    verifyRegistration: protectedProcedure
       .input(z.any())
       .mutation(({ input, ctx }) => {
         const currentUserId = (ctx.user as User)?.userId;
@@ -272,7 +397,7 @@ export const appRouter = router({
       ),
   }),
   biometric: router({
-    changeEmbedding: publicProcedure // TODO: better naming
+    changeEmbedding: protectedProcedure // TODO: better naming
       .input(
         z.object({
           embedding: z.string(), // json serialized array of numbers
@@ -288,13 +413,13 @@ export const appRouter = router({
       ),
   }),
   admin: router({
-    listUsers: publicProcedure.query(() => execute(() => listUsers())),
-    getUser: publicProcedure
+    listUsers: adminProcedure.query(() => execute(() => listUsers())),
+    getUser: adminProcedure
       .input(z.object({ userId: z.string().optional() }))
       .query(({ input }) =>
         execute(() => getUserWithRoleById(input.userId ?? "")),
       ),
-    updateUser: publicProcedure
+    updateUser: adminProcedure
       .input(
         z.object({
           userId: z.string(),
@@ -307,22 +432,22 @@ export const appRouter = router({
           "Admins cannot edit user information. Use the reset password email feature instead.",
         );
       }),
-    getUserActivity: publicProcedure
+    getUserActivity: adminProcedure
       .input(z.object({ userId: z.string() }))
       .query(({ input }) =>
         execute(() => getUserActivityByUserId(input.userId)),
       ),
-    getUserActivityByActivity: publicProcedure
+    getUserActivityByActivity: adminProcedure
       .input(z.object({ activity: z.string() }))
       .query(({ input }) =>
         execute(() => getUserActivityByActivity(input.activity)),
       ),
-    getAllUserActivity: publicProcedure.query(() =>
+    getAllUserActivity: adminProcedure.query(() =>
       execute(() => getAllUserActivity()),
     ),
   }),
   user: router({
-    changePassword: publicProcedure
+    changePassword: protectedProcedure
       .input(
         z.object({
           oldPassword: z.string(),
@@ -332,12 +457,12 @@ export const appRouter = router({
       .mutation(({ input, ctx }) =>
         execute(() => changeUserPassword(input, ctx.user as User)),
       ),
-    confirmPassword: publicProcedure
+    confirmPassword: protectedProcedure
       .input(z.object({ password: z.string() }))
       .mutation(({ input, ctx }) =>
         execute(() => confirmUserPassword(input, ctx.user as User)),
       ),
-    updateMfaPreference: publicProcedure
+    updateMfaPreference: protectedProcedure
       .input(
         z.object({
           enabled: z.boolean(),
@@ -376,7 +501,6 @@ export const appRouter = router({
           username: z.string(),
           emailHash: z.string().min(32),
           password: z.string(),
-          roleId: z.union([z.string(), z.number()]),
           shopIds: z.array(z.number()),
           hpkePublicKeyB64: z.string(),
           recoverySaltB64: z.string(),
@@ -406,7 +530,7 @@ export const appRouter = router({
           authenticateUser(input, ctx.req.session as ChallengeSession),
         ),
       ),
-    addUserPrivateData: publicProcedure
+    addUserPrivateData: protectedProcedure
       .input(
         z.object({
           userId: z.string(),
@@ -434,7 +558,7 @@ export const appRouter = router({
           } as UserPrivateDataType),
         );
       }),
-    updateUserPrivateData: publicProcedure
+    updateUserPrivateData: protectedProcedure
       .input(
         z.object({
           userId: z.string(),
@@ -462,7 +586,7 @@ export const appRouter = router({
           } as UserPrivateDataType),
         );
       }),
-    listProvidersForSharing: publicProcedure.query(({ ctx }) => {
+    listProvidersForSharing: protectedProcedure.query(({ ctx }) => {
       const currentUserId = (ctx.user as User)?.userId;
       if (!currentUserId) {
         throw new TRPCError({
@@ -473,7 +597,7 @@ export const appRouter = router({
 
       return execute(() => listProvidersForUser(currentUserId));
     }),
-    setProviderDataAccess: publicProcedure
+    setProviderDataAccess: protectedProcedure
       .input(
         z.object({
           providerId: z.string(),
@@ -532,7 +656,7 @@ export const appRouter = router({
       }),
   }),
   providers: router({
-    getSharedUserData: publicProcedure
+    getSharedUserData: providerProcedure
       .input(
         z.object({
           userId: z.string(),
@@ -551,7 +675,7 @@ export const appRouter = router({
           getSharedUserDataForProvider(providerId, input.userId),
         );
       }),
-    addNewShopVisit: publicProcedure
+    addNewShopVisit: providerProcedure
       .input(
         z.object({
           id: z.string(),
@@ -559,7 +683,8 @@ export const appRouter = router({
           visitAt: z.string(),
         }),
       )
-      .mutation(({ input }) => {
+      .mutation(({ input, ctx }) => {
+        assertCanAccessSubjectInShop(ctx, input.id, input.shopId);
         return execute(() =>
           addNewShopVisit(input.id, input.shopId, input.visitAt),
         );
@@ -567,23 +692,29 @@ export const appRouter = router({
   }),
   shops: router({
     getAllShops: publicProcedure.query(() => execute(() => getAllShops())),
-    getAllUsersFromShop: publicProcedure
+    getAllUsersFromShop: providerProcedure
       .input(z.object({ shopId: z.number() }))
-      .query(({ input }) => execute(() => getAllUsersFromShop(input.shopId))),
-    getShopVisits: publicProcedure
+      .query(({ input, ctx }) => {
+        assertCanAccessShop(ctx, input.shopId);
+        return execute(() => getAllUsersFromShop(input.shopId));
+      }),
+    getShopVisits: providerProcedure
       .input(z.object({ shopId: z.number() }))
-      .query(({ input }) => execute(() => getShopVisits(input.shopId))),
+      .query(({ input, ctx }) => {
+        assertCanAccessShop(ctx, input.shopId);
+        return execute(() => getShopVisits(input.shopId));
+      }),
   }),
   email: router({
     sendConfirmationEmail: publicProcedure
-      .input(z.object({ to: z.string(), userId: z.string() }))
+      .input(z.object({ to: z.string().email(), userId: z.string() }))
       .mutation(({ input }) =>
         execute(() =>
           sendEmailWithToken(input.to, input.userId, "confirmation"),
         ),
       ),
     sendResetPasswordEmail: publicProcedure
-      .input(z.object({ to: z.string(), userId: z.string() }))
+      .input(z.object({ to: z.string().email(), userId: z.string() }))
       .mutation(({ input }) =>
         execute(() =>
           sendEmailWithToken(input.to, input.userId, "reset_password"),
@@ -614,12 +745,12 @@ export const appRouter = router({
       ),
   }),
   info: router({
-    getUserInfo: publicProcedure.query(({ ctx }) =>
+    getUserInfo: protectedProcedure.query(({ ctx }) =>
       execute(() => getUserInfo((ctx.user as JwtPayload) ?? {})),
     ),
   }),
   privacy: router({
-    toggleUserPrivacyService: publicProcedure
+    toggleUserPrivacyService: protectedProcedure
       .input(
         z.object({
           field: z.string(),
@@ -641,17 +772,17 @@ export const appRouter = router({
     getAllPrivacyPresets: publicProcedure.query(() =>
       execute(() => getAllPrivacyPresets()),
     ),
-    applyPrivacyPreset: publicProcedure
+    applyPrivacyPreset: protectedProcedure
       .input(z.object({ preset: z.string() }))
       .mutation(({ input, ctx }) =>
         execute(() =>
           applyPrivacyPreset(ctx.user?.userId as string, input.preset),
         ),
       ),
-    getUserPrivacyPreset: publicProcedure.query(({ ctx }) =>
+    getUserPrivacyPreset: protectedProcedure.query(({ ctx }) =>
       execute(() => getUserPrivacyPreset(ctx.user?.userId as string)),
     ),
-    getUsersPrivacy: publicProcedure
+    getUsersPrivacy: providerProcedure
       .input(
         z.object({
           userFields: z.array(
@@ -659,22 +790,48 @@ export const appRouter = router({
           ),
         }),
       )
-      .query(({ input }) => execute(() => getUsersPrivacy(input.userFields))),
+      .query(({ input, ctx }) => {
+        assertCanAccessPrivacySubjects(ctx, input.userFields);
+        return execute(() => getUsersPrivacy(input.userFields));
+      }),
   }),
   transactions: router({
-    getTransactionsById: publicProcedure
+    getTransactionsById: protectedProcedure
       .input(z.object({ userId: z.string() }))
-      .query(({ input }) => execute(() => getTransactionsById(input.userId))),
-    getTransactionsByShopId: publicProcedure
+      .query(({ input, ctx }) => {
+        const currentUserId = (ctx.user as User).userId;
+        const isAdmin =
+          ctx.role?.canAccessAdminPanel || ctx.role?.roleName === "admin";
+        if (input.userId !== currentUserId && !isAdmin) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Users can only read their own transactions",
+          });
+        }
+
+        return execute(() => getTransactionsById(input.userId));
+      }),
+    getTransactionsByShopId: providerProcedure
       .input(z.object({ shopId: z.number() }))
-      .query(({ input }) =>
-        execute(() => getTransactionsByShopIdService(input.shopId)),
-      ),
-    addTestTransactions: publicProcedure
+      .query(({ input, ctx }) => {
+        assertCanAccessShop(ctx, input.shopId);
+        return execute(() => getTransactionsByShopIdService(input.shopId));
+      }),
+    addTestTransactions: protectedProcedure
       .input(z.object({ userId: z.string() }))
-      .mutation(({ input }) =>
-        execute(() => addTestTransactionsService(input.userId)),
-      ),
+      .mutation(({ input, ctx }) => {
+        const currentUserId = (ctx.user as User).userId;
+        const isAdmin =
+          ctx.role?.canAccessAdminPanel || ctx.role?.roleName === "admin";
+        if (input.userId !== currentUserId && !isAdmin) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Users can only create their own test transactions",
+          });
+        }
+
+        return execute(() => addTestTransactionsService(input.userId));
+      }),
   }),
 });
 

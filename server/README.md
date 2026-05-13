@@ -12,6 +12,7 @@ cp .env.example .env
 Fill in the required values in `.env`:
 
 - `SESSION_SECRET`
+- `JWT_SECRET`
 - `CORS_ORIGIN`
 - `MODEL_BASE_URL`
 - `EMAIL_USER`

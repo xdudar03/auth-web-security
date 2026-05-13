@@ -70,8 +70,9 @@ export function getUserWithRoleById(id: string) {
     ...row,
     shops,
   });
+  const { credentials, password, ...safeUser } = response.user;
   return {
-    user: response.user,
+    user: safeUser,
     role: response.role,
   };
 }
