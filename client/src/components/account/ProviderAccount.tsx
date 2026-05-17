@@ -1,33 +1,14 @@
 'use client';
 import { useUser } from '@/hooks/useUserContext';
 import { AccountHeader } from './AccountHeader';
-import { useEffect, useState } from 'react';
-import {
-  loadDecryptedUser,
-  DecryptedPrivateProfile,
-} from '@/lib/encryption/loadDecrypted';
+import { useState } from 'react';
+import { useDecryptedPrivateProfile } from '@/hooks/useDecryptedPrivateProfile';
 import ShopInfo from './ShopInfo';
 
 export default function ProviderAccount() {
-  const { user, shops, privateData } = useUser();
-  const [decryptedData, setDecryptedData] =
-    useState<DecryptedPrivateProfile | null>(null);
+  const { shops } = useUser();
+  const decryptedData = useDecryptedPrivateProfile();
   const [mode, setMode] = useState<'view' | 'edit'>('view');
-
-  useEffect(() => {
-    const loadDecryptedData = async () => {
-      if (!user || !privateData) {
-        setDecryptedData(null);
-        return;
-      }
-      const decryptedData = await loadDecryptedUser(user, privateData);
-      if (!decryptedData) {
-        return;
-      }
-      setDecryptedData(decryptedData);
-    };
-    void loadDecryptedData();
-  }, [privateData, user]);
 
   const handleProviderFormSubmit = (
     event: React.FormEvent<HTMLFormElement>

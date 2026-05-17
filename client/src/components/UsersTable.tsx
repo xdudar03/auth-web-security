@@ -102,13 +102,13 @@ export default function UsersTable({
             >
               <Eye className="w-4 h-4" />
             </Button>
-            <Button
+            {/* <Button
               className="icon-btn"
               variant="ghost"
               onClick={() => handleDelete(row.original.user)}
             >
               <Trash className="w-4 h-4" />
-            </Button>
+            </Button> */}
           </div>
         ),
         accessorKey: 'actions',

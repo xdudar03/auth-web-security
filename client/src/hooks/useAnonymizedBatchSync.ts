@@ -1,10 +1,9 @@
 import { encryptWithHpkePublicKey } from '@/lib/encryption/encryption';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { FormValues } from '@/lib/anonymization/anonymizationHandlers';
-
-export type AnonymizedValues = Partial<
-  Record<keyof FormValues, FormValues[keyof FormValues]>
->;
+import type {
+  AnonymizedValues,
+  FormValues,
+} from '@/lib/anonymization/anonymizationHandlers';
 
 type PrivateDataPayload = {
   userId: string;
@@ -152,6 +151,20 @@ export const useAnonymizedBatchSync = ({
     setHasPendingSync(false);
   }, []);
 
+  const saveAnonymizedSnapshot = useCallback(
+    async (snapshot: AnonymizedValues) => {
+      if (flushTimeoutRef.current) {
+        clearTimeout(flushTimeoutRef.current);
+        flushTimeoutRef.current = null;
+      }
+
+      setAnonymizedData(snapshot);
+      setHasPendingSync(true);
+      await syncSnapshot(snapshot);
+    },
+    [syncSnapshot]
+  );
+
   const clearAnonymizedSnapshot = useCallback(() => {
     setAnonymizedData({});
     setHasPendingSync(false);
@@ -182,6 +195,7 @@ export const useAnonymizedBatchSync = ({
     upsertAnonymizedField,
     removeAnonymizedField,
     setAnonymizedSnapshot,
+    saveAnonymizedSnapshot,
     clearAnonymizedSnapshot,
     flushAnonymizedNow,
     hasPendingSync,

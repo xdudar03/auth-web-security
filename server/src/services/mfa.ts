@@ -1,5 +1,9 @@
 import crypto from "crypto";
-import { addUserActivity, getUserById } from "../database.ts";
+import {
+  addUserActivity,
+  getUserById,
+  getUserPrivateDataByUserId,
+} from "../database.ts";
 import { HttpError } from "../errors.ts";
 import { hashEmailForSeed } from "../lib/encryption.ts";
 import { sendEmail } from "../tools/mailer.ts";
@@ -38,6 +42,12 @@ function buildSuccessResponse(
   firstFactor: AuthFactorMethod,
   session?: ChallengeSession,
 ) {
+  const privateData = getUserPrivateDataByUserId(user.userId);
+  const hasPrivateData = Boolean(
+    privateData?.original_cipher &&
+      privateData.original_iv &&
+      privateData.original_encap_pubkey,
+  );
   const matchingCredential =
     firstFactor === "passwordless" && session?.verifiedCredentialId
       ? parseCredentials(user.credentials ?? null).find(
@@ -57,6 +67,8 @@ function buildSuccessResponse(
     recoverySaltB64: user.recoverySaltB64 ?? null,
     encryptedPrivateKey: user.encryptedPrivateKey ?? null,
     encryptedPrivateKeyIv: user.encryptedPrivateKeyIv ?? null,
+    hasPrivateData,
+    privateData,
   };
 }
 

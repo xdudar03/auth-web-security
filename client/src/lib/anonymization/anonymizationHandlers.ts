@@ -28,114 +28,133 @@ export type FormValues = {
   shoppingHistory: string | null;
 };
 
+export type AnonymizedValues = Partial<
+  Record<keyof FormValues, FormValues[keyof FormValues]>
+>;
+
+type FormValueGetter = (
+  field: keyof FormValues
+) => FormValues[keyof FormValues] | undefined;
+
+type PrivacySettingForAnonymization = {
+  field: string;
+  visibility: 'hidden' | 'anonymized' | 'visible';
+};
+
+const asString = (value: FormValues[keyof FormValues] | undefined) => {
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+  return value ?? '';
+};
+
+export const formatAnonymizedValue = (
+  value: FormValues[keyof FormValues] | undefined
+) => (Array.isArray(value) ? value.join(', ') : value);
+
+export async function anonymizeFieldValue(
+  fieldName: string,
+  formGetValues: FormValueGetter
+): Promise<FormValues[keyof FormValues] | undefined> {
+  switch (fieldName) {
+    case 'username':
+      return 'hidden-user';
+    case 'firstName':
+      return namePseudonymization().firstName;
+    case 'lastName':
+      return namePseudonymization().lastName;
+    case 'email':
+      return masking(asString(formGetValues('email')));
+    case 'phoneNumber':
+      return masking(asString(formGetValues('phoneNumber')));
+    case 'dateOfBirth':
+      return ageGeneralization(asString(formGetValues('dateOfBirth')));
+    case 'gender':
+      return suppression();
+    case 'zip':
+      return masking(asString(formGetValues('zip')));
+    case 'country':
+      return anonymizeCountry(asString(formGetValues('country'))) ?? 'anonymous';
+    case 'city': {
+      const city = asString(formGetValues('city'));
+      if (!city) return 'anonymous';
+
+      try {
+        const anonymizedCity = await anonymizeCity(city);
+        return anonymizedCity[0]?.country ?? 'anonymous';
+      } catch {
+        return 'anonymous';
+      }
+    }
+    case 'address': {
+      const street = asString(formGetValues('address'));
+      const city = asString(formGetValues('city'));
+      if (!street) return 'anonymous';
+
+      try {
+        const anonymizedStreet = await anonymizeStreet(street, city);
+        return anonymizedStreet[0]?.city ?? 'anonymous';
+      } catch {
+        return 'anonymous';
+      }
+    }
+    case 'spendings':
+      return '***';
+    case 'shoppingHistory':
+      return '[]';
+    case 'shops':
+      return [];
+    default:
+      return undefined;
+  }
+}
+
+export async function buildAnonymizedSnapshotForSettings(
+  settings: PrivacySettingForAnonymization[],
+  formGetValues: FormValueGetter
+): Promise<{
+  snapshot: AnonymizedValues;
+  messages: Record<string, string>;
+}> {
+  const snapshot: AnonymizedValues = {};
+  const messages: Record<string, string> = {};
+
+  for (const { field, visibility } of settings) {
+    if (visibility !== 'anonymized') {
+      continue;
+    }
+
+    const anonymizedValue = await anonymizeFieldValue(field, formGetValues);
+    if (anonymizedValue === undefined) {
+      continue;
+    }
+
+    snapshot[field as keyof FormValues] = anonymizedValue;
+    messages[field] = `Anonymized value: ${formatAnonymizedValue(
+      anonymizedValue
+    )}`;
+  }
+
+  return { snapshot, messages };
+}
+
 export async function handleFieldAnonymization(
   fieldName: string,
-  formGetValues: (field: keyof FormValues) => string | undefined,
+  formGetValues: FormValueGetter,
   formSetValue: UseFormSetValue<FormValues>,
   setMessages: (
     callback: (prev: Record<string, string>) => Record<string, string>
   ) => void
 ) {
-  switch (fieldName) {
-    case 'firstName':
-      const anonFirstName = namePseudonymization().firstName;
-      setMessages((prev) => ({
-        ...prev,
-        [fieldName]: 'Anonymized value: ' + anonFirstName,
-      }));
-      formSetValue('firstName', anonFirstName);
-      break;
-    case 'lastName':
-      const anonLastName = namePseudonymization().lastName;
-      setMessages((prev) => ({
-        ...prev,
-        [fieldName]: 'Anonymized value: ' + anonLastName,
-      }));
-      formSetValue('lastName', anonLastName);
-      break;
-    case 'email':
-      const anonEmail = masking(formGetValues('email') ?? '');
-      setMessages((prev) => ({
-        ...prev,
-        [fieldName]: 'Anonymized value: ' + anonEmail,
-      }));
-      formSetValue('email', anonEmail);
-      break;
-    case 'phoneNumber':
-      const anonPhone = masking(formGetValues('phoneNumber') ?? '');
-      setMessages((prev) => ({
-        ...prev,
-        [fieldName]: 'Anonymized value: ' + anonPhone,
-      }));
-      formSetValue('phoneNumber', anonPhone);
-      break;
-    case 'dateOfBirth':
-      const dateOfBirth = formGetValues('dateOfBirth') ?? '';
-      const anonDOB = ageGeneralization(dateOfBirth);
-      setMessages((prev) => ({
-        ...prev,
-        [fieldName]: 'Anonymized value: ' + anonDOB,
-      }));
-      formSetValue('dateOfBirth', anonDOB);
-      break;
-    case 'gender':
-      const anonGender = suppression();
-      setMessages((prev) => ({
-        ...prev,
-        [fieldName]: 'Anonymized value: ' + anonGender,
-      }));
-      formSetValue('gender', anonGender);
-      break;
-    case 'zip':
-      const anonZip = masking(formGetValues('zip') ?? '');
-      setMessages((prev) => ({
-        ...prev,
-        [fieldName]: 'Anonymized value: ' + anonZip,
-      }));
-      formSetValue('zip', anonZip);
-      break;
-    case 'country':
-      const country = formGetValues('country') ?? '';
-      const anonymizedCountry = anonymizeCountry(country);
-      console.log('anonymizedCountry', anonymizedCountry);
-      if (anonymizedCountry) {
-        setMessages((prev) => ({
-          ...prev,
-          [fieldName]: 'Anonymized value: ' + anonymizedCountry,
-        }));
-      } else {
-        setMessages((prev) => ({ ...prev, [fieldName]: 'No country found' }));
-      }
-      formSetValue('country', anonymizedCountry ?? null);
-      break;
-    case 'city':
-      const city = formGetValues('city') ?? '';
-      const anonymizedCity = await anonymizeCity(city);
-      console.log('anonymizedCity', anonymizedCity);
-      if (anonymizedCity.length > 0) {
-        setMessages((prev) => ({
-          ...prev,
-          [fieldName]: 'Anonymized value: ' + anonymizedCity[0].country,
-        }));
-      } else {
-        setMessages((prev) => ({ ...prev, [fieldName]: 'No city found' }));
-      }
-      formSetValue('city', anonymizedCity[0].country);
-      break;
-    case 'address':
-      const street = formGetValues('address') ?? '';
-      const cityValue = formGetValues('city') ?? '';
-      const anonymizedStreet = await anonymizeStreet(street, cityValue);
-      console.log('anonymizedStreet', anonymizedStreet);
-      if (anonymizedStreet.length > 0) {
-        setMessages((prev) => ({
-          ...prev,
-          [fieldName]: 'Anonymized value: ' + anonymizedStreet[0].city,
-        }));
-      } else {
-        setMessages((prev) => ({ ...prev, [fieldName]: 'No street found' }));
-      }
-      formSetValue('address', anonymizedStreet[0].city);
-      break;
+  const field = fieldName as keyof FormValues;
+  const anonymizedValue = await anonymizeFieldValue(field, formGetValues);
+  if (anonymizedValue === undefined) {
+    return;
   }
+
+  setMessages((prev) => ({
+    ...prev,
+    [fieldName]: `Anonymized value: ${formatAnonymizedValue(anonymizedValue)}`,
+  }));
+  formSetValue(field, anonymizedValue);
 }

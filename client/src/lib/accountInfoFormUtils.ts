@@ -1,6 +1,8 @@
 import { Shop, type User as UserType } from '@/hooks/useUserContext';
-import type { FormValues } from './anonymization/anonymizationHandlers';
-import type { AnonymizedValues } from '@/hooks/useAnonymizedBatchSync';
+import type {
+  AnonymizedValues,
+  FormValues,
+} from './anonymization/anonymizationHandlers';
 
 export const buildAccountFormValues = (
   source: Partial<UserType> | null,

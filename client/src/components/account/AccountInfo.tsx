@@ -10,7 +10,9 @@ import { AccountHeader } from './AccountHeader';
 import { PersonalDetailsSection } from './PersonalDetailsSection';
 import { AddressSection } from './AddressSection';
 import {
+  buildAnonymizedSnapshotForSettings,
   handleFieldAnonymization,
+  type AnonymizedValues,
   type FormValues,
 } from '@/lib/anonymization/anonymizationHandlers';
 import ProvidersManager from './ProvidersManager';
@@ -23,13 +25,13 @@ import {
 import {
   buildAccountFormValues,
   parseDecryptedAnonymizedPayload,
-  parseDecryptedUserPayload,
 } from '@/lib/accountInfoFormUtils';
 import {
   useAnonymizedBatchSync,
-  type AnonymizedValues,
 } from '@/hooks/useAnonymizedBatchSync';
 import { useProviderDataAccessSync } from '@/hooks/useProviderDataAccessSync';
+import { loadDecryptedUser } from '@/lib/encryption/loadDecrypted';
+import { buildPrivacyMapWithOverride } from '@/lib/providerSharing';
 
 export default function AccountInfo() {
   const { user, shops, privacy, hasPrivateData, privateData } = useUser();
@@ -43,11 +45,10 @@ export default function AccountInfo() {
 
   const addUserPrivateDataMutation = useMutation(
     trpc.user.addUserPrivateData.mutationOptions({
-      onSuccess: () => {
+      onSuccess: () =>
         queryClient.invalidateQueries({
           queryKey: trpc.info.getUserInfo.queryOptions().queryKey,
-        });
-      },
+        }),
       onError: (error: unknown) => {
         console.error('Error adding user private data', error);
       },
@@ -56,11 +57,10 @@ export default function AccountInfo() {
 
   const updateUserPrivateDataMutation = useMutation(
     trpc.user.updateUserPrivateData.mutationOptions({
-      onSuccess: () => {
+      onSuccess: () =>
         queryClient.invalidateQueries({
           queryKey: trpc.info.getUserInfo.queryOptions().queryKey,
-        });
-      },
+        }),
       onError: (error: unknown) => {
         console.error('Error updating user private data', error);
       },
@@ -91,6 +91,7 @@ export default function AccountInfo() {
     upsertAnonymizedField,
     removeAnonymizedField,
     setAnonymizedSnapshot,
+    saveAnonymizedSnapshot,
     clearAnonymizedSnapshot,
     flushAnonymizedNow,
     anonymizedData,
@@ -152,7 +153,7 @@ export default function AccountInfo() {
       form.reset(buildAccountFormValues(source, shops));
     };
 
-    const loadDecryptedUser = async () => {
+    const loadAccountValues = async () => {
       if (!user) {
         clearAnonymizedSnapshot();
         setProviderVisibleValues(buildAccountFormValues(null, shops));
@@ -160,8 +161,16 @@ export default function AccountInfo() {
         return;
       }
 
-      if (hasPrivateData && user.hpkePublicKeyB64) {
+      if (hasPrivateData && user.hpkePublicKeyB64 && privateData) {
         try {
+          const decryptedUser = await loadDecryptedUser(user, privateData);
+          if (!decryptedUser) {
+            clearAnonymizedSnapshot();
+            setProviderVisibleValues(buildAccountFormValues(user, shops));
+            resetWithValues(user);
+            return;
+          }
+
           const privateKeyJwkB64 = await getActiveHpkePrivateKeyJwkB64();
           if (!privateKeyJwkB64) {
             throw new Error('Missing active HPKE private key in session');
@@ -192,25 +201,11 @@ export default function AccountInfo() {
             clearAnonymizedSnapshot();
           }
 
-          if (
-            privateData?.original_cipher &&
-            privateData?.original_iv &&
-            privateData?.original_encap_pubkey
-          ) {
-            const decryptedOriginal = await decryptWithHpkePrivateKey(
-              privateKey,
-              privateData.original_cipher,
-              privateData.original_iv,
-              privateData.original_encap_pubkey
-            );
-
-            const parsedOriginal = parseDecryptedUserPayload(decryptedOriginal);
-            resetWithValues(parsedOriginal);
-            setProviderVisibleValues(
-              buildAccountFormValues(parsedOriginal, shops)
-            );
-            return;
-          }
+          resetWithValues(decryptedUser);
+          setProviderVisibleValues(
+            buildAccountFormValues(decryptedUser, shops)
+          );
+          return;
         } catch (error) {
           console.error('Error decrypting account info', error);
         }
@@ -221,7 +216,7 @@ export default function AccountInfo() {
       resetWithValues(user);
     };
 
-    void loadDecryptedUser();
+    void loadAccountValues();
   }, [
     clearAnonymizedSnapshot,
     form,
@@ -262,7 +257,6 @@ export default function AccountInfo() {
             original_encap_pubkey: encryptedData.encapPublicKeyB64,
           },
         };
-
         if (hasPrivateData) {
           await updateUserPrivateDataMutation.mutateAsync(privateDataPayload);
         } else {
@@ -327,6 +321,25 @@ export default function AccountInfo() {
     });
   };
 
+  const handleApplyPrivacyPreset = async (
+    settings: { field: string; visibility: Visibility }[]
+  ) => {
+    const formValues = form.getValues();
+    const privacyMap = buildPrivacyMapWithOverride(settings);
+    const { snapshot: nextSnapshot, messages: nextMessages } =
+      await buildAnonymizedSnapshotForSettings(
+        settings,
+        (name) => formValues[name]
+      );
+
+    setMessages(nextMessages);
+    await saveAnonymizedSnapshot(nextSnapshot);
+    await syncProviderAccessFromForm(formValues, {
+      privacyMapOverride: privacyMap,
+      anonymizedSnapshot: nextSnapshot,
+    });
+  };
+
   return (
     <div className="flex flex-col gap-4 w-full bg-surface rounded-lg p-4">
       <Form {...form}>
@@ -348,6 +361,7 @@ export default function AccountInfo() {
             privacy={privacy}
             messages={messages}
             onToggleVisibility={handleToggleVisibility}
+            onApplyPrivacyPreset={handleApplyPrivacyPreset}
           />
           <AddressSection
             control={form.control}

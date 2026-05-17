@@ -1,4 +1,4 @@
-# auth-web-security
+# Privacy-Preserving Web-Based Facial Authentication with Multi-Factor Mechanisms
 
 ## Getting Started
 

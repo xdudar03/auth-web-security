@@ -295,11 +295,11 @@ export default function UserInfoModal({
         </div>
 
         <div className="divide-y">
-          <InfoRow
+          {/* <InfoRow
             label="Username"
             display={usernameDisplay}
             visibility={getVisibility('username')}
-          />
+          /> */}
           <InfoRow
             label="Email"
             display={emailDisplay}

@@ -1,13 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useUser } from '@/hooks/useUserContext';
 import { Badge } from '../ui/badge';
 import { Briefcase, Shield, User as UserIcon } from 'lucide-react';
-import {
-  DecryptedPrivateProfile,
-  loadDecryptedUser,
-} from '@/lib/encryption/loadDecrypted';
+import { useDecryptedPrivateProfile } from '@/hooks/useDecryptedPrivateProfile';
 
 const permissionLabel = (permissionKey: string) =>
   permissionKey
@@ -16,21 +13,8 @@ const permissionLabel = (permissionKey: string) =>
     .trim();
 
 export default function AdminAccountInfo() {
-  const { user, role, privateData } = useUser();
-  const [decryptedData, setDecryptedData] =
-    useState<DecryptedPrivateProfile | null>(null);
-
-  useEffect(() => {
-    const loadDecryptedData = async () => {
-      if (!user || !privateData) {
-        setDecryptedData(null);
-        return;
-      }
-      const decryptedData = await loadDecryptedUser(user, privateData);
-      setDecryptedData(decryptedData);
-    };
-    void loadDecryptedData();
-  }, [privateData, user]);
+  const { role } = useUser();
+  const decryptedData = useDecryptedPrivateProfile();
 
   console.log('decryptedData', decryptedData);
 

@@ -81,6 +81,7 @@ export const useProviderDataAccessSync = ({
       formValues: FormValues,
       options?: {
         privacyOverride?: { field: string; visibility: Visibility };
+        privacyMapOverride?: Record<string, Visibility>;
         anonymizedSnapshot?: AnonymizedSnapshot;
         sharingOverride?: Record<string, boolean>;
       }
@@ -99,10 +100,9 @@ export const useProviderDataAccessSync = ({
         return;
       }
 
-      const privacyMap = buildPrivacyMapWithOverride(
-        privacy ?? [],
-        options?.privacyOverride
-      );
+      const privacyMap =
+        options?.privacyMapOverride ??
+        buildPrivacyMapWithOverride(privacy ?? [], options?.privacyOverride);
 
       const { mode, payload } = buildProviderPayload(
         userId,

@@ -4,6 +4,7 @@ import { Control } from 'react-hook-form';
 import { PrivacySettings } from '@/hooks/useUserContext';
 import { FormValues } from '../../lib/anonymization/anonymizationHandlers';
 import PrivacyLevelsToggle from './PrivacyLevelsToggle';
+import type { Visibility } from '../../../../server/src/types/privacySetting';
 
 interface PersonalDetailsSectionProps {
   control: Control<FormValues>;
@@ -14,6 +15,9 @@ interface PersonalDetailsSectionProps {
     field: string,
     visibility: 'hidden' | 'anonymized' | 'visible'
   ) => Promise<void>;
+  onApplyPrivacyPreset: (
+    settings: { field: string; visibility: Visibility }[]
+  ) => Promise<void>;
 }
 
 export const PersonalDetailsSection = ({
@@ -22,12 +26,13 @@ export const PersonalDetailsSection = ({
   privacy,
   messages,
   onToggleVisibility,
+  onApplyPrivacyPreset,
 }: PersonalDetailsSectionProps) => {
   return (
     <div className="grid-section-2 w-full">
       <div className="flex flex-row gap-2 items-center justify-between col-span-2">
         <h1 className="text-lg font-bold">Personal Details</h1>
-        <PrivacyLevelsToggle />
+        <PrivacyLevelsToggle onPresetApplied={onApplyPrivacyPreset} />
       </div>
       <FormInputField
         control={control}

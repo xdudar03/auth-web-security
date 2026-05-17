@@ -1,33 +1,11 @@
 'use client';
 import { User } from 'lucide-react';
-import { useUser } from '@/hooks/useUserContext';
 import Link from 'next/link';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
-import { useEffect, useState } from 'react';
-import {
-  loadDecryptedUser,
-  DecryptedPrivateProfile,
-} from '@/lib/encryption/loadDecrypted';
+import { useDecryptedPrivateProfile } from '@/hooks/useDecryptedPrivateProfile';
 
 export default function AccountInfoCard() {
-  const { user, privateData } = useUser();
-  const [decryptedData, setDecryptedData] =
-    useState<DecryptedPrivateProfile | null>(null);
-
-  useEffect(() => {
-    const loadDecryptedData = async () => {
-      if (!user || !privateData) {
-        setDecryptedData(null);
-        return;
-      }
-      const decryptedData = await loadDecryptedUser(user, privateData);
-      if (!decryptedData) {
-        return;
-      }
-      setDecryptedData(decryptedData);
-    };
-    void loadDecryptedData();
-  }, [privateData, user]);
+  const decryptedData = useDecryptedPrivateProfile();
 
   console.log('decryptedData', decryptedData);
   return (

@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { FormValues } from '@/types/authentication';
 import { startAuthentication } from '@simplewebauthn/browser';
 import {
+  decryptWithHpkePrivateKey,
   decryptPrivateKeyWithPasskeyPrfOutput,
   decryptPrivateKeyWithRecoveryKey,
   deriveRecoveryKey,
@@ -19,12 +20,14 @@ import {
   getActiveHpkePublicKeyB64,
   getUserHpkeBundle,
   getUserHpkeBundleByPublicKey,
+  importHpkePrivateKeyJwkB64,
   newRecoverySaltB64,
   saveUserHpkeBundle,
   setActiveHpkePrivateKey,
   setActiveHpkePublicKey,
 } from '@/lib/encryption/encryption';
 import { hashString } from '@/lib/encryption/hash';
+import type { UserPrivateData } from '../../../server/src/types/user';
 
 export type SuccessData = {
   jwt: string;
@@ -47,6 +50,8 @@ type AuthenticatedLoginResult = {
   recoverySaltB64?: string | null;
   encryptedPrivateKey?: string | null;
   encryptedPrivateKeyIv?: string | null;
+  hasPrivateData?: boolean;
+  privateData?: UserPrivateData | null;
 };
 
 const PASSKEY_PRF_EVAL_LABEL = 'auth-web-security:hpke-unlock-v1';
@@ -76,6 +81,8 @@ type EncryptedAccessInput = {
   recoverySaltB64?: string | null;
   encryptedPrivateKey?: string | null;
   encryptedPrivateKeyIv?: string | null;
+  hasPrivateData?: boolean;
+  privateData?: UserPrivateData | null;
 };
 
 type EncryptedAccessResult = {
@@ -85,6 +92,35 @@ type EncryptedAccessResult = {
 
 const FIRST_LOGIN_RECOVERY_MESSAGE =
   'For first login on a new device, enter your recovery passphrase once to unlock encrypted profile data.';
+
+const hasOriginalPrivatePayload = (privateData?: UserPrivateData | null) =>
+  Boolean(
+    privateData?.original_cipher &&
+    privateData.original_iv &&
+    privateData.original_encap_pubkey
+  );
+
+async function canDecryptPrivateData(
+  privateKeyJwkB64: string,
+  privateData?: UserPrivateData | null
+) {
+  if (!hasOriginalPrivatePayload(privateData)) {
+    return true;
+  }
+
+  try {
+    const privateKey = await importHpkePrivateKeyJwkB64(privateKeyJwkB64);
+    await decryptWithHpkePrivateKey(
+      privateKey,
+      privateData?.original_cipher as string,
+      privateData?.original_iv as string,
+      privateData?.original_encap_pubkey as string
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function ensureEncryptedDataAccessForLogin({
   username,
@@ -98,11 +134,83 @@ export async function ensureEncryptedDataAccessForLogin({
   recoverySaltB64,
   encryptedPrivateKey,
   encryptedPrivateKeyIv,
+  hasPrivateData,
+  privateData,
 }: EncryptedAccessInput): Promise<EncryptedAccessResult> {
   const totalStartedAt = performance.now();
   const bundleLookupStartedAt = performance.now();
   let storedBundle = await getUserHpkeBundle(username);
   let bundleLookupMs = authTimingMs(bundleLookupStartedAt);
+  const hasPrivatePayload = hasOriginalPrivatePayload(privateData);
+
+  if (!hasPrivatePayload) {
+    if (
+      storedBundle &&
+      (!hpkePublicKeyB64 || storedBundle.publicKeyB64 === hpkePublicKeyB64)
+    ) {
+      await setActiveHpkePrivateKey(storedBundle.privateKeyJwkB64);
+      await setActiveHpkePublicKey(storedBundle.publicKeyB64);
+      return { hasAccess: true };
+    }
+
+    if (hpkePublicKeyB64) {
+      const matchedBundle =
+        await getUserHpkeBundleByPublicKey(hpkePublicKeyB64);
+      if (matchedBundle) {
+        await saveUserHpkeBundle(username, matchedBundle);
+        await setActiveHpkePrivateKey(matchedBundle.privateKeyJwkB64);
+        await setActiveHpkePublicKey(matchedBundle.publicKeyB64);
+        return { hasAccess: true };
+      }
+    }
+
+    if (hasPrivateData) {
+      return {
+        hasAccess: false,
+        message: `Login succeeded, but encrypted profile data is locked on this device. ${FIRST_LOGIN_RECOVERY_MESSAGE}`,
+      };
+    }
+
+    if (
+      hpkePublicKeyB64 &&
+      recoverySaltB64 &&
+      encryptedPrivateKey &&
+      encryptedPrivateKeyIv
+    ) {
+      if (!recoveryPassphrase) {
+        return {
+          hasAccess: false,
+          message: FIRST_LOGIN_RECOVERY_MESSAGE,
+        };
+      }
+
+      try {
+        const recoveryKey = await deriveRecoveryKey(
+          recoveryPassphrase,
+          recoverySaltB64
+        );
+        const privateKeyJwkB64 = await decryptPrivateKeyWithRecoveryKey(
+          encryptedPrivateKey,
+          encryptedPrivateKeyIv,
+          recoveryKey
+        );
+        await saveUserHpkeBundle(username, {
+          privateKeyJwkB64,
+          publicKeyB64: hpkePublicKeyB64,
+        });
+        await setActiveHpkePrivateKey(privateKeyJwkB64);
+        await setActiveHpkePublicKey(hpkePublicKeyB64);
+        return { hasAccess: true };
+      } catch {
+        return {
+          hasAccess: false,
+          message: `Login succeeded, but encrypted profile data could not be unlocked. ${FIRST_LOGIN_RECOVERY_MESSAGE}`,
+        };
+      }
+    }
+
+    return { hasAccess: true };
+  }
 
   if (!storedBundle && hpkePublicKeyB64) {
     const publicKeyMatchStartedAt = performance.now();
@@ -117,7 +225,8 @@ export async function ensureEncryptedDataAccessForLogin({
 
   if (
     storedBundle &&
-    (!hpkePublicKeyB64 || storedBundle.publicKeyB64 === hpkePublicKeyB64)
+    (!hpkePublicKeyB64 || storedBundle.publicKeyB64 === hpkePublicKeyB64) &&
+    (await canDecryptPrivateData(storedBundle.privateKeyJwkB64, privateData))
   ) {
     const activateStoredStartedAt = performance.now();
     await setActiveHpkePrivateKey(storedBundle.privateKeyJwkB64);
@@ -149,6 +258,9 @@ export async function ensureEncryptedDataAccessForLogin({
         passkeyWrapSaltB64 as string,
         passkeyPrfOutputB64 as string
       );
+      if (!(await canDecryptPrivateData(privateKeyJwkB64, privateData))) {
+        throw new Error('Passkey private key cannot decrypt private data');
+      }
       await saveUserHpkeBundle(username, {
         privateKeyJwkB64,
         publicKeyB64: hpkePublicKeyB64 as string,
@@ -217,6 +329,9 @@ export async function ensureEncryptedDataAccessForLogin({
       encryptedPrivateKeyIv as string,
       recoveryKey
     );
+    if (!(await canDecryptPrivateData(privateKeyJwkB64, privateData))) {
+      throw new Error('Recovery private key cannot decrypt private data');
+    }
     const decryptRecoveryMs = authTimingMs(decryptStartedAt);
     const activateStartedAt = performance.now();
     await saveUserHpkeBundle(username, {
@@ -410,23 +525,27 @@ export default function useAuth({
             ? context.passkeyPrfOutputB64
             : undefined,
         passkeyCredentialId:
-          context.method === 'passwordless' ? result.credentialId ?? null : null,
+          context.method === 'passwordless'
+            ? (result.credentialId ?? null)
+            : null,
         passkeyWrappedPrivateKey:
           context.method === 'passwordless'
-            ? result.passkeyWrappedPrivateKey ?? null
+            ? (result.passkeyWrappedPrivateKey ?? null)
             : null,
         passkeyWrappedPrivateKeyIv:
           context.method === 'passwordless'
-            ? result.passkeyWrappedPrivateKeyIv ?? null
+            ? (result.passkeyWrappedPrivateKeyIv ?? null)
             : null,
         passkeyWrapSaltB64:
           context.method === 'passwordless'
-            ? result.passkeyWrapSaltB64 ?? null
+            ? (result.passkeyWrapSaltB64 ?? null)
             : null,
         hpkePublicKeyB64: result.hpkePublicKeyB64 ?? null,
         recoverySaltB64: result.recoverySaltB64 ?? null,
         encryptedPrivateKey: result.encryptedPrivateKey ?? null,
         encryptedPrivateKeyIv: result.encryptedPrivateKeyIv ?? null,
+        hasPrivateData: result.hasPrivateData ?? false,
+        privateData: result.privateData ?? null,
       });
 
       if (
@@ -457,11 +576,18 @@ export default function useAuth({
             'Encrypted profile data is locked on this device.',
           type: 'error',
         });
+        return false;
       }
 
       handleSuccess({ jwt: result.jwt });
+      return true;
     },
-    [ensureEncryptedDataAccess, handleSuccess, saveCredentialKeyMaterialMutation, setMessage]
+    [
+      ensureEncryptedDataAccess,
+      handleSuccess,
+      saveCredentialKeyMaterialMutation,
+      setMessage,
+    ]
   );
 
   const loadShops = useCallback(
@@ -584,7 +710,7 @@ export default function useAuth({
         const authContext: PendingMfaState = {
           method: 'password',
           username: values.username,
-          recoveryPassphrase: values.recoveryPassphrase || values.password,
+          recoveryPassphrase: values.recoveryPassphrase || undefined,
         };
 
         const result = await authenticateMutation.mutateAsync({
@@ -751,7 +877,9 @@ export default function useAuth({
     }
 
     try {
-      const result = await verifyMfaCodeMutation.mutateAsync({ code: code.trim() });
+      const result = await verifyMfaCodeMutation.mutateAsync({
+        code: code.trim(),
+      });
       await finalizeAuthenticatedLogin(result, pendingMfa);
       resetMfaState();
     } catch (error) {

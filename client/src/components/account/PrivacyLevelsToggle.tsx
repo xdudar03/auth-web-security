@@ -9,8 +9,20 @@ import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useState } from 'react';
+import type { Visibility } from '../../../../server/src/types/privacySetting';
 
-export default function PrivacyLevelsToggle() {
+type PrivacyPresetUpdate = {
+  field: string;
+  visibility: Visibility;
+};
+
+type PrivacyLevelsToggleProps = {
+  onPresetApplied?: (settings: PrivacyPresetUpdate[]) => Promise<void> | void;
+};
+
+export default function PrivacyLevelsToggle({
+  onPresetApplied,
+}: PrivacyLevelsToggleProps) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
 
@@ -30,39 +42,42 @@ export default function PrivacyLevelsToggle() {
   );
 
   const applyPrivacyPresetMutation = useMutation(
-    trpc.privacy.applyPrivacyPreset.mutationOptions({
-      onSuccess: (data) => {
-        console.log('data', data);
-        queryClient.invalidateQueries({
-          queryKey: trpc.info.getUserInfo.queryOptions().queryKey,
-        });
-        queryClient.invalidateQueries({
-          queryKey: trpc.privacy.getUserPrivacyPreset.queryOptions().queryKey,
-        });
-        setMessage({
-          message: 'Privacy preset applied successfully',
-          type: 'success',
-        });
-        setTimeout(() => {
-          setMessage({ message: '', type: '' });
-        }, 3000);
-      },
-      onError: (error) => {
-        console.error('Error applying privacy preset', error);
-        setMessage({
-          message: 'Error applying privacy preset',
-          type: 'error',
-        });
-        setTimeout(() => {
-          setMessage({ message: '', type: '' });
-        }, 3000);
-      },
-    })
+    trpc.privacy.applyPrivacyPreset.mutationOptions()
   );
 
-  const handleApplyPrivacyPreset = (preset: string) => {
-    console.log('preset', preset);
-    applyPrivacyPresetMutation.mutate({ preset: preset.toLowerCase() });
+  const handleApplyPrivacyPreset = async (preset: string) => {
+    try {
+      console.log('preset', preset);
+      const data = await applyPrivacyPresetMutation.mutateAsync({
+        preset: preset.toLowerCase(),
+      });
+      console.log('data', data);
+
+      await onPresetApplied?.(data);
+
+      queryClient.invalidateQueries({
+        queryKey: trpc.info.getUserInfo.queryOptions().queryKey,
+      });
+      queryClient.invalidateQueries({
+        queryKey: trpc.privacy.getUserPrivacyPreset.queryOptions().queryKey,
+      });
+      setMessage({
+        message: 'Privacy preset applied successfully',
+        type: 'success',
+      });
+      setTimeout(() => {
+        setMessage({ message: '', type: '' });
+      }, 3000);
+    } catch (error) {
+      console.error('Error applying privacy preset', error);
+      setMessage({
+        message: 'Error applying privacy preset',
+        type: 'error',
+      });
+      setTimeout(() => {
+        setMessage({ message: '', type: '' });
+      }, 3000);
+    }
   };
 
   const privacyPresets = getAllPrivacyPresetsQuery.data ?? [];
@@ -112,7 +127,8 @@ export default function PrivacyLevelsToggle() {
               key={label}
               value={label}
               className="privacy-toggle-button"
-              onClick={() => handleApplyPrivacyPreset(label)}
+              disabled={applyPrivacyPresetMutation.isPending}
+              onClick={() => void handleApplyPrivacyPreset(label)}
             >
               {label}
             </ToggleGroupItem>

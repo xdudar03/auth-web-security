@@ -86,9 +86,5 @@ export function applyPrivacyPreset(userId: string, preset: string) {
 }
 
 export function getUserPrivacyPreset(userId: string) {
-  const privacyPreset = getUserPrivacyPresetById(userId) as string;
-  if (!privacyPreset) {
-    throw new HttpError(404, "Privacy preset not found");
-  }
-  return privacyPreset;
+  return getUserPrivacyPresetById(userId) ?? null;
 }

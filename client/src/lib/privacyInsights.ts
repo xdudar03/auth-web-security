@@ -1,14 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTRPC } from '@/hooks/TrpcContext';
 import { useUser } from '@/hooks/useUserContext';
 import type { PrivacySettings } from '@/hooks/useUserContext';
-import {
-  loadDecryptedUser,
-  type DecryptedPrivateProfile,
-} from '@/lib/encryption/loadDecrypted';
+import { useDecryptedPrivateProfile } from '@/hooks/useDecryptedPrivateProfile';
 
 type Visibility = 'hidden' | 'anonymized' | 'visible';
 
@@ -109,9 +106,8 @@ function getTopShopName(shoppingHistory: unknown): string | null {
 
 export function useDashboardPrivacyInsights(): DashboardPrivacyInsights {
   const trpc = useTRPC();
-  const { user, privateData, privacy, shops } = useUser();
-  const [decryptedData, setDecryptedData] =
-    useState<DecryptedPrivateProfile | null>(null);
+  const { user, privacy, shops } = useUser();
+  const decryptedData = useDecryptedPrivateProfile();
 
   const getUserPrivacyPresetQuery = useQuery({
     ...trpc.privacy.getUserPrivacyPreset.queryOptions(),
@@ -121,24 +117,10 @@ export function useDashboardPrivacyInsights(): DashboardPrivacyInsights {
 
   const getPresetFieldsQuery = useQuery({
     ...trpc.privacy.getPrivacyPreset.queryOptions({
-      preset: privacyPreset ?? 'pl4',
+      preset: (privacyPreset as string) ?? 'pl4',
     }),
     enabled: Boolean(privacyPreset),
   });
-
-  useEffect(() => {
-    const loadDecryptedData = async () => {
-      if (!user || !privateData) {
-        setDecryptedData(null);
-        return;
-      }
-
-      const result = await loadDecryptedUser(user, privateData);
-      setDecryptedData(result);
-    };
-
-    void loadDecryptedData();
-  }, [privateData, user]);
 
   const effectivePrivacySettings = useMemo<PrivacySettings[]>(() => {
     if (privacy && privacy.length > 0) return privacy;
@@ -202,7 +184,7 @@ export function useDashboardPrivacyInsights(): DashboardPrivacyInsights {
   );
 
   return {
-    privacyPreset,
+    privacyPreset: privacyPreset as string | null,
     sortedSettings,
     visibilityStats,
     topShopName,

@@ -69,6 +69,7 @@ import {
   getUserShops,
   getShopById,
   getShopUsers as getDbShopUsers,
+  getTransactionsByShopId as getDbTransactionsByShopId,
   updateUser,
   getAllUserActivity,
 } from "./database.ts";
@@ -175,13 +176,20 @@ function providerOwnedShopIds(ctx: AuthContext) {
     .map((shop) => shop.shopId);
 }
 
-function assertCanAccessSubject(ctx: AuthContext, subjectId: string) {
-  if (isAdminContext(ctx)) return;
-
-  const canAccess = providerOwnedShopIds(ctx).some((shopId) =>
+function canAccessSubjectInShops(shopIds: number[], subjectId: string) {
+  return shopIds.some((shopId) =>
     getDbShopUsers(shopId).some(
       (row: { userId?: unknown }) => row.userId === subjectId,
     ),
+  );
+}
+
+function assertCanAccessSubject(ctx: AuthContext, subjectId: string) {
+  if (isAdminContext(ctx)) return;
+
+  const canAccess = canAccessSubjectInShops(
+    providerOwnedShopIds(ctx),
+    subjectId,
   );
 
   if (!canAccess) {
@@ -212,14 +220,32 @@ function assertCanAccessSubjectInShop(
   }
 }
 
+function canAccessTransactionPrivacyField(
+  shopIds: number[],
+  pseudoId: string,
+  field: string,
+) {
+  const match = /^shoppingHistory_transaction_(\d+)$/.exec(field);
+  if (!match) return false;
+
+  const transactionId = Number(match[1]);
+  return shopIds.some((shopId) =>
+    getDbTransactionsByShopId(shopId).some(
+      (transaction) =>
+        transaction.transactionId === transactionId &&
+        transaction.pseudoId === pseudoId,
+    ),
+  );
+}
+
 function assertCanAccessPrivacySubjects(
   ctx: AuthContext,
   userFields: { pseudoId: string; field: string }[],
 ) {
   if (isAdminContext(ctx)) return;
 
-  const pseudoIds = new Set(userFields.map(({ pseudoId }) => pseudoId));
-  for (const pseudoId of pseudoIds) {
+  const shopIds = providerOwnedShopIds(ctx);
+  for (const { pseudoId, field } of userFields) {
     const userId = getUserIdByPseudoId(pseudoId);
     if (!userId) {
       throw new TRPCError({
@@ -227,7 +253,17 @@ function assertCanAccessPrivacySubjects(
         message: "User not found for pseudoId",
       });
     }
-    assertCanAccessSubject(ctx, userId);
+    if (
+      canAccessSubjectInShops(shopIds, userId) ||
+      canAccessTransactionPrivacyField(shopIds, pseudoId, field)
+    ) {
+      continue;
+    }
+
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Provider can only access privacy for their own shop users",
+    });
   }
 }
 

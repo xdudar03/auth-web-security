@@ -1,4 +1,7 @@
-import type { FormValues } from '@/lib/anonymization/anonymizationHandlers';
+import type {
+  AnonymizedValues,
+  FormValues,
+} from '@/lib/anonymization/anonymizationHandlers';
 import type { Visibility } from '../../../server/src/types/privacySetting';
 
 export const providerShareFields: Array<keyof FormValues> = [
@@ -17,9 +20,7 @@ export const providerShareFields: Array<keyof FormValues> = [
 
 export type ProviderAccessMode = 'hidden' | 'anonymized' | 'visible';
 
-export type AnonymizedSnapshot = Partial<
-  Record<keyof FormValues, FormValues[keyof FormValues]>
->;
+export type AnonymizedSnapshot = AnonymizedValues;
 
 export type PrivacyEntry = {
   field: string;
