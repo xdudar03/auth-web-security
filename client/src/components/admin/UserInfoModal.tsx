@@ -7,7 +7,7 @@ import { useTRPC } from '@/hooks/TrpcContext';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUserContext';
 import InfoRow from './user-info/InfoRow';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   decryptWithHpkePrivateKey,
   getActiveHpkePrivateKeyJwkB64,
@@ -189,20 +189,9 @@ export default function UserInfoModal({
     return '';
   };
 
-  const emailDisplay = useMemo(
-    () => formatValue('email', activeUserEmail),
-    [activeUserEmail, role?.roleName, sharedProfile, sharedVisibility]
-  );
-
-  const phoneDisplay = useMemo(
-    () => formatValue('phoneNumber', activeUser.phoneNumber ?? ''),
-    [activeUser.phoneNumber, role?.roleName, sharedProfile, sharedVisibility]
-  );
-
-  const usernameDisplay = useMemo(
-    () => formatValue('username', activeUser.username),
-    [activeUser.username, role?.roleName, sharedProfile, sharedVisibility]
-  );
+  const emailDisplay = formatValue('email', activeUserEmail);
+  const phoneDisplay = formatValue('phoneNumber', activeUser.phoneNumber ?? '');
+  const usernameDisplay = formatValue('username', activeUser.username);
 
   const initials = () => {
     const first = activeUser.firstName?.[0] ?? '';

@@ -17,7 +17,6 @@ export default function ProviderDashboard() {
   const { shops } = useUser();
   console.log('shops: ', shops);
   const shopId = shops?.[0]?.shopId;
-  const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
   const [activeUser, setActiveUser] = useState<AdminUserRow['user'] | null>(
     null
@@ -35,7 +34,6 @@ export default function ProviderDashboard() {
     )?.privacy;
   }
   console.log('activeUser: ', activeUser);
-  console.log('mode: ', mode);
   console.log('showUserInfoModal: ', showUserInfoModal);
   return (
     <div className="grid w-full gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr">

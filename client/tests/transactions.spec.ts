@@ -5,6 +5,12 @@ async function loginAsUser(page: Page) {
   await page.goto('/login');
   await page.getByRole('textbox', { name: /username/i }).fill('user');
   await page.getByRole('textbox', { name: /password/i }).fill('user');
+  await page
+    .getByRole('button', { name: /use recovery passphrase/i })
+    .click();
+  await page
+    .getByRole('textbox', { name: /recovery passphrase/i })
+    .fill('user');
   await page.getByRole('button', { name: /^login$/i }).click();
   await expect(page).toHaveURL('/dashboard', { timeout: 10000 });
 }
@@ -13,6 +19,12 @@ async function loginAsProvider(page: Page) {
   await page.goto('/login');
   await page.getByRole('textbox', { name: /username/i }).fill('shop owner 1');
   await page.getByRole('textbox', { name: /password/i }).fill('shop owner 1');
+  await page
+    .getByRole('button', { name: /use recovery passphrase/i })
+    .click();
+  await page
+    .getByRole('textbox', { name: /recovery passphrase/i })
+    .fill('shop owner 1');
   await page.getByRole('button', { name: /^login$/i }).click();
   await expect(page).toHaveURL('/provider-dashboard', { timeout: 10000 });
 }

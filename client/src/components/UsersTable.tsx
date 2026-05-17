@@ -6,7 +6,7 @@ import {
   Table,
   Row,
 } from '@tanstack/react-table';
-import { Eye, Trash } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import { useMemo, useState, useCallback } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -36,10 +36,6 @@ export default function UsersTable({
     },
     [setActiveUser, setShowUserInfoModal]
   );
-
-  const handleDelete = useCallback((user: AdminUserRow['user']) => {
-    console.log('deleting user', user);
-  }, []);
 
   const columns = useMemo(
     () => [
@@ -102,19 +98,12 @@ export default function UsersTable({
             >
               <Eye className="w-4 h-4" />
             </Button>
-            {/* <Button
-              className="icon-btn"
-              variant="ghost"
-              onClick={() => handleDelete(row.original.user)}
-            >
-              <Trash className="w-4 h-4" />
-            </Button> */}
           </div>
         ),
         accessorKey: 'actions',
       },
     ],
-    [handleView, handleDelete]
+    [handleView]
   );
   const [rowSelection, setRowSelection] = useState({});
   const table = useReactTable({

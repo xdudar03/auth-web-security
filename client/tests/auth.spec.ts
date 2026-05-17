@@ -5,50 +5,74 @@ const testAccounts = {
   admin: {
     username: 'admin',
     password: 'admin',
+    recoveryPassphrase: 'admin',
     dashboard: '/admin-dashboard',
   },
-  user: { username: 'user', password: 'user', dashboard: '/dashboard' },
+  user: {
+    username: 'user',
+    password: 'user',
+    recoveryPassphrase: 'user',
+    dashboard: '/dashboard',
+  },
   provider1: {
     username: 'shop owner 1',
     password: 'shop owner 1',
+    recoveryPassphrase: 'shop owner 1',
     dashboard: '/provider-dashboard',
   },
   provider2: {
     username: 'shop owner 2',
     password: 'shop owner 2',
+    recoveryPassphrase: 'shop owner 2',
     dashboard: '/provider-dashboard',
   },
   provider3: {
     username: 'shop owner 3',
     password: 'shop owner 3',
+    recoveryPassphrase: 'shop owner 3',
     dashboard: '/provider-dashboard',
   },
   hiddenAll: {
     username: 'hidden_all',
     password: 'password1',
+    recoveryPassphrase: 'password1',
     dashboard: '/dashboard',
   },
   anonAll: {
     username: 'anon_all',
     password: 'password2',
+    recoveryPassphrase: 'password2',
     dashboard: '/dashboard',
   },
   visibleAll: {
     username: 'visible_all',
     password: 'password3',
+    recoveryPassphrase: 'password3',
     dashboard: '/dashboard',
   },
   mixedA: {
     username: 'mixed_a',
     password: 'password4',
+    recoveryPassphrase: 'password4',
     dashboard: '/dashboard',
   },
 };
 
-async function login(page: Page, username: string, password: string) {
+async function login(
+  page: Page,
+  username: string,
+  password: string,
+  recoveryPassphrase: string
+) {
   await page.goto('/login');
   await page.getByRole('textbox', { name: /username/i }).fill(username);
   await page.getByRole('textbox', { name: /password/i }).fill(password);
+  await page
+    .getByRole('button', { name: /use recovery passphrase/i })
+    .click();
+  await page
+    .getByRole('textbox', { name: /recovery passphrase/i })
+    .fill(recoveryPassphrase);
   await page.getByRole('button', { name: /^login$/i }).click();
 }
 
@@ -64,6 +88,15 @@ test.describe('Authentication - Login', () => {
     await expect(
       page.getByRole('textbox', { name: /password/i })
     ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /use recovery passphrase/i })
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: /use recovery passphrase/i })
+      .click();
+    await expect(
+      page.getByRole('textbox', { name: /recovery passphrase/i })
+    ).toBeVisible();
     await expect(page.getByRole('button', { name: /^login$/i })).toBeVisible();
   });
 
@@ -77,7 +110,12 @@ test.describe('Authentication - Login', () => {
 
   test('admin login redirects to admin dashboard', async ({ page }) => {
     const account = testAccounts.admin;
-    await login(page, account.username, account.password);
+    await login(
+      page,
+      account.username,
+      account.password,
+      account.recoveryPassphrase
+    );
 
     // Wait for redirect
     await expect(page).toHaveURL(account.dashboard, { timeout: 10000 });
@@ -86,7 +124,12 @@ test.describe('Authentication - Login', () => {
 
   test('regular user login redirects to user dashboard', async ({ page }) => {
     const account = testAccounts.user;
-    await login(page, account.username, account.password);
+    await login(
+      page,
+      account.username,
+      account.password,
+      account.recoveryPassphrase
+    );
 
     // Wait for redirect
     await expect(page).toHaveURL(account.dashboard, { timeout: 10000 });
@@ -94,7 +137,12 @@ test.describe('Authentication - Login', () => {
 
   test('provider login redirects to provider dashboard', async ({ page }) => {
     const account = testAccounts.provider1;
-    await login(page, account.username, account.password);
+    await login(
+      page,
+      account.username,
+      account.password,
+      account.recoveryPassphrase
+    );
 
     // Wait for redirect
     await expect(page).toHaveURL(account.dashboard, { timeout: 10000 });
@@ -135,7 +183,12 @@ test.describe('Authentication - Login', () => {
 test.describe('Authentication - All User Types', () => {
   for (const [accountName, account] of Object.entries(testAccounts)) {
     test(`${accountName} can login successfully`, async ({ page }) => {
-      await login(page, account.username, account.password);
+      await login(
+        page,
+        account.username,
+        account.password,
+        account.recoveryPassphrase
+      );
 
       // Wait for redirect to appropriate dashboard
       await expect(page).toHaveURL(account.dashboard, { timeout: 10000 });
@@ -146,7 +199,12 @@ test.describe('Authentication - All User Types', () => {
 test.describe('Authentication - Logout', () => {
   test('user can logout successfully', async ({ page }) => {
     const account = testAccounts.user;
-    await login(page, account.username, account.password);
+    await login(
+      page,
+      account.username,
+      account.password,
+      account.recoveryPassphrase
+    );
 
     // Wait for redirect
     await expect(page).toHaveURL(account.dashboard, { timeout: 10000 });

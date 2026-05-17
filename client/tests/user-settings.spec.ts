@@ -1,10 +1,21 @@
 import { test, expect, Page } from '@playwright/test';
 
 // Helper to login before tests
-async function loginAsUser(page: Page, username = 'user', password = 'user') {
+async function loginAsUser(
+  page: Page,
+  username = 'user',
+  password = 'user',
+  recoveryPassphrase = 'user'
+) {
   await page.goto('/login');
   await page.getByRole('textbox', { name: /username/i }).fill(username);
   await page.getByRole('textbox', { name: /password/i }).fill(password);
+  await page
+    .getByRole('button', { name: /use recovery passphrase/i })
+    .click();
+  await page
+    .getByRole('textbox', { name: /recovery passphrase/i })
+    .fill(recoveryPassphrase);
   await page.getByRole('button', { name: /^login$/i }).click();
   await expect(page).toHaveURL('/dashboard', { timeout: 10000 });
 }
@@ -174,7 +185,7 @@ test.describe('User Privacy - Visibility Settings', () => {
 
 test.describe('User Privacy - Field Visibility', () => {
   test('visible_all user has all fields visible', async ({ page }) => {
-    await loginAsUser(page, 'visible_all', 'password3');
+    await loginAsUser(page, 'visible_all', 'password3', 'password3');
     await page.goto('/account');
     await page.waitForTimeout(3000);
 
@@ -189,7 +200,7 @@ test.describe('User Privacy - Field Visibility', () => {
   });
 
   test('hidden_all user has fields hidden', async ({ page }) => {
-    await loginAsUser(page, 'hidden_all', 'password1');
+    await loginAsUser(page, 'hidden_all', 'password1', 'password1');
     await page.goto('/account');
     await page.waitForTimeout(3000);
 
@@ -198,7 +209,7 @@ test.describe('User Privacy - Field Visibility', () => {
   });
 
   test('anon_all user has fields anonymized', async ({ page }) => {
-    await loginAsUser(page, 'anon_all', 'password2');
+    await loginAsUser(page, 'anon_all', 'password2', 'password2');
     await page.goto('/account');
     await page.waitForTimeout(3000);
 
