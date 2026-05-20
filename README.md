@@ -66,6 +66,12 @@ Stop and remove volumes (full clean reset):
 docker compose down -v --remove-orphans
 ```
 
+The same can be done with the following script:
+
+```bash
+./remove-volumes.sh
+```
+
 After a full reset, run either `./run-docker.sh` or `./run-docker.sh prod` again.
 
 ## Environment Variables
