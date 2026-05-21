@@ -420,29 +420,29 @@ export default function FormAuth({
                       );
                     })}
 
-                    {process.env.NODE_ENV === 'development' && (
-                      <div className="flex flex-col gap-2 rounded-md border border-border/60 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-start gap-3">
-                          <FlaskConical className="mt-0.5 h-4 w-4 text-muted" />
-                          <div>
-                            <p className="text-sm font-medium">
-                              Use test account
-                            </p>
-                            <p className="text-xs text-muted">
-                              Try a seeded role or privacy setup.
-                            </p>
-                          </div>
+                    {/* {process.env.NODE_ENV === 'development' && ( */}
+                    <div className="flex flex-col gap-2 rounded-md border border-border/60 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-3">
+                        <FlaskConical className="mt-0.5 h-4 w-4 text-muted" />
+                        <div>
+                          <p className="text-sm font-medium">
+                            Use test account
+                          </p>
+                          <p className="text-xs text-muted">
+                            Try a seeded role or privacy setup.
+                          </p>
                         </div>
-
-                        <TestAccountsDialog
-                          disabled={isAuthenticating}
-                          onSelect={loginAs}
-                          triggerVariant="outline"
-                          triggerClassName="w-full sm:w-auto"
-                          triggerLabel="Choose account"
-                        />
                       </div>
-                    )}
+
+                      <TestAccountsDialog
+                        disabled={isAuthenticating}
+                        onSelect={loginAs}
+                        triggerVariant="outline"
+                        triggerClassName="w-full sm:w-auto"
+                        triggerLabel="Choose account"
+                      />
+                    </div>
+                    {/* )} */}
                   </div>
                 </div>
               )}
